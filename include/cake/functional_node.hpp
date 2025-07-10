@@ -30,7 +30,7 @@ RCLCPP_COMPONENTS_REGISTER_NODE(my_package::MyNode);
 ***/
 #pragma once
 
-#include "rclcpp/rclcpp.hpp"
+#include <rclcpp/rclcpp.hpp>
 
 #include "fixed_string.hpp"
 
