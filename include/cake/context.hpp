@@ -1,8 +1,8 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 #include <thread>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 
