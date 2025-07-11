@@ -36,10 +36,14 @@ RCLCPP_COMPONENTS_REGISTER_NODE(my_package::MyNode);
 
 namespace cake {
 
-template <fixed_string node_name, auto init_func> class FunctionalNode {
+template <
+    fixed_string node_name,
+    auto init_func,
+    auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
+class FunctionalNode {
   public:
     explicit FunctionalNode(const rclcpp::NodeOptions &options)
-        : node_(std::make_shared<rclcpp::Node>(node_name.c_str(), options)) {
+        : node_(std::make_shared<rclcpp::Node>(node_name.c_str(), extend_options(options))) {
         init_func(node_);
     }
 
