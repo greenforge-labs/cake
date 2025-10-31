@@ -1,0 +1,5 @@
+cake_example::my_node:
+  spicy_param:
+    type: string
+    description: "A real spicy one"
+    default_value: "oh hi mark"
