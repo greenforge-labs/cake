@@ -27,17 +27,16 @@ template <typename DerivedContextType> struct ManualNodeContext : cake::Context 
     ManualNodeSubscribers<DerivedContextType> subscribers;
 };
 
+
 template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
 class ManualNodeBase : public cake::BaseNode<"manual_node", extend_options> {
   public:
-    explicit ManualNodeBase(const rclcpp::NodeOptions &options)
-        : cake::BaseNode<"manual_node", extend_options>(options) {
+    explicit ManualNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"manual_node", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<ManualNodeContext<ContextType>, ContextType>,
-            "ContextType must be a child of ManualNodeContext"
+            std::is_base_of_v<ManualNodeContext<ContextType>, ContextType>, "ContextType must be a child of ManualNodeContext"
         );
 
         // init context

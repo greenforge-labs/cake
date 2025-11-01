@@ -28,17 +28,16 @@ template <typename DerivedContextType> struct QosTestNodeContext : cake::Context
     QosTestNodeSubscribers<DerivedContextType> subscribers;
 };
 
+
 template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
 class QosTestNodeBase : public cake::BaseNode<"qos_test_node", extend_options> {
   public:
-    explicit QosTestNodeBase(const rclcpp::NodeOptions &options)
-        : cake::BaseNode<"qos_test_node", extend_options>(options) {
+    explicit QosTestNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"qos_test_node", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<QosTestNodeContext<ContextType>, ContextType>,
-            "ContextType must be a child of QosTestNodeContext"
+            std::is_base_of_v<QosTestNodeContext<ContextType>, ContextType>, "ContextType must be a child of QosTestNodeContext"
         );
 
         // init context
@@ -46,16 +45,11 @@ class QosTestNodeBase : public cake::BaseNode<"qos_test_node", extend_options> {
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.sensor_data_topic =
-            ctx->node->template create_publisher<std_msgs::msg::String>("sensor_data_topic", rclcpp::SensorDataQoS());
-        ctx->publishers.system_defaults_topic = ctx->node->template create_publisher<std_msgs::msg::String>(
-            "system_defaults_topic", rclcpp::SystemDefaultsQoS()
-        );
+        ctx->publishers.sensor_data_topic = ctx->node->template create_publisher<std_msgs::msg::String>("sensor_data_topic", rclcpp::SensorDataQoS());
+        ctx->publishers.system_defaults_topic = ctx->node->template create_publisher<std_msgs::msg::String>("system_defaults_topic", rclcpp::SystemDefaultsQoS());
         // init subscribers
-        ctx->subscribers.parameters_topic =
-            cake::create_subscriber<std_msgs::msg::String>(ctx, "parameters_topic", rclcpp::ParametersQoS());
-        ctx->subscribers.services_topic =
-            cake::create_subscriber<std_msgs::msg::String>(ctx, "services_topic", rclcpp::ServicesQoS());
+        ctx->subscribers.parameters_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "parameters_topic", rclcpp::ParametersQoS());
+        ctx->subscribers.services_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "services_topic", rclcpp::ServicesQoS());
         // TODO init services and actions
 
         init_func(ctx);

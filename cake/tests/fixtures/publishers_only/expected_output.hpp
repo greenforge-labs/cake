@@ -25,6 +25,7 @@ template <typename DerivedContextType> struct PubNodeContext : cake::Context {
     PubNodeSubscribers<DerivedContextType> subscribers;
 };
 
+
 template <
     typename ContextType,
     auto init_func,

@@ -5,22 +5,19 @@ node:
 publishers:
     - topic: some_topic
       type: std_msgs/msg/String
-      qos: 10 # or the full qos object
-      manually_created: false # a default false optional option that will skip code generation if true (exists on all 4 types)
-      # so the idea here is we create the publisher under the hood, and then using the cake pattern of accessing the node via ctx->node we can go like ctx->node.publishers.some_topic.publish(msg).
+      qos:
+        profile: SystemDefaultsQoS
 
 subscribers:
     - topic: other_topic
       type: std_msgs/msg/Bool
-      qos: 10 # or the full qos object
-    # so the idea here is we create the subscriber under the hood, and then using the cake pattern of accessing the node via ctx->node we can go like ctx->node.subscribers.other_topic.set_callback(my_func). We can do this by setting the callback to a lambda under the hood that just checks a variable for what callback it should call (or something).
+      qos:
+        profile: SensorDataQoS
 
 services:
     - name: my_service
       type: example_interfaces/srv/AddTwoInts
-    # again we have a way to attach the response handler. ctx->node.services.my_service.set_response_handler(my_func)
 
 actions:
     - name: my_action
       type: example_action/action/Fibonacci
-    # in the implementation we'll set cake options for the action (e.g. "single goal") at runtime via a similar interface ctx->node.actions.my_action.set_options().

@@ -28,17 +28,16 @@ template <typename DerivedContextType> struct CustomQosNodeContext : cake::Conte
     CustomQosNodeSubscribers<DerivedContextType> subscribers;
 };
 
+
 template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
 class CustomQosNodeBase : public cake::BaseNode<"custom_qos_node", extend_options> {
   public:
-    explicit CustomQosNodeBase(const rclcpp::NodeOptions &options)
-        : cake::BaseNode<"custom_qos_node", extend_options>(options) {
+    explicit CustomQosNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"custom_qos_node", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<CustomQosNodeContext<ContextType>, ContextType>,
-            "ContextType must be a child of CustomQosNodeContext"
+            std::is_base_of_v<CustomQosNodeContext<ContextType>, ContextType>, "ContextType must be a child of CustomQosNodeContext"
         );
 
         // init context
@@ -46,19 +45,11 @@ class CustomQosNodeBase : public cake::BaseNode<"custom_qos_node", extend_option
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.reliable_topic = ctx->node->template create_publisher<std_msgs::msg::String>(
-            "reliable_topic", rclcpp::QoS(10).reliable().durability_volatile()
-        );
-        ctx->publishers.best_effort_topic = ctx->node->template create_publisher<std_msgs::msg::String>(
-            "best_effort_topic", rclcpp::QoS(5).best_effort().transient_local()
-        );
+        ctx->publishers.reliable_topic = ctx->node->template create_publisher<std_msgs::msg::String>("reliable_topic", rclcpp::QoS(10).reliable().durability_volatile());
+        ctx->publishers.best_effort_topic = ctx->node->template create_publisher<std_msgs::msg::String>("best_effort_topic", rclcpp::QoS(5).best_effort().transient_local());
         // init subscribers
-        ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(
-            ctx, "keep_all_topic", rclcpp::QoS(10).reliable().keep_all()
-        );
-        ctx->subscribers.profile_override_topic = cake::create_subscriber<std_msgs::msg::String>(
-            ctx, "profile_override_topic", rclcpp::SensorDataQoS().reliable().keep_last(20)
-        );
+        ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(10).reliable().keep_all());
+        ctx->subscribers.profile_override_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "profile_override_topic", rclcpp::SensorDataQoS().reliable().keep_last(20));
         // TODO init services and actions
 
         init_func(ctx);

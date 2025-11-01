@@ -19,6 +19,7 @@ template <typename DerivedContextType> struct EmptyNodeContext : cake::Context {
     EmptyNodeSubscribers<DerivedContextType> subscribers;
 };
 
+
 template <
     typename ContextType,
     auto init_func,
@@ -27,8 +28,7 @@ class EmptyNodeBase : public cake::BaseNode<"empty_node", extend_options> {
   public:
     explicit EmptyNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"empty_node", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<EmptyNodeContext<ContextType>, ContextType>,
-            "ContextType must be a child of EmptyNodeContext"
+            std::is_base_of_v<EmptyNodeContext<ContextType>, ContextType>, "ContextType must be a child of EmptyNodeContext"
         );
 
         // init context

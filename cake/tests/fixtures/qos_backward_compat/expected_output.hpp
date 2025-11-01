@@ -28,17 +28,16 @@ template <typename DerivedContextType> struct BackwardCompatNodeContext : cake::
     BackwardCompatNodeSubscribers<DerivedContextType> subscribers;
 };
 
+
 template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
 class BackwardCompatNodeBase : public cake::BaseNode<"backward_compat_node", extend_options> {
   public:
-    explicit BackwardCompatNodeBase(const rclcpp::NodeOptions &options)
-        : cake::BaseNode<"backward_compat_node", extend_options>(options) {
+    explicit BackwardCompatNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"backward_compat_node", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<BackwardCompatNodeContext<ContextType>, ContextType>,
-            "ContextType must be a child of BackwardCompatNodeContext"
+            std::is_base_of_v<BackwardCompatNodeContext<ContextType>, ContextType>, "ContextType must be a child of BackwardCompatNodeContext"
         );
 
         // init context
@@ -47,8 +46,7 @@ class BackwardCompatNodeBase : public cake::BaseNode<"backward_compat_node", ext
 
         // init publishers
         ctx->publishers.int_qos_pub = ctx->node->template create_publisher<std_msgs::msg::String>("int_qos_pub", 10);
-        ctx->publishers.default_qos_pub =
-            ctx->node->template create_publisher<std_msgs::msg::String>("default_qos_pub", 10);
+        ctx->publishers.default_qos_pub = ctx->node->template create_publisher<std_msgs::msg::String>("default_qos_pub", 10);
         // init subscribers
         ctx->subscribers.int_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "int_qos_sub", 5);
         ctx->subscribers.default_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "default_qos_sub", 10);

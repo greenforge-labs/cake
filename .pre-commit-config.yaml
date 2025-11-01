@@ -10,6 +10,7 @@ repos:
   rev: v18.1.5
   hooks:
   - id: clang-format
+    exclude: ^cake/tests/fixtures/  # Exclude the fixtures folder
 - repo: https://github.com/cheshirekow/cmake-format-precommit
   rev: v0.6.13
   hooks:
