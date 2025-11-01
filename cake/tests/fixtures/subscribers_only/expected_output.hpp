@@ -10,6 +10,8 @@
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
 
+namespace sub_node {
+
 template <typename ContextType> struct SubNodePublishers {};
 
 template <typename ContextType> struct SubNodeSubscribers {
@@ -45,3 +47,5 @@ class SubNodeBase : public cake::BaseNode<"sub_node", extend_options> {
         init_func(ctx);
     }
 };
+
+} // namespace sub_node

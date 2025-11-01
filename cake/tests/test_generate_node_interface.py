@@ -86,7 +86,7 @@ def test_missing_node_name(tmp_path):
     # Create a YAML file with missing node.name
     yaml_file = tmp_path / "invalid.yaml"
     yaml_file.write_text("""node:
-    package: $THIS_PACKAGE
+    package: ${THIS_PACKAGE}
 """)
     output_file = tmp_path / "output.hpp"
 
@@ -128,7 +128,7 @@ def test_empty_publishers_and_subscribers(tmp_path):
     yaml_file = tmp_path / "empty.yaml"
     yaml_file.write_text("""node:
     name: test_node
-    package: $THIS_PACKAGE
+    package: ${THIS_PACKAGE}
 publishers: []
 subscribers: []
 """)

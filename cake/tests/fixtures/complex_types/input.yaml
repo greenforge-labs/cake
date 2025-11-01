@@ -1,6 +1,6 @@
 node:
     name: complex_node
-    package: $THIS_PACKAGE
+    package: ${THIS_PACKAGE}
 
 publishers:
     - topic: pose

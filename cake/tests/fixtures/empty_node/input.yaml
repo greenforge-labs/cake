@@ -1,3 +1,3 @@
 node:
     name: empty_node
-    package: $THIS_PACKAGE
+    package: ${THIS_PACKAGE}

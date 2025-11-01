@@ -9,6 +9,8 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 
+namespace pub_node {
+
 template <typename ContextType> struct PubNodePublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr counter;
@@ -44,3 +46,5 @@ class PubNodeBase : public cake::BaseNode<"pub_node", extend_options> {
         init_func(ctx);
     }
 };
+
+} // namespace pub_node

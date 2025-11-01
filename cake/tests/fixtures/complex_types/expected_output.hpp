@@ -12,6 +12,8 @@
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
 
+namespace complex_node {
+
 template <typename ContextType> struct ComplexNodePublishers {
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path;
@@ -55,3 +57,5 @@ class ComplexNodeBase : public cake::BaseNode<"complex_node", extend_options> {
         init_func(ctx);
     }
 };
+
+} // namespace complex_node

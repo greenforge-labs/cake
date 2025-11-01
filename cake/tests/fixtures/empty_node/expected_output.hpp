@@ -6,6 +6,8 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 
+namespace empty_node {
+
 template <typename ContextType> struct EmptyNodePublishers {};
 
 template <typename ContextType> struct EmptyNodeSubscribers {};
@@ -36,3 +38,5 @@ class EmptyNodeBase : public cake::BaseNode<"empty_node", extend_options> {
         init_func(ctx);
     }
 };
+
+} // namespace empty_node

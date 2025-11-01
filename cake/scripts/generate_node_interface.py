@@ -211,16 +211,16 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     lines.append("")
 
     # Determine namespace
-    if package and package != "$THIS_PACKAGE":
+    if package and package != "${THIS_PACKAGE}":
         ns = f"{package}::{node_name}"
     else:
-        # For $THIS_PACKAGE, we can't know the package name, so just use node_name
+        # For ${THIS_PACKAGE}, we can't know the package name, so just use node_name
         # The user will need to wrap this in their own namespace
         ns = node_name
 
     # Open namespace
-    # lines.append(f"namespace {ns} {{")
-    # lines.append("")
+    lines.append(f"namespace {ns} {{")
+    lines.append("")
 
     # Generate structures
     lines.append(generate_publishers_struct(publishers, namespace))
@@ -232,7 +232,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     )
 
     # Close namespace
-    # lines.append(f"}} // namespace {ns}")
+    lines.append(f"}} // namespace {ns}")
     lines.append("")
 
     return "\n".join(lines)
