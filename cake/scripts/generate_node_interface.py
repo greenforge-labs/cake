@@ -85,6 +85,92 @@ def generate_context_struct(node_name: str, namespace: str) -> str:
 """
 
 
+def generate_qos_code(qos_spec: Any) -> str:
+    """
+    Generate C++ QoS code from YAML QoS specification.
+
+    Supports:
+    - Integer: 10 -> "10"
+    - String (predefined profile): "SensorDataQoS" -> "rclcpp::SensorDataQoS()"
+    - Dict (custom parameters): {reliability: reliable, depth: 10} -> "rclcpp::QoS(10).reliable()..."
+    """
+    # Backward compatible: integer
+    if isinstance(qos_spec, int):
+        return str(qos_spec)
+
+    # Predefined profile: string
+    if isinstance(qos_spec, str):
+        return f"rclcpp::{qos_spec}()"
+
+    # Custom parameters: dict
+    if isinstance(qos_spec, dict):
+        # Check if using profile with overrides
+        if "profile" in qos_spec:
+            base_qos = f"rclcpp::{qos_spec['profile']}()"
+            params = {k: v for k, v in qos_spec.items() if k != "profile"}
+        else:
+            # Start with depth if provided, otherwise default to 10
+            depth = qos_spec.get("depth", 10)
+            base_qos = f"rclcpp::QoS({depth})"
+            params = {k: v for k, v in qos_spec.items() if k != "depth"}
+
+        # Build chain of method calls
+        methods = []
+
+        # Reliability
+        if "reliability" in params:
+            if params["reliability"] == "reliable":
+                methods.append(".reliable()")
+            elif params["reliability"] == "best_effort":
+                methods.append(".best_effort()")
+
+        # Durability
+        if "durability" in params:
+            if params["durability"] == "volatile":
+                methods.append(".durability_volatile()")
+            elif params["durability"] == "transient_local":
+                methods.append(".transient_local()")
+
+        # History
+        if "history" in params:
+            if params["history"] == "keep_last":
+                depth_val = params.get("depth", 10)
+                methods.append(f".keep_last({depth_val})")
+            elif params["history"] == "keep_all":
+                methods.append(".keep_all()")
+        elif "depth" in params:
+            # Depth specified without explicit history (applies to profiles with overrides)
+            methods.append(f".keep_last({params['depth']})")
+
+        # Deadline
+        if "deadline" in params:
+            deadline = params["deadline"]
+            if isinstance(deadline, dict):
+                sec = deadline.get("sec", 0)
+                nsec = deadline.get("nsec", 0)
+                methods.append(f".deadline(rclcpp::Duration({sec}, {nsec}))")
+
+        # Lifespan
+        if "lifespan" in params:
+            lifespan = params["lifespan"]
+            if isinstance(lifespan, dict):
+                sec = lifespan.get("sec", 0)
+                nsec = lifespan.get("nsec", 0)
+                methods.append(f".lifespan(rclcpp::Duration({sec}, {nsec}))")
+
+        # Liveliness
+        if "liveliness" in params:
+            if params["liveliness"] == "automatic":
+                methods.append(".liveliness(rclcpp::LivelinessPolicy::Automatic)")
+            elif params["liveliness"] == "manual_by_topic":
+                methods.append(".liveliness(rclcpp::LivelinessPolicy::ManualByTopic)")
+
+        return base_qos + "".join(methods)
+
+    # Default fallback
+    return "10"
+
+
 def generate_publisher_init(publishers: List[Dict[str, Any]]) -> str:
     """Generate publisher initialization code."""
     if not publishers:
@@ -97,9 +183,10 @@ def generate_publisher_init(publishers: List[Dict[str, Any]]) -> str:
         topic_name = pub["topic"]
         msg_type = ros_type_to_cpp(pub["type"])
         field_name = topic_name.replace("/", "_").lstrip("_")
-        qos = pub.get("qos", 10)
+        qos_spec = pub.get("qos", 10)
+        qos_code = generate_qos_code(qos_spec)
         lines.append(
-            f'        ctx->publishers.{field_name} = ctx->node->template create_publisher<{msg_type}>("{topic_name}", {qos});'
+            f'        ctx->publishers.{field_name} = ctx->node->template create_publisher<{msg_type}>("{topic_name}", {qos_code});'
         )
     lines.append("")
     return "\n".join(lines)
@@ -117,9 +204,10 @@ def generate_subscriber_init(subscribers: List[Dict[str, Any]]) -> str:
         topic_name = sub["topic"]
         msg_type = ros_type_to_cpp(sub["type"])
         field_name = topic_name.replace("/", "_").lstrip("_")
-        qos = sub.get("qos", 10)
+        qos_spec = sub.get("qos", 10)
+        qos_code = generate_qos_code(qos_spec)
         lines.append(
-            f'        ctx->subscribers.{field_name} = cake::create_subscriber<{msg_type}>(ctx, "{topic_name}", {qos});'
+            f'        ctx->subscribers.{field_name} = cake::create_subscriber<{msg_type}>(ctx, "{topic_name}", {qos_code});'
         )
     lines.append("")
     return "\n".join(lines)

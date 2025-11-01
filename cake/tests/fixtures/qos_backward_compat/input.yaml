@@ -1,0 +1,19 @@
+node:
+    name: backward_compat_node
+    package: ${THIS_PACKAGE}
+
+publishers:
+    - topic: int_qos_pub
+      type: std_msgs/msg/String
+      qos: 10
+
+    - topic: default_qos_pub
+      type: std_msgs/msg/String
+
+subscribers:
+    - topic: int_qos_sub
+      type: std_msgs/msg/String
+      qos: 5
+
+    - topic: default_qos_sub
+      type: std_msgs/msg/String
