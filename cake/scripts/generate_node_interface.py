@@ -174,7 +174,7 @@ def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[st
     return sorted(includes)
 
 
-def get_namespace(interface_data: Dict[str, Any], package_name: str = None) -> str:
+def get_namespace(interface_data: Dict[str, Any], package_name: str | None = None) -> str:
     """
     Determine the C++ namespace based on package and node name.
     Handles ${THIS_PACKAGE} substitution.
@@ -199,7 +199,7 @@ def get_namespace(interface_data: Dict[str, Any], package_name: str = None) -> s
         return node_name
 
 
-def generate_header(interface_data: Dict[str, Any], package_name: str = None) -> str:
+def generate_header(interface_data: Dict[str, Any], package_name: str | None = None) -> str:
     """Generate the complete C++ header file using Jinja2 template."""
     # Set up Jinja2 environment
     template_dir = Path(__file__).parent / "templates"
