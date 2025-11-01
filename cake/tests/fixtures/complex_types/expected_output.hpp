@@ -12,7 +12,7 @@
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
 
-namespace complex_node {
+namespace test_package::complex_node {
 
 template <typename ContextType> struct ComplexNodePublishers {
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose;
@@ -58,4 +58,4 @@ class ComplexNodeBase : public cake::BaseNode<"complex_node", extend_options> {
     }
 };
 
-} // namespace complex_node
+} // namespace test_package::complex_node

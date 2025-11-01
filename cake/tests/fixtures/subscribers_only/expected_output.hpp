@@ -10,7 +10,7 @@
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
 
-namespace sub_node {
+namespace test_package::sub_node {
 
 template <typename ContextType> struct SubNodePublishers {};
 
@@ -48,4 +48,4 @@ class SubNodeBase : public cake::BaseNode<"sub_node", extend_options> {
     }
 };
 
-} // namespace sub_node
+} // namespace test_package::sub_node

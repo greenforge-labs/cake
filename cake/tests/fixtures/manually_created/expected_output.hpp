@@ -10,7 +10,7 @@
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
 
-namespace manual_node {
+namespace test_package::manual_node {
 
 template <typename ContextType> struct ManualNodePublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr auto_topic;
@@ -52,4 +52,4 @@ class ManualNodeBase : public cake::BaseNode<"manual_node", extend_options> {
     }
 };
 
-} // namespace manual_node
+} // namespace test_package::manual_node

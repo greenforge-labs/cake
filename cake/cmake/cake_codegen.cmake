@@ -29,9 +29,10 @@ macro(cake_generate_node_interface LIB_NAME YAML_FILE)
     # Generate the header for the library
     add_custom_command(
         OUTPUT ${INTERFACE_HEADER_FILE}
-        COMMAND ${cake_codegen_script_BIN} ${INTERFACE_HEADER_FILE} ${YAML_FILE_PATH}
+        COMMAND ${cake_codegen_script_BIN} ${INTERFACE_HEADER_FILE} ${YAML_FILE_PATH} --package ${PROJECT_NAME}
         DEPENDS ${YAML_FILE_PATH}
-        COMMENT "Running `${cake_codegen_script_BIN} ${INTERFACE_HEADER_FILE} ${YAML_FILE_PATH}`"
+        COMMENT
+            "Running `${cake_codegen_script_BIN} ${INTERFACE_HEADER_FILE} ${YAML_FILE_PATH} --package ${PROJECT_NAME}`"
         VERBATIM
     )
 

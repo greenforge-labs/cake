@@ -9,7 +9,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 
-namespace pub_node {
+namespace test_package::pub_node {
 
 template <typename ContextType> struct PubNodePublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status;
@@ -47,4 +47,4 @@ class PubNodeBase : public cake::BaseNode<"pub_node", extend_options> {
     }
 };
 
-} // namespace pub_node
+} // namespace test_package::pub_node

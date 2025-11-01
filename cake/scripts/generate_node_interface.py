@@ -175,7 +175,7 @@ def collect_includes(
     return sorted(includes)
 
 
-def generate_header(interface_data: Dict[str, Any]) -> str:
+def generate_header(interface_data: Dict[str, Any], package_name: str = None) -> str:
     """Generate the complete C++ header file."""
     node_info = interface_data["node"]
     node_name = node_info["name"]
@@ -211,11 +211,20 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     lines.append("")
 
     # Determine namespace
-    if package and package != "${THIS_PACKAGE}":
+    # Substitute ${THIS_PACKAGE} with actual package name if provided
+    if package == "${THIS_PACKAGE}":
+        if package_name:
+            package = package_name
+        else:
+            # Error: ${THIS_PACKAGE} used but no package name provided
+            raise ValueError(
+                "interface.yaml uses ${THIS_PACKAGE} but no --package argument was provided. "
+                "Please provide the package name via --package argument."
+            )
+
+    if package:
         ns = f"{package}::{node_name}"
     else:
-        # For ${THIS_PACKAGE}, we can't know the package name, so just use node_name
-        # The user will need to wrap this in their own namespace
         ns = node_name
 
     # Open namespace
@@ -244,6 +253,7 @@ def main():
     )
     parser.add_argument("output_file", help="Output header file path")
     parser.add_argument("interface_yaml", help="Path to interface.yaml file")
+    parser.add_argument("--package", help="Package name to substitute for ${THIS_PACKAGE}", default=None)
 
     args = parser.parse_args()
 
@@ -261,7 +271,7 @@ def main():
         sys.exit(1)
 
     # Generate header content
-    header_content = generate_header(interface_data)
+    header_content = generate_header(interface_data, args.package)
 
     # Ensure output directory exists
     output_file = Path(args.output_file)

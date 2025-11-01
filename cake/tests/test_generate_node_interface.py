@@ -45,7 +45,7 @@ def test_generate_node_interface(test_name, input_file, expected_file, generated
     """Test code generation for each fixture."""
     # Run the generator script
     result = subprocess.run(
-        ["python3", str(SCRIPT_PATH), str(generated_file), str(input_file)],
+        ["python3", str(SCRIPT_PATH), str(generated_file), str(input_file), "--package", "test_package"],
         capture_output=True,
         text=True
     )
@@ -92,7 +92,7 @@ def test_missing_node_name(tmp_path):
 
     # Run the generator script
     result = subprocess.run(
-        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file)],
+        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
         text=True
     )
@@ -112,7 +112,7 @@ def test_missing_node_section(tmp_path):
 
     # Run the generator script
     result = subprocess.run(
-        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file)],
+        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
         text=True
     )
@@ -136,7 +136,7 @@ subscribers: []
 
     # Run the generator script
     result = subprocess.run(
-        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file)],
+        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
         text=True
     )
@@ -151,6 +151,29 @@ subscribers: []
     # Should generate empty structs
     assert "struct TestNodePublishers {}" in output
     assert "struct TestNodeSubscribers {}" in output
+
+
+def test_this_package_without_package_arg(tmp_path):
+    """Test that ${THIS_PACKAGE} without --package argument causes script to fail."""
+    # Create a YAML file using ${THIS_PACKAGE}
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text("""node:
+    name: test_node
+    package: ${THIS_PACKAGE}
+publishers: []
+""")
+    output_file = tmp_path / "output.hpp"
+
+    # Run the generator script WITHOUT --package argument
+    result = subprocess.run(
+        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file)],
+        capture_output=True,
+        text=True
+    )
+
+    # Should fail with non-zero exit code
+    assert result.returncode != 0, "Script should fail when ${THIS_PACKAGE} is used without --package argument"
+    assert "${THIS_PACKAGE}" in result.stderr or "package" in result.stderr.lower()
 
 
 if __name__ == "__main__":

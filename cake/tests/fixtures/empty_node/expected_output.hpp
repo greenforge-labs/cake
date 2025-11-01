@@ -6,7 +6,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 
-namespace empty_node {
+namespace test_package::empty_node {
 
 template <typename ContextType> struct EmptyNodePublishers {};
 
@@ -39,4 +39,4 @@ class EmptyNodeBase : public cake::BaseNode<"empty_node", extend_options> {
     }
 };
 
-} // namespace empty_node
+} // namespace test_package::empty_node

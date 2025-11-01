@@ -10,7 +10,7 @@
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
 
-namespace simple_node {
+namespace test_package::simple_node {
 
 template <typename ContextType> struct SimpleNodePublishers {
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel;
@@ -52,4 +52,4 @@ class SimpleNodeBase : public cake::BaseNode<"simple_node", extend_options> {
     }
 };
 
-} // namespace simple_node
+} // namespace test_package::simple_node
