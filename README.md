@@ -260,10 +260,10 @@ Skip auto-generation for specific topics when you need custom initialization:
 publishers:
     - topic: /custom_topic
       type: std_msgs/msg/String
-      manually_created: true  # Field will be in struct but not initialized
+      manually_created: true  # Completely excluded from code generation
 ```
 
-The publisher field will be declared in the struct but not automatically created, allowing you to initialize it manually in your `init()` function.
+Items marked with `manually_created: true` are completely excluded from the generated code, allowing you to create and initialize them entirely manually in your `init()` function or elsewhere in your code.
 
 ### Topic Name to Field Name Conversion
 
