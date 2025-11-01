@@ -192,7 +192,7 @@ def generate_header(interface_data: Dict[str, Any], package_name: str = None) ->
     namespace = "".join(word.capitalize() for word in node_name.split("_"))
 
     # Generate header
-    lines = ["#pragma once", ""]
+    lines = ["// auto-generated DO NOT EDIT", "", "#pragma once", ""]
     lines.append("#include <memory>")
     lines.append("#include <rclcpp/rclcpp.hpp>")
     lines.append("")

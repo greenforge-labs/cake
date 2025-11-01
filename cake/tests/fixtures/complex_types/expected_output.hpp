@@ -1,3 +1,5 @@
+// auto-generated DO NOT EDIT
+
 #pragma once
 
 #include <memory>
