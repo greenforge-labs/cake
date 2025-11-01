@@ -1,6 +1,6 @@
 #include <memory>
 
-#include "../../fake_install/my_node.hpp"
+#include <cake_example/my_node_interface.hpp>
 
 namespace cake_example::my_node {
 

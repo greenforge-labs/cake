@@ -11,6 +11,10 @@ ament_auto_find_build_dependencies()
 ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 
+# NOTE: first argument to cake_generate_node_interface is "LIB_NAME" - impacts the name of the generated header file
+cake_generate_node_interface(my_node_interface nodes/my_node/interface.yaml)
+target_link_libraries(${PROJECT_NAME} my_node_interface)
+
 # NOTE: first argument to generate_parameter_library is "LIB_NAME" - impacts the name of the generated header file
 generate_parameter_library(my_node_parameters nodes/my_node/parameters.yaml)
 target_link_libraries(${PROJECT_NAME} my_node_parameters)
