@@ -16,6 +16,7 @@
   <depend>cake</depend>
 
   <depend>std_msgs</depend>
+  <depend>example_interfaces</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

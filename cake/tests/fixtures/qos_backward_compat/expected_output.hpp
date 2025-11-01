@@ -21,9 +21,12 @@ template <typename ContextType> struct BackwardCompatNodeSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> default_qos_sub;
 };
 
+template <typename ContextType> struct BackwardCompatNodeServices {};
+
 template <typename DerivedContextType> struct BackwardCompatNodeContext : cake::Context {
     BackwardCompatNodePublishers<DerivedContextType> publishers;
     BackwardCompatNodeSubscribers<DerivedContextType> subscribers;
+    BackwardCompatNodeServices<DerivedContextType> services;
 };
 
 
@@ -48,8 +51,6 @@ class BackwardCompatNodeBase : public cake::BaseNode<"backward_compat_node", ext
         // init subscribers
         ctx->subscribers.int_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "int_qos_sub", 5);
         ctx->subscribers.default_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "default_qos_sub", 10);
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };

@@ -6,11 +6,23 @@ Parses interface.yaml and generates C++ header with publishers, subscribers, con
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Any
 import yaml
 from jinja2 import Environment, FileSystemLoader
+
+
+def camel_to_snake(name: str) -> str:
+    """
+    Convert CamelCase or PascalCase to snake_case.
+    Example: AddTwoInts -> add_two_ints, String -> string
+    """
+    # Insert underscore before uppercase letters that follow lowercase letters or digits
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    # Insert underscore before uppercase letters that follow lowercase or digits
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
 def ros_type_to_cpp(ros_type: str) -> str:
@@ -25,11 +37,12 @@ def ros_type_to_include(ros_type: str) -> str:
     """
     Convert ROS message type to include path.
     Example: std_msgs/msg/String -> std_msgs/msg/string.hpp
+    Example: geometry_msgs/msg/TwistStamped -> geometry_msgs/msg/twist_stamped.hpp
     """
     parts = ros_type.split("/")
     if len(parts) >= 3:
-        # Convert last part (message name) to lowercase
-        parts[-1] = parts[-1].lower()
+        # Convert last part (message name) from PascalCase to snake_case
+        parts[-1] = camel_to_snake(parts[-1])
     return "/".join(parts) + ".hpp"
 
 
@@ -161,8 +174,50 @@ def prepare_subscribers(subscribers_raw: List[Dict[str, Any]]) -> List[Dict[str,
     return subscribers
 
 
-def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]]) -> List[str]:
-    """Collect all required message includes."""
+def ros_type_to_service_include(ros_type: str) -> str:
+    """
+    Convert ROS service type to include path.
+    Example: example_interfaces/srv/AddTwoInts -> example_interfaces/srv/add_two_ints.hpp
+    """
+    parts = ros_type.split("/")
+    if len(parts) >= 3:
+        # Convert last part (service name) from PascalCase to snake_case
+        parts[-1] = camel_to_snake(parts[-1])
+    return "/".join(parts) + ".hpp"
+
+
+def service_to_field_name(service_name: str) -> str:
+    """
+    Convert service name to valid C++ identifier.
+    Example: /add_two_ints -> add_two_ints, /robot/compute -> robot_compute
+    """
+    return service_name.replace("/", "_").lstrip("_")
+
+
+def prepare_services(services_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """
+    Prepare service data for template rendering.
+    Converts raw YAML data into template-ready format.
+    """
+    services = []
+    for srv in services_raw:
+        if not srv.get("manually_created", False):
+            # Only generate QoS code if explicitly specified
+            qos_code = None
+            if 'qos' in srv:
+                qos_code = generate_qos_code(srv['qos'])
+
+            services.append({
+                'name': srv['name'],
+                'service_type': ros_type_to_cpp(srv['type']),
+                'field_name': service_to_field_name(srv['name']),
+                'qos_code': qos_code
+            })
+    return services
+
+
+def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]], services: List[Dict[str, Any]]) -> List[str]:
+    """Collect all required message and service includes."""
     includes = set()
 
     for pub in publishers:
@@ -170,6 +225,9 @@ def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[st
 
     for sub in subscribers:
         includes.add(ros_type_to_include(sub['type']))
+
+    for srv in services:
+        includes.add(ros_type_to_service_include(srv['type']))
 
     return sorted(includes)
 
@@ -214,11 +272,13 @@ def generate_header(interface_data: Dict[str, Any], package_name: str | None = N
     node_name = interface_data["node"]["name"]
     publishers_raw = interface_data.get("publishers", [])
     subscribers_raw = interface_data.get("subscribers", [])
+    services_raw = interface_data.get("services", [])
 
     # Prepare template data
     publishers = prepare_publishers(publishers_raw)
     subscribers = prepare_subscribers(subscribers_raw)
-    message_includes = collect_includes(publishers_raw, subscribers_raw)
+    services = prepare_services(services_raw)
+    message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw)
     namespace = get_namespace(interface_data, package_name)
     class_name = "".join(word.capitalize() for word in node_name.split("_"))
 
@@ -229,7 +289,8 @@ def generate_header(interface_data: Dict[str, Any], package_name: str | None = N
         namespace=namespace,
         message_includes=message_includes,
         publishers=publishers,
-        subscribers=subscribers
+        subscribers=subscribers,
+        services=services
     )
 
 

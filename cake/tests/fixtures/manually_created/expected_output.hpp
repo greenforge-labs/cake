@@ -22,9 +22,12 @@ template <typename ContextType> struct ManualNodeSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::Bool, ContextType>> auto_sub;
 };
 
+template <typename ContextType> struct ManualNodeServices {};
+
 template <typename DerivedContextType> struct ManualNodeContext : cake::Context {
     ManualNodePublishers<DerivedContextType> publishers;
     ManualNodeSubscribers<DerivedContextType> subscribers;
+    ManualNodeServices<DerivedContextType> services;
 };
 
 
@@ -47,8 +50,6 @@ class ManualNodeBase : public cake::BaseNode<"manual_node", extend_options> {
         ctx->publishers.auto_topic = ctx->node->template create_publisher<std_msgs::msg::String>("auto_topic", 10);
         // init subscribers
         ctx->subscribers.auto_sub = cake::create_subscriber<std_msgs::msg::Bool>(ctx, "auto_sub", 10);
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };

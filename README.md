@@ -8,7 +8,7 @@ Cake provides code generation tools that reduce boilerplate and make ROS2 node d
 
 - **Node Interface Generator**: Automatically generate C++ node interfaces from YAML definitions
 - **Type-safe Context**: Generated context structures with compile-time type checking
-- **Declarative Publishers/Subscribers**: Define topics in YAML instead of C++
+- **Declarative Publishers/Subscribers/Services**: Define topics and services in YAML instead of C++
 - **Flexible QoS Configuration**: Support for predefined profiles and custom parameters
 
 ## Quick Start
@@ -31,6 +31,10 @@ subscribers:
     - topic: /odom
       type: nav_msgs/msg/Odometry
       qos: SensorDataQoS
+
+services:
+    - name: /reset
+      type: std_srvs/srv/Trigger
 ```
 
 ### 2. Add to CMakeLists.txt
@@ -55,6 +59,13 @@ void init(std::shared_ptr<MyContext> ctx) {
     // Your initialization code
     // ctx->publishers.cmd_vel is ready to use
     // ctx->subscribers.odom is ready to use
+
+    // Set up service handler
+    ctx->services.reset->set_request_handler(
+        [](auto ctx, auto request, auto response) {
+            response->success = true;
+        }
+    );
 }
 
 using MyNode = my_package::my_node::MyNodeBase<MyContext, init>;
@@ -97,6 +108,31 @@ subscribers:
       type: std_msgs/msg/String     # Message type (required)
       qos: 10                       # QoS configuration (optional, default: 10)
       manually_created: false       # Skip auto-generation (optional, default: false)
+```
+
+### Services
+
+```yaml
+services:
+    - name: /my_service             # Service name (required)
+      type: std_srvs/srv/Trigger    # Service type (required)
+      qos: ServicesQoS              # QoS configuration (optional, omit to use C++ default)
+      manually_created: false       # Skip auto-generation (optional, default: false)
+```
+
+When `qos` is omitted, the generated code will use the default QoS from rclcpp (`ServicesQoS`).
+
+Services create service providers (servers) that respond to requests. To set the request handler:
+
+```cpp
+void init(std::shared_ptr<MyContext> ctx) {
+    ctx->services.my_service->set_request_handler(
+        [](auto ctx, auto request, auto response) {
+            // Handle the service request
+            response->success = true;
+        }
+    );
+}
 ```
 
 ## QoS Configuration
@@ -223,11 +259,19 @@ template <typename ContextType> struct MyNodeSubscribers {
 };
 ```
 
+### Services Struct
+```cpp
+template <typename ContextType> struct MyNodeServices {
+    std::shared_ptr<cake::Service<std_srvs::srv::Trigger, ContextType>> my_service;
+};
+```
+
 ### Context Struct
 ```cpp
 template <typename DerivedContextType> struct MyNodeContext : cake::Context {
     MyNodePublishers<DerivedContextType> publishers;
     MyNodeSubscribers<DerivedContextType> subscribers;
+    MyNodeServices<DerivedContextType> services;
 };
 ```
 

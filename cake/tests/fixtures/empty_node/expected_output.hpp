@@ -13,9 +13,12 @@ template <typename ContextType> struct EmptyNodePublishers {};
 
 template <typename ContextType> struct EmptyNodeSubscribers {};
 
+template <typename ContextType> struct EmptyNodeServices {};
+
 template <typename DerivedContextType> struct EmptyNodeContext : cake::Context {
     EmptyNodePublishers<DerivedContextType> publishers;
     EmptyNodeSubscribers<DerivedContextType> subscribers;
+    EmptyNodeServices<DerivedContextType> services;
 };
 
 
@@ -33,8 +36,6 @@ class EmptyNodeBase : public cake::BaseNode<"empty_node", extend_options> {
         // init context
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };

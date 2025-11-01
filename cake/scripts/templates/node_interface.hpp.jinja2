@@ -12,6 +12,9 @@
 {%- if subscribers %}
 #include <cake/subscriber.hpp>
 {%- endif %}
+{%- if services %}
+#include <cake/service.hpp>
+{%- endif %}
 
 namespace {{ namespace }} {
 {%- if publishers %}
@@ -36,10 +39,22 @@ template <typename ContextType> struct {{ class_name }}Subscribers {
 
 template <typename ContextType> struct {{ class_name }}Subscribers {};
 {%- endif %}
+{%- if services %}
+
+template <typename ContextType> struct {{ class_name }}Services {
+{%- for srv in services %}
+    std::shared_ptr<cake::Service<{{ srv.service_type }}, ContextType>> {{ srv.field_name }};
+{%- endfor %}
+};
+{%- else %}
+
+template <typename ContextType> struct {{ class_name }}Services {};
+{%- endif %}
 
 template <typename DerivedContextType> struct {{ class_name }}Context : cake::Context {
     {{ class_name }}Publishers<DerivedContextType> publishers;
     {{ class_name }}Subscribers<DerivedContextType> subscribers;
+    {{ class_name }}Services<DerivedContextType> services;
 };
 
 
@@ -72,8 +87,13 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
 {%- endfor %}
 
 {%- endif %}
-        // TODO init services and actions
+{%- if services %}
+        // init services
+{%- for srv in services %}
+        ctx->services.{{ srv.field_name }} = cake::create_service<{{ srv.service_type }}>(ctx, "{{ srv.name }}"{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %});
+{%- endfor %}
 
+{%- endif %}
         init_func(ctx);
     }
 };

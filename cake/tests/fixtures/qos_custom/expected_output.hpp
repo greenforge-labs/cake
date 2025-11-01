@@ -21,9 +21,12 @@ template <typename ContextType> struct CustomQosNodeSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> profile_override_topic;
 };
 
+template <typename ContextType> struct CustomQosNodeServices {};
+
 template <typename DerivedContextType> struct CustomQosNodeContext : cake::Context {
     CustomQosNodePublishers<DerivedContextType> publishers;
     CustomQosNodeSubscribers<DerivedContextType> subscribers;
+    CustomQosNodeServices<DerivedContextType> services;
 };
 
 
@@ -48,8 +51,6 @@ class CustomQosNodeBase : public cake::BaseNode<"custom_qos_node", extend_option
         // init subscribers
         ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(10).reliable().keep_all());
         ctx->subscribers.profile_override_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "profile_override_topic", rclcpp::SensorDataQoS().reliable().keep_last(20));
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };

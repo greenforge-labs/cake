@@ -20,9 +20,12 @@ template <typename ContextType> struct SimpleNodeSubscribers {
     std::shared_ptr<cake::Subscriber<nav_msgs::msg::Odometry, ContextType>> odom;
 };
 
+template <typename ContextType> struct SimpleNodeServices {};
+
 template <typename DerivedContextType> struct SimpleNodeContext : cake::Context {
     SimpleNodePublishers<DerivedContextType> publishers;
     SimpleNodeSubscribers<DerivedContextType> subscribers;
+    SimpleNodeServices<DerivedContextType> services;
 };
 
 
@@ -45,8 +48,6 @@ class SimpleNodeBase : public cake::BaseNode<"simple_node", extend_options> {
         ctx->publishers.cmd_vel = ctx->node->template create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
         // init subscribers
         ctx->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(ctx, "/odom", 10);
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };

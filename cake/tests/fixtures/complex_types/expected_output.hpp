@@ -4,10 +4,10 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
-#include <geometry_msgs/msg/posestamped.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/path.hpp>
-#include <sensor_msgs/msg/jointstate.hpp>
-#include <sensor_msgs/msg/pointcloud2.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
@@ -24,9 +24,12 @@ template <typename ContextType> struct ComplexNodeSubscribers {
     std::shared_ptr<cake::Subscriber<sensor_msgs::msg::PointCloud2, ContextType>> point_cloud;
 };
 
+template <typename ContextType> struct ComplexNodeServices {};
+
 template <typename DerivedContextType> struct ComplexNodeContext : cake::Context {
     ComplexNodePublishers<DerivedContextType> publishers;
     ComplexNodeSubscribers<DerivedContextType> subscribers;
+    ComplexNodeServices<DerivedContextType> services;
 };
 
 
@@ -51,8 +54,6 @@ class ComplexNodeBase : public cake::BaseNode<"complex_node", extend_options> {
         // init subscribers
         ctx->subscribers.joint_states = cake::create_subscriber<sensor_msgs::msg::JointState>(ctx, "joint_states", 10);
         ctx->subscribers.point_cloud = cake::create_subscriber<sensor_msgs::msg::PointCloud2>(ctx, "point_cloud", 1);
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };

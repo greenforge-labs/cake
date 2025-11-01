@@ -5,7 +5,7 @@
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
-#include <sensor_msgs/msg/laserscan.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
@@ -19,9 +19,12 @@ template <typename ContextType> struct SubNodeSubscribers {
     std::shared_ptr<cake::Subscriber<sensor_msgs::msg::Image, ContextType>> camera_image;
 };
 
+template <typename ContextType> struct SubNodeServices {};
+
 template <typename DerivedContextType> struct SubNodeContext : cake::Context {
     SubNodePublishers<DerivedContextType> publishers;
     SubNodeSubscribers<DerivedContextType> subscribers;
+    SubNodeServices<DerivedContextType> services;
 };
 
 
@@ -42,8 +45,6 @@ class SubNodeBase : public cake::BaseNode<"sub_node", extend_options> {
         // init subscribers
         ctx->subscribers.sensor_data = cake::create_subscriber<sensor_msgs::msg::LaserScan>(ctx, "sensor_data", 10);
         ctx->subscribers.camera_image = cake::create_subscriber<sensor_msgs::msg::Image>(ctx, "camera_image", 1);
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };

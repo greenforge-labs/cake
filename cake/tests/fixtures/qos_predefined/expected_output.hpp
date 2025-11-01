@@ -21,9 +21,12 @@ template <typename ContextType> struct QosTestNodeSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> services_topic;
 };
 
+template <typename ContextType> struct QosTestNodeServices {};
+
 template <typename DerivedContextType> struct QosTestNodeContext : cake::Context {
     QosTestNodePublishers<DerivedContextType> publishers;
     QosTestNodeSubscribers<DerivedContextType> subscribers;
+    QosTestNodeServices<DerivedContextType> services;
 };
 
 
@@ -48,8 +51,6 @@ class QosTestNodeBase : public cake::BaseNode<"qos_test_node", extend_options> {
         // init subscribers
         ctx->subscribers.parameters_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "parameters_topic", rclcpp::ParametersQoS());
         ctx->subscribers.services_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "services_topic", rclcpp::ServicesQoS());
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };

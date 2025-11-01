@@ -18,9 +18,12 @@ template <typename ContextType> struct PubNodePublishers {
 
 template <typename ContextType> struct PubNodeSubscribers {};
 
+template <typename ContextType> struct PubNodeServices {};
+
 template <typename DerivedContextType> struct PubNodeContext : cake::Context {
     PubNodePublishers<DerivedContextType> publishers;
     PubNodeSubscribers<DerivedContextType> subscribers;
+    PubNodeServices<DerivedContextType> services;
 };
 
 
@@ -42,8 +45,6 @@ class PubNodeBase : public cake::BaseNode<"pub_node", extend_options> {
         // init publishers
         ctx->publishers.status = ctx->node->template create_publisher<std_msgs::msg::String>("status", 10);
         ctx->publishers.counter = ctx->node->template create_publisher<std_msgs::msg::Int32>("counter", 5);
-        // TODO init services and actions
-
         init_func(ctx);
     }
 };
