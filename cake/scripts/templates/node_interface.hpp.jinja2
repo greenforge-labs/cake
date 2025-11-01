@@ -15,6 +15,9 @@
 {%- if services %}
 #include <cake/service.hpp>
 {%- endif %}
+{%- if action_servers %}
+#include <cake/action_server.hpp>
+{%- endif %}
 
 namespace {{ namespace }} {
 {%- if publishers %}
@@ -61,12 +64,24 @@ template <typename ContextType> struct {{ class_name }}ServiceClients {
 
 template <typename ContextType> struct {{ class_name }}ServiceClients {};
 {%- endif %}
+{%- if action_servers %}
+
+template <typename ContextType> struct {{ class_name }}ActionServers {
+{%- for action in action_servers %}
+    std::shared_ptr<cake::SingleGoalActionServer<{{ action.action_type }}>> {{ action.field_name }};
+{%- endfor %}
+};
+{%- else %}
+
+template <typename ContextType> struct {{ class_name }}ActionServers {};
+{%- endif %}
 
 template <typename DerivedContextType> struct {{ class_name }}Context : cake::Context {
     {{ class_name }}Publishers<DerivedContextType> publishers;
     {{ class_name }}Subscribers<DerivedContextType> subscribers;
     {{ class_name }}Services<DerivedContextType> services;
     {{ class_name }}ServiceClients<DerivedContextType> service_clients;
+    {{ class_name }}ActionServers<DerivedContextType> action_servers;
 };
 
 
@@ -110,6 +125,13 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
         // init service clients
 {%- for client in service_clients %}
         ctx->service_clients.{{ client.field_name }} = ctx->node->template create_client<{{ client.service_type }}>("{{ client.name }}"{% if client.qos_code %}, {{ client.qos_code }}{% endif %});
+{%- endfor %}
+
+{%- endif %}
+{%- if action_servers %}
+        // init action servers
+{%- for action in action_servers %}
+        ctx->action_servers.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx, "{{ action.name }}");
 {%- endfor %}
 
 {%- endif %}

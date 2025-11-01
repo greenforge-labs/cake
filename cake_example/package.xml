@@ -17,6 +17,7 @@
 
   <depend>std_msgs</depend>
   <depend>example_interfaces</depend>
+  <depend>example_action</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

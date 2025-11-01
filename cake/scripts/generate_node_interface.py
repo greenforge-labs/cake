@@ -194,6 +194,26 @@ def service_to_field_name(service_name: str) -> str:
     return service_name.replace("/", "_").lstrip("_")
 
 
+def ros_type_to_action_include(ros_type: str) -> str:
+    """
+    Convert ROS action type to include path.
+    Example: example_interfaces/action/Fibonacci -> example_interfaces/action/fibonacci.hpp
+    """
+    parts = ros_type.split("/")
+    if len(parts) >= 3:
+        # Convert last part (action name) from PascalCase to snake_case
+        parts[-1] = camel_to_snake(parts[-1])
+    return "/".join(parts) + ".hpp"
+
+
+def action_to_field_name(action_name: str) -> str:
+    """
+    Convert action name to valid C++ identifier.
+    Example: /fibonacci -> fibonacci, /robot/compute -> robot_compute
+    """
+    return action_name.replace("/", "_").lstrip("_")
+
+
 def prepare_services(services_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     """
     Prepare service data for template rendering.
@@ -238,8 +258,24 @@ def prepare_service_clients(service_clients_raw: List[Dict[str, Any]]) -> List[D
     return service_clients
 
 
-def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]], services: List[Dict[str, Any]], service_clients: List[Dict[str, Any]]) -> List[str]:
-    """Collect all required message and service includes."""
+def prepare_action_servers(action_servers_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """
+    Prepare action server data for template rendering.
+    Converts raw YAML data into template-ready format.
+    """
+    action_servers = []
+    for action in action_servers_raw:
+        if not action.get("manually_created", False):
+            action_servers.append({
+                'name': action['name'],
+                'action_type': ros_type_to_cpp(action['type']),
+                'field_name': action_to_field_name(action['name'])
+            })
+    return action_servers
+
+
+def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]], services: List[Dict[str, Any]], service_clients: List[Dict[str, Any]], action_servers: List[Dict[str, Any]]) -> List[str]:
+    """Collect all required message, service, and action includes."""
     includes = set()
 
     for pub in publishers:
@@ -253,6 +289,9 @@ def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[st
 
     for client in service_clients:
         includes.add(ros_type_to_service_include(client['type']))
+
+    for action in action_servers:
+        includes.add(ros_type_to_action_include(action['type']))
 
     return sorted(includes)
 
@@ -299,13 +338,15 @@ def generate_header(interface_data: Dict[str, Any], package_name: str | None = N
     subscribers_raw = interface_data.get("subscribers", [])
     services_raw = interface_data.get("services", [])
     service_clients_raw = interface_data.get("service_clients", [])
+    action_servers_raw = interface_data.get("action_servers", [])
 
     # Prepare template data
     publishers = prepare_publishers(publishers_raw)
     subscribers = prepare_subscribers(subscribers_raw)
     services = prepare_services(services_raw)
     service_clients = prepare_service_clients(service_clients_raw)
-    message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw, service_clients_raw)
+    action_servers = prepare_action_servers(action_servers_raw)
+    message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw, service_clients_raw, action_servers_raw)
     namespace = get_namespace(interface_data, package_name)
     class_name = "".join(word.capitalize() for word in node_name.split("_"))
 
@@ -318,7 +359,8 @@ def generate_header(interface_data: Dict[str, Any], package_name: str | None = N
         publishers=publishers,
         subscribers=subscribers,
         services=services,
-        service_clients=service_clients
+        service_clients=service_clients,
+        action_servers=action_servers
     )
 
 

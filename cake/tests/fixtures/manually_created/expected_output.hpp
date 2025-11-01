@@ -26,11 +26,14 @@ template <typename ContextType> struct ManualNodeServices {};
 
 template <typename ContextType> struct ManualNodeServiceClients {};
 
+template <typename ContextType> struct ManualNodeActionServers {};
+
 template <typename DerivedContextType> struct ManualNodeContext : cake::Context {
     ManualNodePublishers<DerivedContextType> publishers;
     ManualNodeSubscribers<DerivedContextType> subscribers;
     ManualNodeServices<DerivedContextType> services;
     ManualNodeServiceClients<DerivedContextType> service_clients;
+    ManualNodeActionServers<DerivedContextType> action_servers;
 };
 
 

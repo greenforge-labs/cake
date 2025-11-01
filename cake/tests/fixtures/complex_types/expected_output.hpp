@@ -28,11 +28,14 @@ template <typename ContextType> struct ComplexNodeServices {};
 
 template <typename ContextType> struct ComplexNodeServiceClients {};
 
+template <typename ContextType> struct ComplexNodeActionServers {};
+
 template <typename DerivedContextType> struct ComplexNodeContext : cake::Context {
     ComplexNodePublishers<DerivedContextType> publishers;
     ComplexNodeSubscribers<DerivedContextType> subscribers;
     ComplexNodeServices<DerivedContextType> services;
     ComplexNodeServiceClients<DerivedContextType> service_clients;
+    ComplexNodeActionServers<DerivedContextType> action_servers;
 };
 
 

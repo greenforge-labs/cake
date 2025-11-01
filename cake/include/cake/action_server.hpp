@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <rclcpp/node.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
@@ -21,7 +22,7 @@ template <typename ActionT> class SingleGoalActionServer {
     explicit SingleGoalActionServer(
         rclcpp::Node *node,
         const std::string &server_name,
-        const SingleGoalActionServerOptions<ActionT> &options = SingleGoalActionServerOptions<ActionT>()
+        const std::optional<SingleGoalActionServerOptions<ActionT>> &options = std::nullopt
     )
         : node_(node), action_server_(nullptr), active_goal_handle_(nullptr), options_(options) {
 
@@ -43,6 +44,8 @@ template <typename ActionT> class SingleGoalActionServer {
         }
     }
 
+    void set_options(const SingleGoalActionServerOptions<ActionT> &options) { options_ = options; }
+
     const std::shared_ptr<const typename ActionT::Goal> get_active_goal() {
         if (!active_goal_handle_) {
             return nullptr;
@@ -51,21 +54,55 @@ template <typename ActionT> class SingleGoalActionServer {
         return active_goal_handle_->get_goal();
     }
 
+    void publish_feedback(std::shared_ptr<typename ActionT::Feedback> feedback) {
+        if (!active_goal_handle_) {
+            RCLCPP_WARN(node_->get_logger(), "Cannot publish feedback: no active goal");
+            return;
+        }
+        active_goal_handle_->publish_feedback(feedback);
+    }
+
+    void succeed(std::shared_ptr<typename ActionT::Result> result) {
+        if (!active_goal_handle_) {
+            RCLCPP_WARN(node_->get_logger(), "Cannot succeed: no active goal");
+            return;
+        }
+        active_goal_handle_->succeed(result);
+        active_goal_handle_ = nullptr;
+    }
+
+    void abort(std::shared_ptr<typename ActionT::Result> result) {
+        if (!active_goal_handle_) {
+            RCLCPP_WARN(node_->get_logger(), "Cannot abort: no active goal");
+            return;
+        }
+        active_goal_handle_->abort(result);
+        active_goal_handle_ = nullptr;
+    }
+
   private:
     rclcpp::Node *node_;
     rclcpp_action::Server<ActionT>::SharedPtr action_server_;
     std::shared_ptr<GoalHandle> active_goal_handle_;
-    SingleGoalActionServerOptions<ActionT> options_;
+    std::optional<SingleGoalActionServerOptions<ActionT>> options_;
 
     rclcpp_action::GoalResponse
     handle_goal(const rclcpp_action::GoalUUID & /*uuid*/, std::shared_ptr<const typename ActionT::Goal> goal) {
-        if (!options_.goal_validator(*goal)) {
+        if (!options_.has_value()) {
+            RCLCPP_WARN(
+                node_->get_logger(),
+                "Rejecting goal: action server options not configured. Call set_options() to configure."
+            );
+            return rclcpp_action::GoalResponse::REJECT;
+        }
+
+        if (!options_.value().goal_validator(*goal)) {
             RCLCPP_WARN(node_->get_logger(), "Rejecting goal, goal is invalid");
             return rclcpp_action::GoalResponse::REJECT;
         }
 
         if (active_goal_handle_) {
-            if (options_.new_goals_replace_current_goal) {
+            if (options_.value().new_goals_replace_current_goal) {
                 RCLCPP_WARN(node_->get_logger(), "Cancelling current goal");
                 handle_cancel(active_goal_handle_);
             } else {
@@ -99,9 +136,18 @@ template <typename ActionT>
 std::shared_ptr<SingleGoalActionServer<ActionT>> create_single_goal_action_server(
     rclcpp::Node *node,
     const std::string &server_name,
-    const SingleGoalActionServerOptions<ActionT> &options = SingleGoalActionServerOptions<ActionT>()
+    const std::optional<SingleGoalActionServerOptions<ActionT>> &options = std::nullopt
 ) {
     return std::make_shared<SingleGoalActionServer<ActionT>>(node, server_name, options);
+}
+
+template <typename ActionT, typename ContextType>
+std::shared_ptr<SingleGoalActionServer<ActionT>> create_single_goal_action_server(
+    std::shared_ptr<ContextType> context,
+    const std::string &server_name,
+    const std::optional<SingleGoalActionServerOptions<ActionT>> &options = std::nullopt
+) {
+    return create_single_goal_action_server(context->node.get(), server_name, options);
 }
 
 } // namespace cake
