@@ -1,0 +1,13 @@
+node:
+    name: simple_node
+    package: $THIS_PACKAGE
+
+publishers:
+    - topic: /cmd_vel
+      type: geometry_msgs/msg/Twist
+      qos: 10
+
+subscribers:
+    - topic: /odom
+      type: nav_msgs/msg/Odometry
+      qos: 10
