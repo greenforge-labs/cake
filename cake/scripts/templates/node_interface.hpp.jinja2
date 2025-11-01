@@ -1,0 +1,81 @@
+// auto-generated DO NOT EDIT
+
+#pragma once
+
+#include <memory>
+#include <rclcpp/rclcpp.hpp>
+{% for include in message_includes -%}
+#include <{{ include }}>
+{% endfor -%}
+#include <cake/base_node.hpp>
+#include <cake/context.hpp>
+{%- if subscribers %}
+#include <cake/subscriber.hpp>
+{%- endif %}
+
+namespace {{ namespace }} {
+{%- if publishers %}
+
+template <typename ContextType> struct {{ class_name }}Publishers {
+{%- for pub in publishers %}
+    rclcpp::Publisher<{{ pub.msg_type }}>::SharedPtr {{ pub.field_name }};
+{%- endfor %}
+};
+{%- else %}
+
+template <typename ContextType> struct {{ class_name }}Publishers {};
+{%- endif %}
+{%- if subscribers %}
+
+template <typename ContextType> struct {{ class_name }}Subscribers {
+{%- for sub in subscribers %}
+    std::shared_ptr<cake::Subscriber<{{ sub.msg_type }}, ContextType>> {{ sub.field_name }};
+{%- endfor %}
+};
+{%- else %}
+
+template <typename ContextType> struct {{ class_name }}Subscribers {};
+{%- endif %}
+
+template <typename DerivedContextType> struct {{ class_name }}Context : cake::Context {
+    {{ class_name }}Publishers<DerivedContextType> publishers;
+    {{ class_name }}Subscribers<DerivedContextType> subscribers;
+};
+
+
+template <
+    typename ContextType,
+    auto init_func,
+    auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
+class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_options> {
+  public:
+    explicit {{ class_name }}Base(const rclcpp::NodeOptions &options) : cake::BaseNode<"{{ node_name }}", extend_options>(options) {
+        static_assert(
+            std::is_base_of_v<{{ class_name }}Context<ContextType>, ContextType>, "ContextType must be a child of {{ class_name }}Context"
+        );
+
+        // init context
+        auto ctx = std::make_shared<ContextType>();
+        ctx->node = this->node_;
+{%- if publishers %}
+
+        // init publishers
+{%- for pub in publishers %}
+        ctx->publishers.{{ pub.field_name }} = ctx->node->template create_publisher<{{ pub.msg_type }}>("{{ pub.topic }}", {{ pub.qos_code }});
+{%- endfor %}
+
+{%- endif %}
+{%- if subscribers %}
+        // init subscribers
+{%- for sub in subscribers %}
+        ctx->subscribers.{{ sub.field_name }} = cake::create_subscriber<{{ sub.msg_type }}>(ctx, "{{ sub.topic }}", {{ sub.qos_code }});
+{%- endfor %}
+
+{%- endif %}
+        // TODO init services and actions
+
+        init_func(ctx);
+    }
+};
+
+} // namespace {{ namespace }}

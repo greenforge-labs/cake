@@ -4,12 +4,10 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
-
 #include <geometry_msgs/msg/posestamped.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <sensor_msgs/msg/jointstate.hpp>
 #include <sensor_msgs/msg/pointcloud2.hpp>
-
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>

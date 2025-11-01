@@ -4,10 +4,10 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
-
 #include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/int32.hpp>
 #include <std_msgs/msg/string.hpp>
-
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>

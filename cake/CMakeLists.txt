@@ -7,6 +7,9 @@ ament_auto_find_build_dependencies()
 # Install the code generation script
 install(PROGRAMS scripts/generate_node_interface.py DESTINATION lib/${PROJECT_NAME})
 
+# Install the templates directory
+install(DIRECTORY scripts/templates DESTINATION lib/${PROJECT_NAME})
+
 # Install and export the CMake module
 install(FILES cmake/cake_codegen.cmake DESTINATION share/${PROJECT_NAME}/cmake)
 

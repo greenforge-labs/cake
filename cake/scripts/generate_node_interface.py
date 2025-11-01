@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Any
 import yaml
+from jinja2 import Environment, FileSystemLoader
 
 
 def ros_type_to_cpp(ros_type: str) -> str:
@@ -32,57 +33,12 @@ def ros_type_to_include(ros_type: str) -> str:
     return "/".join(parts) + ".hpp"
 
 
-def generate_publishers_struct(publishers: List[Dict[str, Any]], namespace: str) -> str:
-    """Generate the Publishers struct template."""
-    if not publishers:
-        return f"""template <typename ContextType> struct {namespace}Publishers {{}};
-"""
-
-    lines = [f"template <typename ContextType> struct {namespace}Publishers {{"]
-    for pub in publishers:
-        if pub.get("manually_created", False):
-            continue
-        topic_name = pub["topic"]
-        msg_type = ros_type_to_cpp(pub["type"])
-        # Convert topic name to valid C++ identifier (replace / with _)
-        field_name = topic_name.replace("/", "_").lstrip("_")
-        lines.append(f"    rclcpp::Publisher<{msg_type}>::SharedPtr {field_name};")
-    lines.append("};")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def generate_subscribers_struct(
-    subscribers: List[Dict[str, Any]], namespace: str
-) -> str:
-    """Generate the Subscribers struct template."""
-    if not subscribers:
-        return f"""template <typename ContextType> struct {namespace}Subscribers {{}};
-"""
-
-    lines = [f"template <typename ContextType> struct {namespace}Subscribers {{"]
-    for sub in subscribers:
-        if sub.get("manually_created", False):
-            continue
-        topic_name = sub["topic"]
-        msg_type = ros_type_to_cpp(sub["type"])
-        # Convert topic name to valid C++ identifier
-        field_name = topic_name.replace("/", "_").lstrip("_")
-        lines.append(
-            f"    std::shared_ptr<cake::Subscriber<{msg_type}, ContextType>> {field_name};"
-        )
-    lines.append("};")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def generate_context_struct(node_name: str, namespace: str) -> str:
-    """Generate the Context struct template."""
-    return f"""template <typename DerivedContextType> struct {namespace}Context : cake::Context {{
-    {namespace}Publishers<DerivedContextType> publishers;
-    {namespace}Subscribers<DerivedContextType> subscribers;
-}};
-"""
+def topic_to_field_name(topic: str) -> str:
+    """
+    Convert topic name to valid C++ identifier.
+    Example: /cmd_vel -> cmd_vel, /robot/status -> robot_status
+    """
+    return topic.replace("/", "_").lstrip("_")
 
 
 def generate_qos_code(qos_spec: Any) -> str:
@@ -171,134 +127,61 @@ def generate_qos_code(qos_spec: Any) -> str:
     return "10"
 
 
-def generate_publisher_init(publishers: List[Dict[str, Any]]) -> str:
-    """Generate publisher initialization code."""
-    if not publishers:
-        return ""
-
-    lines = ["        // init publishers"]
-    for pub in publishers:
-        if pub.get("manually_created", False):
-            continue
-        topic_name = pub["topic"]
-        msg_type = ros_type_to_cpp(pub["type"])
-        field_name = topic_name.replace("/", "_").lstrip("_")
-        qos_spec = pub.get("qos", 10)
-        qos_code = generate_qos_code(qos_spec)
-        lines.append(
-            f'        ctx->publishers.{field_name} = ctx->node->template create_publisher<{msg_type}>("{topic_name}", {qos_code});'
-        )
-    lines.append("")
-    return "\n".join(lines)
+def prepare_publishers(publishers_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """
+    Prepare publisher data for template rendering.
+    Converts raw YAML data into template-ready format.
+    """
+    publishers = []
+    for pub in publishers_raw:
+        if not pub.get("manually_created", False):
+            publishers.append({
+                'topic': pub['topic'],
+                'msg_type': ros_type_to_cpp(pub['type']),
+                'field_name': topic_to_field_name(pub['topic']),
+                'qos_code': generate_qos_code(pub.get('qos', 10))
+            })
+    return publishers
 
 
-def generate_subscriber_init(subscribers: List[Dict[str, Any]]) -> str:
-    """Generate subscriber initialization code."""
-    if not subscribers:
-        return ""
-
-    lines = ["        // init subscribers"]
-    for sub in subscribers:
-        if sub.get("manually_created", False):
-            continue
-        topic_name = sub["topic"]
-        msg_type = ros_type_to_cpp(sub["type"])
-        field_name = topic_name.replace("/", "_").lstrip("_")
-        qos_spec = sub.get("qos", 10)
-        qos_code = generate_qos_code(qos_spec)
-        lines.append(
-            f'        ctx->subscribers.{field_name} = cake::create_subscriber<{msg_type}>(ctx, "{topic_name}", {qos_code});'
-        )
-    lines.append("")
-    return "\n".join(lines)
+def prepare_subscribers(subscribers_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """
+    Prepare subscriber data for template rendering.
+    Converts raw YAML data into template-ready format.
+    """
+    subscribers = []
+    for sub in subscribers_raw:
+        if not sub.get("manually_created", False):
+            subscribers.append({
+                'topic': sub['topic'],
+                'msg_type': ros_type_to_cpp(sub['type']),
+                'field_name': topic_to_field_name(sub['topic']),
+                'qos_code': generate_qos_code(sub.get('qos', 10))
+            })
+    return subscribers
 
 
-def generate_base_node_class(
-    node_name: str,
-    namespace: str,
-    publishers: List[Dict[str, Any]],
-    subscribers: List[Dict[str, Any]],
-) -> str:
-    """Generate the base node class template."""
-    pub_init = generate_publisher_init(publishers)
-    sub_init = generate_subscriber_init(subscribers)
-
-    return f"""template <
-    typename ContextType,
-    auto init_func,
-    auto extend_options = [](rclcpp::NodeOptions options) {{ return options; }}>
-class {namespace}Base : public cake::BaseNode<"{node_name}", extend_options> {{
-  public:
-    explicit {namespace}Base(const rclcpp::NodeOptions &options) : cake::BaseNode<"{node_name}", extend_options>(options) {{
-        static_assert(
-            std::is_base_of_v<{namespace}Context<ContextType>, ContextType>, "ContextType must be a child of {namespace}Context"
-        );
-
-        // init context
-        auto ctx = std::make_shared<ContextType>();
-        ctx->node = this->node_;
-
-{pub_init}{sub_init}        // TODO init services and actions
-
-        init_func(ctx);
-    }}
-}};
-"""
-
-
-def collect_includes(
-    publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]]
-) -> List[str]:
+def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]]) -> List[str]:
     """Collect all required message includes."""
     includes = set()
 
     for pub in publishers:
-        if not pub.get("manually_created", False):
-            includes.add(ros_type_to_include(pub["type"]))
+        includes.add(ros_type_to_include(pub['type']))
 
     for sub in subscribers:
-        if not sub.get("manually_created", False):
-            includes.add(ros_type_to_include(sub["type"]))
+        includes.add(ros_type_to_include(sub['type']))
 
     return sorted(includes)
 
 
-def generate_header(interface_data: Dict[str, Any], package_name: str = None) -> str:
-    """Generate the complete C++ header file."""
-    node_info = interface_data["node"]
-    node_name = node_info["name"]
-    package = node_info.get("package", "")
+def get_namespace(interface_data: Dict[str, Any], package_name: str = None) -> str:
+    """
+    Determine the C++ namespace based on package and node name.
+    Handles ${THIS_PACKAGE} substitution.
+    """
+    node_name = interface_data["node"]["name"]
+    package = interface_data["node"].get("package", "")
 
-    # Get publishers and subscribers
-    publishers = interface_data.get("publishers", [])
-    subscribers = interface_data.get("subscribers", [])
-
-    # Collect includes
-    message_includes = collect_includes(publishers, subscribers)
-
-    # Convert node_name to CapitalCase for struct/class names
-    namespace = "".join(word.capitalize() for word in node_name.split("_"))
-
-    # Generate header
-    lines = ["// auto-generated DO NOT EDIT", "", "#pragma once", ""]
-    lines.append("#include <memory>")
-    lines.append("#include <rclcpp/rclcpp.hpp>")
-    lines.append("")
-
-    # Add message includes
-    for include in message_includes:
-        lines.append(f"#include <{include}>")
-    if message_includes:
-        lines.append("")
-
-    # Add cake includes
-    lines.append("#include <cake/base_node.hpp>")
-    lines.append("#include <cake/context.hpp>")
-    if subscribers:
-        lines.append("#include <cake/subscriber.hpp>")
-    lines.append("")
-
-    # Determine namespace
     # Substitute ${THIS_PACKAGE} with actual package name if provided
     if package == "${THIS_PACKAGE}":
         if package_name:
@@ -311,28 +194,43 @@ def generate_header(interface_data: Dict[str, Any], package_name: str = None) ->
             )
 
     if package:
-        ns = f"{package}::{node_name}"
+        return f"{package}::{node_name}"
     else:
-        ns = node_name
+        return node_name
 
-    # Open namespace
-    lines.append(f"namespace {ns} {{")
-    lines.append("")
 
-    # Generate structures
-    lines.append(generate_publishers_struct(publishers, namespace))
-    lines.append(generate_subscribers_struct(subscribers, namespace))
-    lines.append(generate_context_struct(node_name, namespace))
-    lines.append("")
-    lines.append(
-        generate_base_node_class(node_name, namespace, publishers, subscribers)
+def generate_header(interface_data: Dict[str, Any], package_name: str = None) -> str:
+    """Generate the complete C++ header file using Jinja2 template."""
+    # Set up Jinja2 environment
+    template_dir = Path(__file__).parent / "templates"
+    env = Environment(
+        loader=FileSystemLoader(template_dir),
+        trim_blocks=False,
+        lstrip_blocks=False
     )
+    template = env.get_template("node_interface.hpp.jinja2")
 
-    # Close namespace
-    lines.append(f"}} // namespace {ns}")
-    lines.append("")
+    # Extract data
+    node_name = interface_data["node"]["name"]
+    publishers_raw = interface_data.get("publishers", [])
+    subscribers_raw = interface_data.get("subscribers", [])
 
-    return "\n".join(lines)
+    # Prepare template data
+    publishers = prepare_publishers(publishers_raw)
+    subscribers = prepare_subscribers(subscribers_raw)
+    message_includes = collect_includes(publishers_raw, subscribers_raw)
+    namespace = get_namespace(interface_data, package_name)
+    class_name = "".join(word.capitalize() for word in node_name.split("_"))
+
+    # Render template
+    return template.render(
+        node_name=node_name,
+        class_name=class_name,
+        namespace=namespace,
+        message_includes=message_includes,
+        publishers=publishers,
+        subscribers=subscribers
+    )
 
 
 def main():

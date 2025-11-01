@@ -4,9 +4,7 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
-
 #include <std_msgs/msg/string.hpp>
-
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>

@@ -4,7 +4,6 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
-
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 
@@ -34,7 +33,6 @@ class EmptyNodeBase : public cake::BaseNode<"empty_node", extend_options> {
         // init context
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
-
         // TODO init services and actions
 
         init_func(ctx);
