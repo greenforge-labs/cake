@@ -1,0 +1,10 @@
+node:
+  name: client_node
+  package: ${THIS_PACKAGE}
+
+service_clients:
+  - name: /add_two_ints
+    type: example_interfaces/srv/AddTwoInts
+  - name: trigger_service
+    type: std_srvs/srv/Trigger
+    qos: 10

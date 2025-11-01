@@ -23,10 +23,13 @@ template <typename ContextType> struct QosTestNodeSubscribers {
 
 template <typename ContextType> struct QosTestNodeServices {};
 
+template <typename ContextType> struct QosTestNodeServiceClients {};
+
 template <typename DerivedContextType> struct QosTestNodeContext : cake::Context {
     QosTestNodePublishers<DerivedContextType> publishers;
     QosTestNodeSubscribers<DerivedContextType> subscribers;
     QosTestNodeServices<DerivedContextType> services;
+    QosTestNodeServiceClients<DerivedContextType> service_clients;
 };
 
 

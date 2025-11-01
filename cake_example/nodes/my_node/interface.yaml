@@ -17,6 +17,12 @@ subscribers:
 services:
     - name: my_service
       type: example_interfaces/srv/AddTwoInts
+    - name: bing_bong
+      type: example_interfaces/srv/Trigger
+
+service_clients:
+    - name: bing_bong
+      type: example_interfaces/srv/Trigger
 
 actions:
     - name: my_action

@@ -20,10 +20,13 @@ template <typename ContextType> struct PubNodeSubscribers {};
 
 template <typename ContextType> struct PubNodeServices {};
 
+template <typename ContextType> struct PubNodeServiceClients {};
+
 template <typename DerivedContextType> struct PubNodeContext : cake::Context {
     PubNodePublishers<DerivedContextType> publishers;
     PubNodeSubscribers<DerivedContextType> subscribers;
     PubNodeServices<DerivedContextType> services;
+    PubNodeServiceClients<DerivedContextType> service_clients;
 };
 
 

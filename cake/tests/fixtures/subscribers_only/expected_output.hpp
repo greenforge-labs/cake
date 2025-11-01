@@ -21,10 +21,13 @@ template <typename ContextType> struct SubNodeSubscribers {
 
 template <typename ContextType> struct SubNodeServices {};
 
+template <typename ContextType> struct SubNodeServiceClients {};
+
 template <typename DerivedContextType> struct SubNodeContext : cake::Context {
     SubNodePublishers<DerivedContextType> publishers;
     SubNodeSubscribers<DerivedContextType> subscribers;
     SubNodeServices<DerivedContextType> services;
+    SubNodeServiceClients<DerivedContextType> service_clients;
 };
 
 

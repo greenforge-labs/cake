@@ -21,10 +21,13 @@ template <typename ContextType> struct DefaultQosServiceNodeServices {
     std::shared_ptr<cake::Service<example_interfaces::srv::AddTwoInts, ContextType>> compute;
 };
 
+template <typename ContextType> struct DefaultQosServiceNodeServiceClients {};
+
 template <typename DerivedContextType> struct DefaultQosServiceNodeContext : cake::Context {
     DefaultQosServiceNodePublishers<DerivedContextType> publishers;
     DefaultQosServiceNodeSubscribers<DerivedContextType> subscribers;
     DefaultQosServiceNodeServices<DerivedContextType> services;
+    DefaultQosServiceNodeServiceClients<DerivedContextType> service_clients;
 };
 
 

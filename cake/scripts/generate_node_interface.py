@@ -216,7 +216,29 @@ def prepare_services(services_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]
     return services
 
 
-def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]], services: List[Dict[str, Any]]) -> List[str]:
+def prepare_service_clients(service_clients_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """
+    Prepare service client data for template rendering.
+    Converts raw YAML data into template-ready format.
+    """
+    service_clients = []
+    for client in service_clients_raw:
+        if not client.get("manually_created", False):
+            # Only generate QoS code if explicitly specified
+            qos_code = None
+            if 'qos' in client:
+                qos_code = generate_qos_code(client['qos'])
+
+            service_clients.append({
+                'name': client['name'],
+                'service_type': ros_type_to_cpp(client['type']),
+                'field_name': service_to_field_name(client['name']),
+                'qos_code': qos_code
+            })
+    return service_clients
+
+
+def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]], services: List[Dict[str, Any]], service_clients: List[Dict[str, Any]]) -> List[str]:
     """Collect all required message and service includes."""
     includes = set()
 
@@ -228,6 +250,9 @@ def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[st
 
     for srv in services:
         includes.add(ros_type_to_service_include(srv['type']))
+
+    for client in service_clients:
+        includes.add(ros_type_to_service_include(client['type']))
 
     return sorted(includes)
 
@@ -273,12 +298,14 @@ def generate_header(interface_data: Dict[str, Any], package_name: str | None = N
     publishers_raw = interface_data.get("publishers", [])
     subscribers_raw = interface_data.get("subscribers", [])
     services_raw = interface_data.get("services", [])
+    service_clients_raw = interface_data.get("service_clients", [])
 
     # Prepare template data
     publishers = prepare_publishers(publishers_raw)
     subscribers = prepare_subscribers(subscribers_raw)
     services = prepare_services(services_raw)
-    message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw)
+    service_clients = prepare_service_clients(service_clients_raw)
+    message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw, service_clients_raw)
     namespace = get_namespace(interface_data, package_name)
     class_name = "".join(word.capitalize() for word in node_name.split("_"))
 
@@ -290,7 +317,8 @@ def generate_header(interface_data: Dict[str, Any], package_name: str | None = N
         message_includes=message_includes,
         publishers=publishers,
         subscribers=subscribers,
-        services=services
+        services=services,
+        service_clients=service_clients
     )
 
 

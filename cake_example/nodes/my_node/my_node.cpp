@@ -1,9 +1,16 @@
 #include "my_node.hpp"
-#include "example_interfaces/srv/add_two_ints.hpp"
-#include "std_msgs/msg/bool.hpp"
-#include "std_msgs/msg/string.hpp"
+
 #include <memory>
 #include <rclcpp/logging.hpp>
+
+#include "example_interfaces/srv/add_two_ints.hpp"
+#include "example_interfaces/srv/trigger.hpp"
+#include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/string.hpp"
+
+#include <cake/timer.hpp>
+
+using namespace std::chrono_literals;
 
 namespace cake_example::my_node {
 
@@ -18,7 +25,7 @@ void msg_callback(std::shared_ptr<Context> ctx, std_msgs::msg::Bool::ConstShared
     ctx->very_important_number++;
 }
 
-void request_handler(
+void addition_request_handler(
     std::shared_ptr<Context> ctx,
     example_interfaces::srv::AddTwoInts::Request::SharedPtr request,
     example_interfaces::srv::AddTwoInts::Response::SharedPtr response
@@ -33,6 +40,16 @@ void request_handler(
     );
 }
 
+void bing_bong_request_handler(
+    std::shared_ptr<Context> ctx,
+    example_interfaces::srv::Trigger::Request::SharedPtr /*request*/,
+    example_interfaces::srv::Trigger::Response::SharedPtr response
+) {
+    response->success = true;
+    response->message = "bing bong!";
+    RCLCPP_INFO(ctx->node->get_logger(), "Bing bong requested!");
+}
+
 void init(std::shared_ptr<Context> ctx) {
     RCLCPP_INFO(ctx->node->get_logger(), "Hello from the test range! This is **my_node**.");
 
@@ -41,7 +58,13 @@ void init(std::shared_ptr<Context> ctx) {
     ctx->publishers.some_topic->publish(msg);
 
     ctx->subscribers.other_topic->set_callback(msg_callback);
-    ctx->services.my_service->set_request_handler(request_handler);
+    ctx->services.my_service->set_request_handler(addition_request_handler);
+    ctx->services.bing_bong->set_request_handler(bing_bong_request_handler);
+
+    cake::create_timer(ctx, 1000ms, [](auto ctx) {
+        ctx->service_clients.bing_bong->async_send_request(std::make_shared<example_interfaces::srv::Trigger::Request>()
+        );
+    });
 }
 
 } // namespace cake_example::my_node

@@ -27,10 +27,13 @@ template <typename ContextType> struct MixedNodeServices {
     std::shared_ptr<cake::Service<example_interfaces::srv::AddTwoInts, ContextType>> compute;
 };
 
+template <typename ContextType> struct MixedNodeServiceClients {};
+
 template <typename DerivedContextType> struct MixedNodeContext : cake::Context {
     MixedNodePublishers<DerivedContextType> publishers;
     MixedNodeSubscribers<DerivedContextType> subscribers;
     MixedNodeServices<DerivedContextType> services;
+    MixedNodeServiceClients<DerivedContextType> service_clients;
 };
 
 

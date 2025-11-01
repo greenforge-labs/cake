@@ -15,10 +15,13 @@ template <typename ContextType> struct EmptyNodeSubscribers {};
 
 template <typename ContextType> struct EmptyNodeServices {};
 
+template <typename ContextType> struct EmptyNodeServiceClients {};
+
 template <typename DerivedContextType> struct EmptyNodeContext : cake::Context {
     EmptyNodePublishers<DerivedContextType> publishers;
     EmptyNodeSubscribers<DerivedContextType> subscribers;
     EmptyNodeServices<DerivedContextType> services;
+    EmptyNodeServiceClients<DerivedContextType> service_clients;
 };
 
 

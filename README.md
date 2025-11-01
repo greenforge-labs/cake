@@ -8,7 +8,7 @@ Cake provides code generation tools that reduce boilerplate and make ROS2 node d
 
 - **Node Interface Generator**: Automatically generate C++ node interfaces from YAML definitions
 - **Type-safe Context**: Generated context structures with compile-time type checking
-- **Declarative Publishers/Subscribers/Services**: Define topics and services in YAML instead of C++
+- **Declarative ROS2 Interfaces**: Define publishers, subscribers, services, and service clients in YAML instead of C++
 - **Flexible QoS Configuration**: Support for predefined profiles and custom parameters
 
 ## Quick Start
@@ -130,6 +130,39 @@ void init(std::shared_ptr<MyContext> ctx) {
         [](auto ctx, auto request, auto response) {
             // Handle the service request
             response->success = true;
+        }
+    );
+}
+```
+
+### Service Clients
+
+```yaml
+service_clients:
+    - name: /my_service             # Service name (required)
+      type: std_srvs/srv/Trigger    # Service type (required)
+      qos: ServicesQoS              # QoS configuration (optional, omit to use C++ default)
+      manually_created: false       # Skip auto-generation (optional, default: false)
+```
+
+When `qos` is omitted, the generated code will use the default QoS from rclcpp (`ServicesQoS`).
+
+Service clients are exposed as raw `rclcpp::Client<ServiceT>::SharedPtr` for maximum flexibility:
+
+```cpp
+void init(std::shared_ptr<MyContext> ctx) {
+    // Create request
+    auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+
+    // Async call with callback
+    auto future = ctx->service_clients.my_service->async_send_request(request);
+
+    // Or with callback
+    ctx->service_clients.my_service->async_send_request(
+        request,
+        [](rclcpp::Client<std_srvs::srv::Trigger>::SharedFuture future) {
+            auto response = future.get();
+            // Handle response
         }
     );
 }
@@ -266,12 +299,20 @@ template <typename ContextType> struct MyNodeServices {
 };
 ```
 
+### Service Clients Struct
+```cpp
+template <typename ContextType> struct MyNodeServiceClients {
+    rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr my_service;
+};
+```
+
 ### Context Struct
 ```cpp
 template <typename DerivedContextType> struct MyNodeContext : cake::Context {
     MyNodePublishers<DerivedContextType> publishers;
     MyNodeSubscribers<DerivedContextType> subscribers;
     MyNodeServices<DerivedContextType> services;
+    MyNodeServiceClients<DerivedContextType> service_clients;
 };
 ```
 

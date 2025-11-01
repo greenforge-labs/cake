@@ -20,10 +20,13 @@ template <typename ContextType> struct ServiceNodeServices {
     std::shared_ptr<cake::Service<example_interfaces::srv::AddTwoInts, ContextType>> math_multiply;
 };
 
+template <typename ContextType> struct ServiceNodeServiceClients {};
+
 template <typename DerivedContextType> struct ServiceNodeContext : cake::Context {
     ServiceNodePublishers<DerivedContextType> publishers;
     ServiceNodeSubscribers<DerivedContextType> subscribers;
     ServiceNodeServices<DerivedContextType> services;
+    ServiceNodeServiceClients<DerivedContextType> service_clients;
 };
 
 
