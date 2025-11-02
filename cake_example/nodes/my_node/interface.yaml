@@ -24,6 +24,6 @@ service_clients:
     - name: bing_bong
       type: example_interfaces/srv/Trigger
 
-action_servers:
+actions:
     - name: my_action
       type: example_interfaces/action/Fibonacci

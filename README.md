@@ -8,9 +8,9 @@ Cake provides code generation tools that reduce boilerplate and make ROS2 node d
 
 - **Node Interface Generator**: Automatically generate C++ node interfaces from YAML definitions
 - **Type-safe Context**: Generated context structures with compile-time type checking
-- **Declarative ROS2 Interfaces**: Define publishers, subscribers, services, service clients, and action servers in YAML instead of C++
+- **Declarative ROS2 Interfaces**: Define publishers, subscribers, services, service clients, and actions in YAML instead of C++
 - **Flexible QoS Configuration**: Support for predefined profiles and custom parameters
-- **Polling-based Action Servers**: Simple action server implementation designed for main-loop processing
+- **Polling-based Actions**: Simple action server implementation designed for main-loop processing
 
 ## Quick Start
 
@@ -169,16 +169,16 @@ void init(std::shared_ptr<MyContext> ctx) {
 }
 ```
 
-### Action Servers
+### Actions
 
 ```yaml
-action_servers:
+actions:
     - name: fibonacci                           # Action name (required)
       type: example_interfaces/action/Fibonacci # Action type (required)
       manually_created: false                   # Skip auto-generation (optional, default: false)
 ```
 
-Action servers use the `SingleGoalActionServer` which manages goal lifecycle and ensures only one goal is active at a time. The design is polling-based - you check for active goals in your main loop rather than using callbacks.
+Actions use the `SingleGoalActionServer` which manages goal lifecycle and ensures only one goal is active at a time. The design is polling-based - you check for active goals in your main loop rather than using callbacks.
 
 #### Setting Options
 
@@ -193,11 +193,11 @@ void init(std::shared_ptr<Context> ctx) {
         return goal.order > 0;  // Custom validation logic
     };
 
-    ctx->action_servers.fibonacci->set_options(options);
+    ctx->actions.fibonacci->set_options(options);
 }
 ```
 
-**Note:** Action servers will reject all goals until options are set via `set_options()`.
+**Note:** Actions will reject all goals until options are set via `set_options()`.
 
 #### Processing Goals (Polling Pattern)
 
@@ -205,7 +205,7 @@ Check for active goals in your node's main loop or timer callbacks:
 
 ```cpp
 cake::create_timer(ctx, 100ms, [](auto ctx) {
-    auto goal = ctx->action_servers.fibonacci->get_active_goal();
+    auto goal = ctx->actions.fibonacci->get_active_goal();
     if (!goal) {
         return;  // No active goal (or it was cancelled)
     }
@@ -213,13 +213,13 @@ cake::create_timer(ctx, 100ms, [](auto ctx) {
     // Process goal incrementally
     auto feedback = std::make_shared<example_interfaces::action::Fibonacci::Feedback>();
     feedback->sequence.push_back(current_value);
-    ctx->action_servers.fibonacci->publish_feedback(feedback);
+    ctx->actions.fibonacci->publish_feedback(feedback);
 
     // Complete when done
     if (is_complete) {
         auto result = std::make_shared<example_interfaces::action::Fibonacci::Result>();
         result->sequence = final_sequence;
-        ctx->action_servers.fibonacci->succeed(result);
+        ctx->actions.fibonacci->succeed(result);
     }
 });
 ```

@@ -29,14 +29,14 @@ template <typename ContextType> struct MixedNodeServices {
 
 template <typename ContextType> struct MixedNodeServiceClients {};
 
-template <typename ContextType> struct MixedNodeActionServers {};
+template <typename ContextType> struct MixedNodeActions {};
 
 template <typename DerivedContextType> struct MixedNodeContext : cake::Context {
     MixedNodePublishers<DerivedContextType> publishers;
     MixedNodeSubscribers<DerivedContextType> subscribers;
     MixedNodeServices<DerivedContextType> services;
     MixedNodeServiceClients<DerivedContextType> service_clients;
-    MixedNodeActionServers<DerivedContextType> action_servers;
+    MixedNodeActions<DerivedContextType> actions;
 };
 
 

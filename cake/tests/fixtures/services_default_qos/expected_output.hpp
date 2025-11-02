@@ -23,14 +23,14 @@ template <typename ContextType> struct DefaultQosServiceNodeServices {
 
 template <typename ContextType> struct DefaultQosServiceNodeServiceClients {};
 
-template <typename ContextType> struct DefaultQosServiceNodeActionServers {};
+template <typename ContextType> struct DefaultQosServiceNodeActions {};
 
 template <typename DerivedContextType> struct DefaultQosServiceNodeContext : cake::Context {
     DefaultQosServiceNodePublishers<DerivedContextType> publishers;
     DefaultQosServiceNodeSubscribers<DerivedContextType> subscribers;
     DefaultQosServiceNodeServices<DerivedContextType> services;
     DefaultQosServiceNodeServiceClients<DerivedContextType> service_clients;
-    DefaultQosServiceNodeActionServers<DerivedContextType> action_servers;
+    DefaultQosServiceNodeActions<DerivedContextType> actions;
 };
 
 

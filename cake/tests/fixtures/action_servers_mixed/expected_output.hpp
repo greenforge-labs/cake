@@ -30,7 +30,7 @@ template <typename ContextType> struct MixedNodeServices {
 
 template <typename ContextType> struct MixedNodeServiceClients {};
 
-template <typename ContextType> struct MixedNodeActionServers {
+template <typename ContextType> struct MixedNodeActions {
     std::shared_ptr<cake::SingleGoalActionServer<example_interfaces::action::Fibonacci>> navigate;
 };
 
@@ -39,7 +39,7 @@ template <typename DerivedContextType> struct MixedNodeContext : cake::Context {
     MixedNodeSubscribers<DerivedContextType> subscribers;
     MixedNodeServices<DerivedContextType> services;
     MixedNodeServiceClients<DerivedContextType> service_clients;
-    MixedNodeActionServers<DerivedContextType> action_servers;
+    MixedNodeActions<DerivedContextType> actions;
 };
 
 
@@ -64,8 +64,8 @@ class MixedNodeBase : public cake::BaseNode<"mixed_node", extend_options> {
         ctx->subscribers.cmd = cake::create_subscriber<std_msgs::msg::Bool>(ctx, "/cmd", 10);
         // init services
         ctx->services.reset = cake::create_service<std_srvs::srv::Trigger>(ctx, "/reset");
-        // init action servers
-        ctx->action_servers.navigate = cake::create_single_goal_action_server<example_interfaces::action::Fibonacci>(ctx, "navigate");
+        // init actions
+        ctx->actions.navigate = cake::create_single_goal_action_server<example_interfaces::action::Fibonacci>(ctx, "navigate");
         init_func(ctx);
     }
 };

@@ -17,14 +17,14 @@ template <typename ContextType> struct EmptyNodeServices {};
 
 template <typename ContextType> struct EmptyNodeServiceClients {};
 
-template <typename ContextType> struct EmptyNodeActionServers {};
+template <typename ContextType> struct EmptyNodeActions {};
 
 template <typename DerivedContextType> struct EmptyNodeContext : cake::Context {
     EmptyNodePublishers<DerivedContextType> publishers;
     EmptyNodeSubscribers<DerivedContextType> subscribers;
     EmptyNodeServices<DerivedContextType> services;
     EmptyNodeServiceClients<DerivedContextType> service_clients;
-    EmptyNodeActionServers<DerivedContextType> action_servers;
+    EmptyNodeActions<DerivedContextType> actions;
 };
 
 

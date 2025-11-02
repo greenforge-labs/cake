@@ -22,14 +22,14 @@ template <typename ContextType> struct ClientNodeServiceClients {
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr trigger_service;
 };
 
-template <typename ContextType> struct ClientNodeActionServers {};
+template <typename ContextType> struct ClientNodeActions {};
 
 template <typename DerivedContextType> struct ClientNodeContext : cake::Context {
     ClientNodePublishers<DerivedContextType> publishers;
     ClientNodeSubscribers<DerivedContextType> subscribers;
     ClientNodeServices<DerivedContextType> services;
     ClientNodeServiceClients<DerivedContextType> service_clients;
-    ClientNodeActionServers<DerivedContextType> action_servers;
+    ClientNodeActions<DerivedContextType> actions;
 };
 
 

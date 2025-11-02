@@ -2,7 +2,7 @@ node:
     name: action_node
     package: ${THIS_PACKAGE}
 
-action_servers:
+actions:
     - name: fibonacci
       type: example_interfaces/action/Fibonacci
     - name: /math/compute

@@ -22,14 +22,14 @@ template <typename ContextType> struct ServiceNodeServices {
 
 template <typename ContextType> struct ServiceNodeServiceClients {};
 
-template <typename ContextType> struct ServiceNodeActionServers {};
+template <typename ContextType> struct ServiceNodeActions {};
 
 template <typename DerivedContextType> struct ServiceNodeContext : cake::Context {
     ServiceNodePublishers<DerivedContextType> publishers;
     ServiceNodeSubscribers<DerivedContextType> subscribers;
     ServiceNodeServices<DerivedContextType> services;
     ServiceNodeServiceClients<DerivedContextType> service_clients;
-    ServiceNodeActionServers<DerivedContextType> action_servers;
+    ServiceNodeActions<DerivedContextType> actions;
 };
 
 

@@ -16,6 +16,6 @@ services:
     - name: /reset
       type: std_srvs/srv/Trigger
 
-action_servers:
+actions:
     - name: navigate
       type: example_interfaces/action/Fibonacci

@@ -15,7 +15,7 @@
 {%- if services %}
 #include <cake/service.hpp>
 {%- endif %}
-{%- if action_servers %}
+{%- if actions %}
 #include <cake/action_server.hpp>
 {%- endif %}
 
@@ -64,16 +64,16 @@ template <typename ContextType> struct {{ class_name }}ServiceClients {
 
 template <typename ContextType> struct {{ class_name }}ServiceClients {};
 {%- endif %}
-{%- if action_servers %}
+{%- if actions %}
 
-template <typename ContextType> struct {{ class_name }}ActionServers {
-{%- for action in action_servers %}
+template <typename ContextType> struct {{ class_name }}Actions {
+{%- for action in actions %}
     std::shared_ptr<cake::SingleGoalActionServer<{{ action.action_type }}>> {{ action.field_name }};
 {%- endfor %}
 };
 {%- else %}
 
-template <typename ContextType> struct {{ class_name }}ActionServers {};
+template <typename ContextType> struct {{ class_name }}Actions {};
 {%- endif %}
 
 template <typename DerivedContextType> struct {{ class_name }}Context : cake::Context {
@@ -81,7 +81,7 @@ template <typename DerivedContextType> struct {{ class_name }}Context : cake::Co
     {{ class_name }}Subscribers<DerivedContextType> subscribers;
     {{ class_name }}Services<DerivedContextType> services;
     {{ class_name }}ServiceClients<DerivedContextType> service_clients;
-    {{ class_name }}ActionServers<DerivedContextType> action_servers;
+    {{ class_name }}Actions<DerivedContextType> actions;
 };
 
 
@@ -128,10 +128,10 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
 {%- endfor %}
 
 {%- endif %}
-{%- if action_servers %}
-        // init action servers
-{%- for action in action_servers %}
-        ctx->action_servers.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx, "{{ action.name }}");
+{%- if actions %}
+        // init actions
+{%- for action in actions %}
+        ctx->actions.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx, "{{ action.name }}");
 {%- endfor %}
 
 {%- endif %}

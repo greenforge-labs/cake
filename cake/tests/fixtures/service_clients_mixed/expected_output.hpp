@@ -32,14 +32,14 @@ template <typename ContextType> struct FullNodeServiceClients {
     rclcpp::Client<example_interfaces::srv::AddTwoInts>::SharedPtr compute;
 };
 
-template <typename ContextType> struct FullNodeActionServers {};
+template <typename ContextType> struct FullNodeActions {};
 
 template <typename DerivedContextType> struct FullNodeContext : cake::Context {
     FullNodePublishers<DerivedContextType> publishers;
     FullNodeSubscribers<DerivedContextType> subscribers;
     FullNodeServices<DerivedContextType> services;
     FullNodeServiceClients<DerivedContextType> service_clients;
-    FullNodeActionServers<DerivedContextType> action_servers;
+    FullNodeActions<DerivedContextType> actions;
 };
 
 

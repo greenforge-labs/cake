@@ -25,14 +25,14 @@ template <typename ContextType> struct BackwardCompatNodeServices {};
 
 template <typename ContextType> struct BackwardCompatNodeServiceClients {};
 
-template <typename ContextType> struct BackwardCompatNodeActionServers {};
+template <typename ContextType> struct BackwardCompatNodeActions {};
 
 template <typename DerivedContextType> struct BackwardCompatNodeContext : cake::Context {
     BackwardCompatNodePublishers<DerivedContextType> publishers;
     BackwardCompatNodeSubscribers<DerivedContextType> subscribers;
     BackwardCompatNodeServices<DerivedContextType> services;
     BackwardCompatNodeServiceClients<DerivedContextType> service_clients;
-    BackwardCompatNodeActionServers<DerivedContextType> action_servers;
+    BackwardCompatNodeActions<DerivedContextType> actions;
 };
 
 
