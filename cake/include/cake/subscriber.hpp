@@ -24,8 +24,12 @@ template <typename MessageT, typename ContextType> class Subscriber {
 
   private:
     rclcpp::Subscription<MessageT>::SharedPtr subscription_;
-    std::function<void(std::shared_ptr<ContextType>, typename MessageT::ConstSharedPtr)> callback_ =
-        [](auto /*ctx*/, auto /*msg*/) {};
+    std::function<void(std::shared_ptr<ContextType>, typename MessageT::ConstSharedPtr)> callback_ = [](auto ctx,
+                                                                                                        auto /*msg*/) {
+        RCLCPP_WARN(
+            ctx->node->get_logger(), "Subscriber received message but no callback configured. Call set_callback()."
+        );
+    };
 };
 
 template <typename MessageT, typename ContextType>

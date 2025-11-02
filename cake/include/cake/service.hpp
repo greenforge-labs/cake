@@ -35,7 +35,12 @@ template <typename ServiceT, typename ContextType> class Service {
     typename rclcpp::Service<ServiceT>::SharedPtr service_;
     std::function<
         void(std::shared_ptr<ContextType>, const std::shared_ptr<typename ServiceT::Request>, std::shared_ptr<typename ServiceT::Response>)>
-        request_handler_ = [](auto /*ctx*/, auto /*req*/, auto /*res*/) {};
+        request_handler_ = [](auto ctx, auto /*req*/, auto /*res*/) {
+            RCLCPP_WARN(
+                ctx->node->get_logger(),
+                "Service received request but no handler configured. Call set_request_handler()."
+            );
+        };
 };
 
 template <typename ServiceT, typename ContextType>
