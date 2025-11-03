@@ -8,6 +8,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/service.hpp>
+#include <test_package/service_node_parameters.hpp>
 
 namespace test_package::service_node {
 
@@ -30,6 +31,8 @@ template <typename DerivedContextType> struct ServiceNodeContext : cake::Context
     ServiceNodeServices<DerivedContextType> services;
     ServiceNodeServiceClients<DerivedContextType> service_clients;
     ServiceNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -50,6 +53,10 @@ class ServiceNodeBase : public cake::BaseNode<"service_node", extend_options> {
         // init services
         ctx->services.add_two_ints = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "add_two_ints", rclcpp::ServicesQoS());
         ctx->services.math_multiply = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "/math/multiply", 10);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

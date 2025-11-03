@@ -6,6 +6,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <test_package/empty_node_parameters.hpp>
 
 namespace test_package::empty_node {
 
@@ -25,6 +26,8 @@ template <typename DerivedContextType> struct EmptyNodeContext : cake::Context {
     EmptyNodeServices<DerivedContextType> services;
     EmptyNodeServiceClients<DerivedContextType> service_clients;
     EmptyNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -42,6 +45,10 @@ class EmptyNodeBase : public cake::BaseNode<"empty_node", extend_options> {
         // init context
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

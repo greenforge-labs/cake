@@ -94,19 +94,16 @@ cake_auto_package()
 
 ```cpp
 #include <my_package/my_node_interface.hpp>
-#include <my_package/my_node_parameters.hpp>
 
 namespace my_package::my_node {
 
 struct MyContext : MyNodeContext<MyContext> {
-    Params params;
+    // Add your custom context members here
+    // Parameters are automatically included in MyNodeContext
 };
 
 void init(std::shared_ptr<MyContext> ctx) {
-    // Load parameters
-    ctx->params = ParamListener(ctx->node).get_params();
-
-    // Access parameter values
+    // Parameters are automatically loaded and ready to use
     RCLCPP_INFO(ctx->node->get_logger(), "Update rate: %.2f Hz", ctx->params.update_rate);
 
     // Publishers and subscribers are ready to use
@@ -186,6 +183,14 @@ parameters:
 - `validation` - Constraints for the parameter value (e.g., `gt<>`, `lt<>`, `one_of<>`, etc.)
 - `read_only` - If true, the parameter cannot be changed after initialization
 - `additional_constraints` - Custom validation constraints
+
+**Automatic Integration:**
+
+Parameters are automatically integrated into your node's context:
+- `ctx->params` - Contains all parameter values, automatically loaded before `init()` is called
+- `ctx->param_listener` - The parameter listener instance (useful for runtime parameter updates)
+
+You don't need to manually initialize parameters - they're ready to use immediately in your `init()` function.
 
 **Note:** A parameters library is always generated for each node, even if no parameters are defined in `interface.yaml`. If no parameters are specified, a dummy parameter is automatically created to satisfy `generate_parameter_library` requirements.
 
@@ -478,6 +483,8 @@ template <typename DerivedContextType> struct MyNodeContext : cake::Context {
     MyNodeSubscribers<DerivedContextType> subscribers;
     MyNodeServices<DerivedContextType> services;
     MyNodeServiceClients<DerivedContextType> service_clients;
+    std::shared_ptr<ParamListener> param_listener;  // Automatically initialized
+    Params params;                                   // Automatically loaded
 };
 ```
 

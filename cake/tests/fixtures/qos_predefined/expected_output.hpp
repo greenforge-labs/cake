@@ -8,6 +8,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
+#include <test_package/qos_test_node_parameters.hpp>
 
 namespace test_package::qos_test_node {
 
@@ -33,6 +34,8 @@ template <typename DerivedContextType> struct QosTestNodeContext : cake::Context
     QosTestNodeServices<DerivedContextType> services;
     QosTestNodeServiceClients<DerivedContextType> service_clients;
     QosTestNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -57,6 +60,10 @@ class QosTestNodeBase : public cake::BaseNode<"qos_test_node", extend_options> {
         // init subscribers
         ctx->subscribers.parameters_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "parameters_topic", rclcpp::ParametersQoS());
         ctx->subscribers.services_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "services_topic", rclcpp::ServicesQoS());
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

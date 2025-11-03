@@ -9,6 +9,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
+#include <test_package/simple_node_parameters.hpp>
 
 namespace test_package::simple_node {
 
@@ -32,6 +33,8 @@ template <typename DerivedContextType> struct SimpleNodeContext : cake::Context 
     SimpleNodeServices<DerivedContextType> services;
     SimpleNodeServiceClients<DerivedContextType> service_clients;
     SimpleNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -54,6 +57,10 @@ class SimpleNodeBase : public cake::BaseNode<"simple_node", extend_options> {
         ctx->publishers.cmd_vel = ctx->node->template create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
         // init subscribers
         ctx->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(ctx, "/odom", 10);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

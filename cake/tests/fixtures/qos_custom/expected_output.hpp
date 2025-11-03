@@ -8,6 +8,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
+#include <test_package/custom_qos_node_parameters.hpp>
 
 namespace test_package::custom_qos_node {
 
@@ -33,6 +34,8 @@ template <typename DerivedContextType> struct CustomQosNodeContext : cake::Conte
     CustomQosNodeServices<DerivedContextType> services;
     CustomQosNodeServiceClients<DerivedContextType> service_clients;
     CustomQosNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -57,6 +60,10 @@ class CustomQosNodeBase : public cake::BaseNode<"custom_qos_node", extend_option
         // init subscribers
         ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(10).reliable().keep_all());
         ctx->subscribers.profile_override_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "profile_override_topic", rclcpp::SensorDataQoS().reliable().keep_last(20));
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

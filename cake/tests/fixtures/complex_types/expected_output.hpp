@@ -11,6 +11,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
+#include <test_package/complex_node_parameters.hpp>
 
 namespace test_package::complex_node {
 
@@ -36,6 +37,8 @@ template <typename DerivedContextType> struct ComplexNodeContext : cake::Context
     ComplexNodeServices<DerivedContextType> services;
     ComplexNodeServiceClients<DerivedContextType> service_clients;
     ComplexNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -60,6 +63,10 @@ class ComplexNodeBase : public cake::BaseNode<"complex_node", extend_options> {
         // init subscribers
         ctx->subscribers.joint_states = cake::create_subscriber<sensor_msgs::msg::JointState>(ctx, "joint_states", 10);
         ctx->subscribers.point_cloud = cake::create_subscriber<sensor_msgs::msg::PointCloud2>(ctx, "point_cloud", 1);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

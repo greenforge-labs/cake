@@ -9,6 +9,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/service.hpp>
+#include <test_package/default_qos_service_node_parameters.hpp>
 
 namespace test_package::default_qos_service_node {
 
@@ -31,6 +32,8 @@ template <typename DerivedContextType> struct DefaultQosServiceNodeContext : cak
     DefaultQosServiceNodeServices<DerivedContextType> services;
     DefaultQosServiceNodeServiceClients<DerivedContextType> service_clients;
     DefaultQosServiceNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -51,6 +54,10 @@ class DefaultQosServiceNodeBase : public cake::BaseNode<"default_qos_service_nod
         // init services
         ctx->services.trigger_service = cake::create_service<std_srvs::srv::Trigger>(ctx, "/trigger_service");
         ctx->services.compute = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "compute", 10);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

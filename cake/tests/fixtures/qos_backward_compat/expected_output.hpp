@@ -8,6 +8,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
+#include <test_package/backward_compat_node_parameters.hpp>
 
 namespace test_package::backward_compat_node {
 
@@ -33,6 +34,8 @@ template <typename DerivedContextType> struct BackwardCompatNodeContext : cake::
     BackwardCompatNodeServices<DerivedContextType> services;
     BackwardCompatNodeServiceClients<DerivedContextType> service_clients;
     BackwardCompatNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -57,6 +60,10 @@ class BackwardCompatNodeBase : public cake::BaseNode<"backward_compat_node", ext
         // init subscribers
         ctx->subscribers.int_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "int_qos_sub", 5);
         ctx->subscribers.default_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "default_qos_sub", 10);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

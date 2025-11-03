@@ -8,6 +8,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/action_server.hpp>
+#include <test_package/action_node_parameters.hpp>
 
 namespace test_package::action_node {
 
@@ -30,6 +31,8 @@ template <typename DerivedContextType> struct ActionNodeContext : cake::Context 
     ActionNodeServices<DerivedContextType> services;
     ActionNodeServiceClients<DerivedContextType> service_clients;
     ActionNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -50,6 +53,10 @@ class ActionNodeBase : public cake::BaseNode<"action_node", extend_options> {
         // init actions
         ctx->actions.fibonacci = cake::create_single_goal_action_server<example_interfaces::action::Fibonacci>(ctx, "fibonacci");
         ctx->actions.math_compute = cake::create_single_goal_action_server<example_interfaces::action::Fibonacci>(ctx, "/math/compute");
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

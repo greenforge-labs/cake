@@ -9,6 +9,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
+#include <test_package/sub_node_parameters.hpp>
 
 namespace test_package::sub_node {
 
@@ -31,6 +32,8 @@ template <typename DerivedContextType> struct SubNodeContext : cake::Context {
     SubNodeServices<DerivedContextType> services;
     SubNodeServiceClients<DerivedContextType> service_clients;
     SubNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -51,6 +54,10 @@ class SubNodeBase : public cake::BaseNode<"sub_node", extend_options> {
         // init subscribers
         ctx->subscribers.sensor_data = cake::create_subscriber<sensor_msgs::msg::LaserScan>(ctx, "sensor_data", 10);
         ctx->subscribers.camera_image = cake::create_subscriber<sensor_msgs::msg::Image>(ctx, "camera_image", 1);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

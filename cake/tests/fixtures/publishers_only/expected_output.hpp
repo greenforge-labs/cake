@@ -8,6 +8,7 @@
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <test_package/pub_node_parameters.hpp>
 
 namespace test_package::pub_node {
 
@@ -30,6 +31,8 @@ template <typename DerivedContextType> struct PubNodeContext : cake::Context {
     PubNodeServices<DerivedContextType> services;
     PubNodeServiceClients<DerivedContextType> service_clients;
     PubNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -51,6 +54,10 @@ class PubNodeBase : public cake::BaseNode<"pub_node", extend_options> {
         // init publishers
         ctx->publishers.status = ctx->node->template create_publisher<std_msgs::msg::String>("status", 10);
         ctx->publishers.counter = ctx->node->template create_publisher<std_msgs::msg::Int32>("counter", 5);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

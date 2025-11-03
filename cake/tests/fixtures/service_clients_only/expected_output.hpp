@@ -8,6 +8,7 @@
 #include <std_srvs/srv/trigger.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <test_package/client_node_parameters.hpp>
 
 namespace test_package::client_node {
 
@@ -30,6 +31,8 @@ template <typename DerivedContextType> struct ClientNodeContext : cake::Context 
     ClientNodeServices<DerivedContextType> services;
     ClientNodeServiceClients<DerivedContextType> service_clients;
     ClientNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -50,6 +53,10 @@ class ClientNodeBase : public cake::BaseNode<"client_node", extend_options> {
         // init service clients
         ctx->service_clients.add_two_ints = ctx->node->template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints");
         ctx->service_clients.trigger_service = ctx->node->template create_client<std_srvs::srv::Trigger>("trigger_service", 10);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

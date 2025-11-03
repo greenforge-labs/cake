@@ -355,6 +355,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
 
     # Extract data
     node_name = interface_data["node"]["name"]
+    package_name = interface_data["node"].get("package", "")
     publishers_raw = interface_data.get("publishers", [])
     subscribers_raw = interface_data.get("subscribers", [])
     services_raw = interface_data.get("services", [])
@@ -374,6 +375,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     # Render template
     return template.render(
         node_name=node_name,
+        package_name=package_name,
         class_name=class_name,
         namespace=namespace,
         message_includes=message_includes,

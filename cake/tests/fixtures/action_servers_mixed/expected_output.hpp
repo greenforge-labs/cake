@@ -13,6 +13,7 @@
 #include <cake/subscriber.hpp>
 #include <cake/service.hpp>
 #include <cake/action_server.hpp>
+#include <test_package/mixed_node_parameters.hpp>
 
 namespace test_package::mixed_node {
 
@@ -40,6 +41,8 @@ template <typename DerivedContextType> struct MixedNodeContext : cake::Context {
     MixedNodeServices<DerivedContextType> services;
     MixedNodeServiceClients<DerivedContextType> service_clients;
     MixedNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -66,6 +69,10 @@ class MixedNodeBase : public cake::BaseNode<"mixed_node", extend_options> {
         ctx->services.reset = cake::create_service<std_srvs::srv::Trigger>(ctx, "/reset");
         // init actions
         ctx->actions.navigate = cake::create_single_goal_action_server<example_interfaces::action::Fibonacci>(ctx, "navigate");
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

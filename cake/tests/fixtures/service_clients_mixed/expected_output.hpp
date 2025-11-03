@@ -12,6 +12,7 @@
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
 #include <cake/service.hpp>
+#include <test_package/full_node_parameters.hpp>
 
 namespace test_package::full_node {
 
@@ -40,6 +41,8 @@ template <typename DerivedContextType> struct FullNodeContext : cake::Context {
     FullNodeServices<DerivedContextType> services;
     FullNodeServiceClients<DerivedContextType> service_clients;
     FullNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -67,6 +70,10 @@ class FullNodeBase : public cake::BaseNode<"full_node", extend_options> {
         // init service clients
         ctx->service_clients.add_two_ints = ctx->node->template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints", rclcpp::ServicesQoS());
         ctx->service_clients.compute = ctx->node->template create_client<example_interfaces::srv::AddTwoInts>("compute");
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

@@ -7,6 +7,7 @@
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <test_package/test_node_parameters.hpp>
 
 namespace test_package::test_node {
 
@@ -28,6 +29,8 @@ template <typename DerivedContextType> struct TestNodeContext : cake::Context {
     TestNodeServices<DerivedContextType> services;
     TestNodeServiceClients<DerivedContextType> service_clients;
     TestNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -48,6 +51,10 @@ class TestNodeBase : public cake::BaseNode<"test_node", extend_options> {
 
         // init publishers
         ctx->publishers.status = ctx->node->template create_publisher<std_msgs::msg::String>("/status", 10);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

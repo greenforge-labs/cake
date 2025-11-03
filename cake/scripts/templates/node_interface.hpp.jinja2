@@ -18,6 +18,7 @@
 {%- if actions %}
 #include <cake/action_server.hpp>
 {%- endif %}
+#include <{{ package_name }}/{{ node_name }}_parameters.hpp>
 
 namespace {{ namespace }} {
 {%- if publishers %}
@@ -82,6 +83,8 @@ template <typename DerivedContextType> struct {{ class_name }}Context : cake::Co
     {{ class_name }}Services<DerivedContextType> services;
     {{ class_name }}ServiceClients<DerivedContextType> service_clients;
     {{ class_name }}Actions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -135,6 +138,10 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
 {%- endfor %}
 
 {%- endif %}
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };

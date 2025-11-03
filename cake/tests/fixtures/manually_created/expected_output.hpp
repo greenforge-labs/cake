@@ -11,6 +11,7 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
+#include <test_package/manual_node_parameters.hpp>
 
 namespace test_package::manual_node {
 
@@ -34,6 +35,8 @@ template <typename DerivedContextType> struct ManualNodeContext : cake::Context 
     ManualNodeServices<DerivedContextType> services;
     ManualNodeServiceClients<DerivedContextType> service_clients;
     ManualNodeActions<DerivedContextType> actions;
+    std::shared_ptr<ParamListener> param_listener;
+    Params params;
 };
 
 
@@ -56,6 +59,10 @@ class ManualNodeBase : public cake::BaseNode<"manual_node", extend_options> {
         ctx->publishers.auto_topic = ctx->node->template create_publisher<std_msgs::msg::String>("auto_topic", 10);
         // init subscribers
         ctx->subscribers.auto_sub = cake::create_subscriber<std_msgs::msg::Bool>(ctx, "auto_sub", 10);
+        // init parameters
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         init_func(ctx);
     }
 };
