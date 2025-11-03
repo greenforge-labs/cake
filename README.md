@@ -30,6 +30,21 @@ my_package/
         └── parameters.yaml (optional)
 ```
 
+**Important:** Make sure your `package.xml` includes all required dependencies:
+```xml
+<buildtool_depend>ament_cmake_auto</buildtool_depend>
+<buildtool_depend>generate_parameter_library</buildtool_depend>
+
+<depend>rclcpp</depend>
+<depend>rclcpp_components</depend>
+<depend>cake</depend>
+
+<!-- Add your message/service dependencies -->
+<depend>std_msgs</depend>
+```
+
+Dependencies listed in `package.xml` are automatically found and linked by `cake_auto_package()`.
+
 ### 2. Define Your Node Interface
 
 Create `nodes/my_node/interface.yaml`:
@@ -60,17 +75,14 @@ services:
 cmake_minimum_required(VERSION 3.22)
 project(my_package)
 
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+endif()
 
-# Create main library from all source files in nodes/
-ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+find_package(cake REQUIRED)
 
-# Automatically discover and register all nodes
+# Automatically handle all package setup
 cake_auto_package()
-
-ament_auto_package()
 ```
 
 ### 4. Use the Generated Interface
@@ -425,26 +437,67 @@ The code generator includes comprehensive tests. See [tests/README.md](cake/test
 
 ### `cake_auto_package()`
 
-Automatically discovers and registers all nodes in the `nodes/` directory, eliminating boilerplate CMake code.
+Completely automates cake package setup - handles dependencies, library creation, node registration, and package finalization.
 
 **What it does:**
+- Finds all build dependencies via `ament_auto_find_build_dependencies()`
+- Creates the main SHARED library from all source files in `nodes/`
+- Sets C++20 as the required C++ standard
 - Scans the `nodes/` directory for node subdirectories
 - For each node found:
   - Generates interface library if `interface.yaml` exists
   - Generates parameters library if `parameters.yaml` exists
   - Links both libraries to `${PROJECT_NAME}`
   - Registers the node as an rclcpp component with the correct naming convention
+- Finalizes the package with `ament_auto_package()`
 
 **Requirements:**
+- Must call `find_package(cake REQUIRED)` first
 - Nodes must be organized in a `nodes/` directory at the project root
 - Each node has its own subdirectory (e.g., `nodes/my_node/`)
 - Node directory names must be in snake_case (e.g., `my_node`)
-- The main library target must be named `${PROJECT_NAME}`
 
-**Naming Conventions:**
-- **Node directory**: `my_node` (snake_case)
+**Dependencies:**
+
+`cake_auto_package()` uses `ament_cmake_auto` to automatically find and link dependencies, but **you must declare them in your `package.xml`** for this to work.
+
+Example `package.xml`:
+```xml
+<?xml version="1.0"?>
+<package format="3">
+  <name>my_package</name>
+  <version>0.0.0</version>
+  <description>My cake-based package</description>
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake_auto</buildtool_depend>
+  <buildtool_depend>generate_parameter_library</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>cake</depend>
+
+  <!-- Add your message/service dependencies here -->
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+```
+
+The `ament_auto_find_build_dependencies()` call inside `cake_auto_package()` will automatically find and link all packages listed as `<depend>`, `<build_depend>`, `<build_export_depend>`, or `<exec_depend>` in your `package.xml`. You don't need to manually call `find_package()` or `target_link_libraries()` for these dependencies.
+
+**Conventions Enforced:**
+- **Main library**: Named `${PROJECT_NAME}`, type SHARED
+- **C++ standard**: C++20
+- **Source location**: `nodes/` directory
+- **Node directory**: snake_case (e.g., `my_node`)
 - **C++ namespace**: `${PROJECT_NAME}::my_node`
-- **C++ class name**: `MyNode` (PascalCase, automatically converted)
+- **C++ class name**: PascalCase (e.g., `MyNode`, auto-converted)
 - **Plugin class**: `${PROJECT_NAME}::my_node::MyNode`
 - **Interface library**: `my_node_interface`
 - **Parameters library**: `my_node_parameters`
@@ -455,21 +508,24 @@ Automatically discovers and registers all nodes in the `nodes/` directory, elimi
 cmake_minimum_required(VERSION 3.22)
 project(my_package)
 
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+endif()
 
-# Create main library from all source files in nodes/
-ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+find_package(cake REQUIRED)
 
-# Automatically register all nodes
+# Automatically handle all package setup
 cake_auto_package()
-
-ament_auto_package()
 ```
 
 **Before (Manual):**
 ```cmake
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
+
+ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+
 # For each node, you had to write:
 cake_generate_node_interface(my_node_interface nodes/my_node/interface.yaml)
 target_link_libraries(${PROJECT_NAME} my_node_interface)
@@ -480,11 +536,15 @@ target_link_libraries(${PROJECT_NAME} my_node_parameters)
 rclcpp_components_register_node(${PROJECT_NAME}
     PLUGIN "my_package::my_node::MyNode"
     EXECUTABLE "my_node")
+
+ament_auto_package()
 ```
 
 **After (Automatic):**
 ```cmake
-cake_auto_package()  # Handles all nodes automatically!
+find_package(cake REQUIRED)
+
+cake_auto_package()  # Handles everything!
 ```
 
 **File Structure Example:**

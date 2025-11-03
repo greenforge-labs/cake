@@ -5,13 +5,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
 
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
+find_package(cake REQUIRED)
 
-ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
-
-# Automatically register all nodes in the nodes/ directory
+# Automatically handle all package setup
 cake_auto_package()
-
-ament_auto_package()

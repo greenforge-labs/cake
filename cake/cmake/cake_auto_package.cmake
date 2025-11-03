@@ -97,25 +97,38 @@ function(_cake_auto_register_nodes TARGET_LIBRARY)
     endforeach()
 endfunction()
 
-# Main entry point: Automates cake package setup
+# Main entry point: Automates complete cake package setup
 #
-# This macro automates the common setup tasks for cake-based packages: - Automatically discovers and registers all nodes
-# in the nodes/ directory - Generates interface and parameter libraries for each node - Registers nodes as rclcpp
-# components
+# This macro automates the entire setup process for cake-based packages: - Finds all build dependencies via ament_auto -
+# Creates the main library from all source files in nodes/ - Sets C++20 standard requirement - Automatically discovers
+# and registers all nodes in the nodes/ directory - Generates interface and parameter libraries for each node -
+# Registers nodes as rclcpp components - Finalizes package with ament_auto_package()
 #
-# Usage: find_package(ament_cmake_auto REQUIRED) ament_auto_find_build_dependencies()
+# Usage: cmake_minimum_required(VERSION 3.22) project(my_package)
 #
-# ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes) target_compile_features(${PROJECT_NAME} PUBLIC
-# cxx_std_20)
+# find_package(cake REQUIRED)
 #
 # cake_auto_package()
 #
-# ament_auto_package()
-#
-# Assumptions: - Main library target is named ${PROJECT_NAME} - Node directories exist under nodes/ subdirectory - Each
-# node follows the naming convention: * Directory: snake_case (e.g., "my_node") * C++ Class: PascalCase (e.g., "MyNode")
-# * Namespace: ${PROJECT_NAME}::${node_name} * Full plugin: ${PROJECT_NAME}::${node_name}::${NodeClass}
+# Conventions enforced: - Main library target is named ${PROJECT_NAME} - Library type is SHARED (for rclcpp components)
+# - C++ standard is C++20 - Source files are located in nodes/ subdirectory - Node directories use snake_case (e.g.,
+# "my_node") - C++ classes use PascalCase (e.g., "MyNode") - Namespace: ${PROJECT_NAME}::${node_name} - Full plugin:
+# ${PROJECT_NAME}::${node_name}::${NodeClass}
 #
 macro(cake_auto_package)
+    # Find ament_cmake_auto (required for all subsequent calls)
+    find_package(ament_cmake_auto REQUIRED)
+
+    # Find all build dependencies
+    ament_auto_find_build_dependencies()
+
+    # Create the main library from all source files in nodes/
+    ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
+    target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+
+    # Auto-register all nodes
     _cake_auto_register_nodes(${PROJECT_NAME})
+
+    # Finalize package
+    ament_auto_package()
 endmacro()
