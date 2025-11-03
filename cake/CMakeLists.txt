@@ -16,4 +16,4 @@ install(FILES cmake/cake_codegen.cmake cmake/cake_auto_package.cmake DESTINATION
 # Export the CMake modules so other packages can use them
 list(APPEND ${PROJECT_NAME}_CONFIG_EXTRAS cmake/cake_codegen.cmake cmake/cake_auto_package.cmake)
 
-ament_auto_package()
+ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)

@@ -132,6 +132,9 @@ macro(cake_auto_package)
     # Auto-register all nodes
     _cake_auto_register_nodes(${PROJECT_NAME})
 
-    # Finalize package
-    ament_auto_package()
+    # Finalize package with scoped header install directory (best practice). USE_SCOPED_HEADER_INSTALL_DIR is used so
+    # that we behave the same way on Jazzy as with Kilted. As far as I can tell, this is a non-breaking change because
+    # it also changes which include directory is set with ament_export_include_directories - i.e. it doesn't really
+    # matter.
+    ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
 endmacro()
