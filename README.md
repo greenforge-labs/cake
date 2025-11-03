@@ -14,9 +14,25 @@ Cake provides code generation tools that reduce boilerplate and make ROS2 node d
 
 ## Quick Start
 
-### 1. Define Your Node Interface
+### 1. Set Up Your Package Structure
 
-Create an `interface.yaml` file:
+Organize your nodes in a `nodes/` directory:
+
+```
+my_package/
+├── CMakeLists.txt
+├── package.xml
+└── nodes/
+    └── my_node/
+        ├── my_node.hpp
+        ├── my_node.cpp
+        ├── interface.yaml
+        └── parameters.yaml (optional)
+```
+
+### 2. Define Your Node Interface
+
+Create `nodes/my_node/interface.yaml`:
 
 ```yaml
 node:
@@ -38,18 +54,26 @@ services:
       type: std_srvs/srv/Trigger
 ```
 
-### 2. Add to CMakeLists.txt
+### 3. Configure CMakeLists.txt
 
 ```cmake
-find_package(cake REQUIRED)
+cmake_minimum_required(VERSION 3.22)
+project(my_package)
 
-cake_generate_node_interface(my_node_interface nodes/my_node/interface.yaml)
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
 
-add_executable(my_node src/my_node.cpp)
-target_link_libraries(my_node my_node_interface)
+# Create main library from all source files in nodes/
+ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+
+# Automatically discover and register all nodes
+cake_auto_package()
+
+ament_auto_package()
 ```
 
-### 3. Use the Generated Interface
+### 4. Use the Generated Interface
 
 ```cpp
 #include <my_package/my_node_interface.hpp>
@@ -399,6 +423,92 @@ The code generator includes comprehensive tests. See [tests/README.md](cake/test
 
 ## CMake API
 
+### `cake_auto_package()`
+
+Automatically discovers and registers all nodes in the `nodes/` directory, eliminating boilerplate CMake code.
+
+**What it does:**
+- Scans the `nodes/` directory for node subdirectories
+- For each node found:
+  - Generates interface library if `interface.yaml` exists
+  - Generates parameters library if `parameters.yaml` exists
+  - Links both libraries to `${PROJECT_NAME}`
+  - Registers the node as an rclcpp component with the correct naming convention
+
+**Requirements:**
+- Nodes must be organized in a `nodes/` directory at the project root
+- Each node has its own subdirectory (e.g., `nodes/my_node/`)
+- Node directory names must be in snake_case (e.g., `my_node`)
+- The main library target must be named `${PROJECT_NAME}`
+
+**Naming Conventions:**
+- **Node directory**: `my_node` (snake_case)
+- **C++ namespace**: `${PROJECT_NAME}::my_node`
+- **C++ class name**: `MyNode` (PascalCase, automatically converted)
+- **Plugin class**: `${PROJECT_NAME}::my_node::MyNode`
+- **Interface library**: `my_node_interface`
+- **Parameters library**: `my_node_parameters`
+- **Executable**: `my_node`
+
+**Example CMakeLists.txt:**
+```cmake
+cmake_minimum_required(VERSION 3.22)
+project(my_package)
+
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
+
+# Create main library from all source files in nodes/
+ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+
+# Automatically register all nodes
+cake_auto_package()
+
+ament_auto_package()
+```
+
+**Before (Manual):**
+```cmake
+# For each node, you had to write:
+cake_generate_node_interface(my_node_interface nodes/my_node/interface.yaml)
+target_link_libraries(${PROJECT_NAME} my_node_interface)
+
+generate_parameter_library(my_node_parameters nodes/my_node/parameters.yaml)
+target_link_libraries(${PROJECT_NAME} my_node_parameters)
+
+rclcpp_components_register_node(${PROJECT_NAME}
+    PLUGIN "my_package::my_node::MyNode"
+    EXECUTABLE "my_node")
+```
+
+**After (Automatic):**
+```cmake
+cake_auto_package()  # Handles all nodes automatically!
+```
+
+**File Structure Example:**
+```
+my_package/
+├── CMakeLists.txt
+├── package.xml
+└── nodes/
+    ├── my_node/
+    │   ├── my_node.hpp
+    │   ├── my_node.cpp
+    │   ├── interface.yaml
+    │   └── parameters.yaml
+    └── another_node/
+        ├── another_node.hpp
+        ├── another_node.cpp
+        ├── interface.yaml
+        └── parameters.yaml
+```
+
+With this structure, `cake_auto_package()` will automatically register both `my_node` and `another_node` with all their interfaces and parameters.
+
+---
+
 ### `cake_generate_node_interface(LIB_NAME YAML_FILE)`
 
 Generates a C++ header from a YAML interface definition.
@@ -413,3 +523,5 @@ cake_generate_node_interface(my_node_interface nodes/my_node/interface.yaml)
 ```
 
 This creates an interface library target and installs the generated header to `include/${PROJECT_NAME}/${LIB_NAME}.hpp`.
+
+**Note:** If you're using `cake_auto_package()`, you don't need to call this manually - it's handled automatically.

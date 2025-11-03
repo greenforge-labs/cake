@@ -10,10 +10,10 @@ install(PROGRAMS scripts/generate_node_interface.py DESTINATION lib/${PROJECT_NA
 # Install the templates directory
 install(DIRECTORY scripts/templates DESTINATION lib/${PROJECT_NAME})
 
-# Install and export the CMake module
-install(FILES cmake/cake_codegen.cmake DESTINATION share/${PROJECT_NAME}/cmake)
+# Install and export the CMake modules
+install(FILES cmake/cake_codegen.cmake cmake/cake_auto_package.cmake DESTINATION share/${PROJECT_NAME}/cmake)
 
-# Export the CMake module so other packages can use it
-list(APPEND ${PROJECT_NAME}_CONFIG_EXTRAS cmake/cake_codegen.cmake)
+# Export the CMake modules so other packages can use them
+list(APPEND ${PROJECT_NAME}_CONFIG_EXTRAS cmake/cake_codegen.cmake cmake/cake_auto_package.cmake)
 
 ament_auto_package()
