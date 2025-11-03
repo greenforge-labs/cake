@@ -120,11 +120,16 @@ int main(int argc, char** argv) {
 
 ```yaml
 node:
-    name: my_node              # Node name (required)
+    name: my_node              # Node name (required) or ${THIS_NODE} for auto-detection
     package: ${THIS_PACKAGE}   # Package name or ${THIS_PACKAGE} for auto-detection
 ```
 
-The `${THIS_PACKAGE}` placeholder is automatically replaced with the package name from CMake's `PROJECT_NAME`.
+**Template Variables:**
+
+- `${THIS_PACKAGE}` - Automatically replaced with the package name from CMake's `PROJECT_NAME`
+- `${THIS_NODE}` - Automatically replaced with the node name (useful when using `cake_auto_package()` which auto-discovers nodes)
+
+These placeholders are particularly useful when using `cake_auto_package()`, which automatically discovers and registers nodes from the `nodes/` directory.
 
 ### Publishers
 

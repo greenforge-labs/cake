@@ -41,7 +41,7 @@ function(_cake_register_single_node TARGET_LIBRARY NODE_NAME NODE_DIR)
     # Generate and link interface library if interface.yaml exists
     if(EXISTS ${INTERFACE_YAML})
         set(INTERFACE_LIB_NAME "${NODE_NAME}_interface")
-        cake_generate_node_interface(${INTERFACE_LIB_NAME} "nodes/${NODE_NAME}/interface.yaml")
+        cake_generate_node_interface(${INTERFACE_LIB_NAME} "nodes/${NODE_NAME}/interface.yaml" ${NODE_NAME})
         target_link_libraries(${TARGET_LIBRARY} ${INTERFACE_LIB_NAME})
         message(STATUS "cake: Generated interface library for node '${NODE_NAME}'")
     endif()

@@ -371,6 +371,7 @@ def main():
     parser.add_argument("output_file", help="Output header file path")
     parser.add_argument("interface_yaml", help="Path to interface.yaml file")
     parser.add_argument("--package", help="Package name to substitute for ${THIS_PACKAGE}", default=None)
+    parser.add_argument("--node-name", help="Node name to substitute for ${THIS_NODE}", default=None)
 
     args = parser.parse_args()
 
@@ -386,6 +387,19 @@ def main():
     if "node" not in interface_data or "name" not in interface_data["node"]:
         print("Error: interface.yaml must contain 'node.name'", file=sys.stderr)
         sys.exit(1)
+
+    # Substitute ${THIS_NODE} with actual node name if provided
+    if interface_data["node"]["name"] == "${THIS_NODE}":
+        if args.node_name:
+            interface_data["node"]["name"] = args.node_name
+        else:
+            # Error: ${THIS_NODE} used but no node name provided
+            print(
+                "Error: interface.yaml uses ${THIS_NODE} but no --node-name argument was provided. "
+                "Please provide the node name via --node-name argument.",
+                file=sys.stderr
+            )
+            sys.exit(1)
 
     # Generate header content
     header_content = generate_header(interface_data, args.package)
