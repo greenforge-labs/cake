@@ -8,10 +8,14 @@
   <license>apache2</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Dependencies used by the auto build scripts -->
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
+  <buildtool_depend>generate_parameter_library</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
+  <depend>rclcpp_components</depend>
 
   <exec_depend>python3-yaml</exec_depend>
 

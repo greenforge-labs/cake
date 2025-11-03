@@ -119,6 +119,9 @@ macro(cake_auto_package)
     # Find ament_cmake_auto (required for all subsequent calls)
     find_package(ament_cmake_auto REQUIRED)
 
+    # Find generate_parameter_library (used internally for parameters.yaml files)
+    find_package(generate_parameter_library REQUIRED)
+
     # Find all build dependencies
     ament_auto_find_build_dependencies()
 

@@ -33,7 +33,6 @@ my_package/
 **Important:** Make sure your `package.xml` includes all required dependencies:
 ```xml
 <buildtool_depend>ament_cmake_auto</buildtool_depend>
-<buildtool_depend>generate_parameter_library</buildtool_depend>
 
 <depend>rclcpp</depend>
 <depend>rclcpp_components</depend>
@@ -43,7 +42,7 @@ my_package/
 <depend>std_msgs</depend>
 ```
 
-Dependencies listed in `package.xml` are automatically found and linked by `cake_auto_package()`.
+Dependencies listed in `package.xml` are automatically found and linked by `cake_auto_package()`. Note: You don't need to add `generate_parameter_library` - it's automatically found by cake.
 
 ### 2. Define Your Node Interface
 
@@ -472,7 +471,6 @@ Example `package.xml`:
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
-  <buildtool_depend>generate_parameter_library</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
@@ -490,6 +488,8 @@ Example `package.xml`:
 ```
 
 The `ament_auto_find_build_dependencies()` call inside `cake_auto_package()` will automatically find and link all packages listed as `<depend>`, `<build_depend>`, `<build_export_depend>`, or `<exec_depend>` in your `package.xml`. You don't need to manually call `find_package()` or `target_link_libraries()` for these dependencies.
+
+**Note:** You don't need to add `generate_parameter_library` to your `package.xml` - it's automatically found by `cake_auto_package()` since it's an internal implementation detail of cake.
 
 **Conventions Enforced:**
 - **Main library**: Named `${PROJECT_NAME}`, type SHARED
