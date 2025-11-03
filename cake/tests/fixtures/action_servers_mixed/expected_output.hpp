@@ -35,12 +35,15 @@ template <typename ContextType> struct MixedNodeActions {
     std::shared_ptr<cake::SingleGoalActionServer<example_interfaces::action::Fibonacci>> navigate;
 };
 
+template <typename ContextType> struct MixedNodeActionClients {};
+
 template <typename DerivedContextType> struct MixedNodeContext : cake::Context {
     MixedNodePublishers<DerivedContextType> publishers;
     MixedNodeSubscribers<DerivedContextType> subscribers;
     MixedNodeServices<DerivedContextType> services;
     MixedNodeServiceClients<DerivedContextType> service_clients;
     MixedNodeActions<DerivedContextType> actions;
+    MixedNodeActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };

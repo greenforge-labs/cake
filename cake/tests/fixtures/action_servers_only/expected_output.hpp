@@ -25,12 +25,15 @@ template <typename ContextType> struct ActionNodeActions {
     std::shared_ptr<cake::SingleGoalActionServer<example_interfaces::action::Fibonacci>> math_compute;
 };
 
+template <typename ContextType> struct ActionNodeActionClients {};
+
 template <typename DerivedContextType> struct ActionNodeContext : cake::Context {
     ActionNodePublishers<DerivedContextType> publishers;
     ActionNodeSubscribers<DerivedContextType> subscribers;
     ActionNodeServices<DerivedContextType> services;
     ActionNodeServiceClients<DerivedContextType> service_clients;
     ActionNodeActions<DerivedContextType> actions;
+    ActionNodeActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };

@@ -26,12 +26,15 @@ template <typename ContextType> struct DefaultQosServiceNodeServiceClients {};
 
 template <typename ContextType> struct DefaultQosServiceNodeActions {};
 
+template <typename ContextType> struct DefaultQosServiceNodeActionClients {};
+
 template <typename DerivedContextType> struct DefaultQosServiceNodeContext : cake::Context {
     DefaultQosServiceNodePublishers<DerivedContextType> publishers;
     DefaultQosServiceNodeSubscribers<DerivedContextType> subscribers;
     DefaultQosServiceNodeServices<DerivedContextType> services;
     DefaultQosServiceNodeServiceClients<DerivedContextType> service_clients;
     DefaultQosServiceNodeActions<DerivedContextType> actions;
+    DefaultQosServiceNodeActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };

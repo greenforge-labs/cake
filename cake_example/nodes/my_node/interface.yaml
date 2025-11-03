@@ -33,3 +33,7 @@ service_clients:
 actions:
     - name: my_action
       type: example_interfaces/action/Fibonacci
+
+action_clients:
+    - name: my_action
+      type: example_interfaces/action/Fibonacci

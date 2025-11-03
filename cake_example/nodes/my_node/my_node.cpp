@@ -3,6 +3,7 @@
 #include <memory>
 #include <rclcpp/logging.hpp>
 
+#include "example_interfaces/action/fibonacci.hpp"
 #include "example_interfaces/srv/add_two_ints.hpp"
 #include "example_interfaces/srv/trigger.hpp"
 #include "std_msgs/msg/bool.hpp"
@@ -62,9 +63,13 @@ void init(std::shared_ptr<Context> ctx) {
     ctx->services.my_service->set_request_handler(addition_request_handler);
     ctx->services.bing_bong->set_request_handler(bing_bong_request_handler);
 
-    cake::create_timer(ctx, 1000ms, [](auto ctx) {
+    cake::create_timer(ctx, 1000ms, [](std::shared_ptr<Context> ctx) {
         ctx->service_clients.bing_bong->async_send_request(std::make_shared<example_interfaces::srv::Trigger::Request>()
         );
+
+        // this is commented out because the action server is not configured. Without configuration, it will just print
+        // a warning message that its not configured and reject all goals.
+        // ctx->action_clients.my_action->async_send_goal(example_interfaces::action::Fibonacci::Goal());
     });
 }
 

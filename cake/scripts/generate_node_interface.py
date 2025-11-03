@@ -274,7 +274,23 @@ def prepare_actions(actions_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     return actions
 
 
-def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]], services: List[Dict[str, Any]], service_clients: List[Dict[str, Any]], actions: List[Dict[str, Any]]) -> List[str]:
+def prepare_action_clients(action_clients_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """
+    Prepare action client data for template rendering.
+    Converts raw YAML data into template-ready format.
+    """
+    action_clients = []
+    for client in action_clients_raw:
+        if not client.get("manually_created", False):
+            action_clients.append({
+                'name': client['name'],
+                'action_type': ros_type_to_cpp(client['type']),
+                'field_name': action_to_field_name(client['name'])
+            })
+    return action_clients
+
+
+def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]], services: List[Dict[str, Any]], service_clients: List[Dict[str, Any]], actions: List[Dict[str, Any]], action_clients: List[Dict[str, Any]]) -> List[str]:
     """Collect all required message, service, and action includes."""
     includes = set()
 
@@ -292,6 +308,9 @@ def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[st
 
     for action in actions:
         includes.add(ros_type_to_action_include(action['type']))
+
+    for action_client in action_clients:
+        includes.add(ros_type_to_action_include(action_client['type']))
 
     return sorted(includes)
 
@@ -361,6 +380,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     services_raw = interface_data.get("services", [])
     service_clients_raw = interface_data.get("service_clients", [])
     actions_raw = interface_data.get("actions", [])
+    action_clients_raw = interface_data.get("action_clients", [])
 
     # Prepare template data
     publishers = prepare_publishers(publishers_raw)
@@ -368,7 +388,8 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     services = prepare_services(services_raw)
     service_clients = prepare_service_clients(service_clients_raw)
     actions = prepare_actions(actions_raw)
-    message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw, service_clients_raw, actions_raw)
+    action_clients = prepare_action_clients(action_clients_raw)
+    message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw, service_clients_raw, actions_raw, action_clients_raw)
     namespace = get_namespace(interface_data)
     class_name = "".join(word.capitalize() for word in node_name.split("_"))
 
@@ -383,7 +404,8 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         subscribers=subscribers,
         services=services,
         service_clients=service_clients,
-        actions=actions
+        actions=actions,
+        action_clients=action_clients
     )
 
 

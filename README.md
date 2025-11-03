@@ -274,7 +274,7 @@ void init(std::shared_ptr<MyContext> ctx) {
 }
 ```
 
-### Actions
+### Actions (Servers)
 
 ```yaml
 actions:
@@ -337,6 +337,61 @@ If the client cancels the goal, `get_active_goal()` will return nullptr on the n
 - `publish_feedback(feedback)` - Send progress updates to client
 - `succeed(result)` - Mark goal as succeeded and clear active goal
 - `abort(result)` - Mark goal as aborted and clear active goal
+
+### Action Clients
+
+```yaml
+action_clients:
+    - name: /navigate                           # Action name (required)
+      type: nav2_msgs/action/NavigateToPose     # Action type (required)
+      manually_created: false                   # Skip auto-generation (optional, default: false)
+```
+
+Action clients are exposed as raw `rclcpp_action::Client<ActionT>::SharedPtr` for maximum flexibility, giving you full access to the rclcpp_action API.
+
+```cpp
+void init(std::shared_ptr<MyContext> ctx) {
+    // Create goal message
+    auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
+    goal_msg.pose.header.frame_id = "map";
+    goal_msg.pose.pose.position.x = 1.0;
+    goal_msg.pose.pose.position.y = 2.0;
+
+    // Send goal asynchronously
+    auto send_goal_options = rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions();
+
+    // Optional: Set goal response callback
+    send_goal_options.goal_response_callback =
+        [](auto goal_handle) {
+            if (!goal_handle) {
+                RCLCPP_ERROR(rclcpp::get_logger("my_node"), "Goal was rejected");
+            } else {
+                RCLCPP_INFO(rclcpp::get_logger("my_node"), "Goal accepted");
+            }
+        };
+
+    // Optional: Set feedback callback
+    send_goal_options.feedback_callback =
+        [](auto, const auto& feedback) {
+            RCLCPP_INFO(rclcpp::get_logger("my_node"),
+                       "Distance remaining: %.2f",
+                       feedback->distance_remaining);
+        };
+
+    // Optional: Set result callback
+    send_goal_options.result_callback =
+        [](const auto& result) {
+            if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
+                RCLCPP_INFO(rclcpp::get_logger("my_node"), "Navigation succeeded!");
+            }
+        };
+
+    // Send the goal
+    ctx->action_clients.navigate->async_send_goal(goal_msg, send_goal_options);
+}
+```
+
+For full details on the action client API, see the [rclcpp_action documentation](https://docs.ros2.org/latest/api/rclcpp_action/).
 
 ## QoS Configuration
 
@@ -476,6 +531,20 @@ template <typename ContextType> struct MyNodeServiceClients {
 };
 ```
 
+### Actions Struct
+```cpp
+template <typename ContextType> struct MyNodeActions {
+    std::shared_ptr<cake::SingleGoalActionServer<example_interfaces::action::Fibonacci>> fibonacci;
+};
+```
+
+### Action Clients Struct
+```cpp
+template <typename ContextType> struct MyNodeActionClients {
+    rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigate;
+};
+```
+
 ### Context Struct
 ```cpp
 template <typename DerivedContextType> struct MyNodeContext : cake::Context {
@@ -483,6 +552,8 @@ template <typename DerivedContextType> struct MyNodeContext : cake::Context {
     MyNodeSubscribers<DerivedContextType> subscribers;
     MyNodeServices<DerivedContextType> services;
     MyNodeServiceClients<DerivedContextType> service_clients;
+    MyNodeActions<DerivedContextType> actions;
+    MyNodeActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;  // Automatically initialized
     Params params;                                   // Automatically loaded
 };

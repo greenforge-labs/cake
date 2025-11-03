@@ -4,7 +4,10 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
+#include <example_interfaces/action/fibonacci.hpp>
 #include <example_interfaces/srv/add_two_ints.hpp>
+#include <nav2_msgs/action/compute_path_to_pose.hpp>
+#include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -12,6 +15,7 @@
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
 #include <cake/service.hpp>
+#include <cake/action_server.hpp>
 #include <test_package/full_node_parameters.hpp>
 
 namespace test_package::full_node {
@@ -29,13 +33,17 @@ template <typename ContextType> struct FullNodeServices {
 };
 
 template <typename ContextType> struct FullNodeServiceClients {
-    rclcpp::Client<example_interfaces::srv::AddTwoInts>::SharedPtr add_two_ints;
     rclcpp::Client<example_interfaces::srv::AddTwoInts>::SharedPtr compute;
 };
 
-template <typename ContextType> struct FullNodeActions {};
+template <typename ContextType> struct FullNodeActions {
+    std::shared_ptr<cake::SingleGoalActionServer<example_interfaces::action::Fibonacci>> fibonacci_server;
+};
 
-template <typename ContextType> struct FullNodeActionClients {};
+template <typename ContextType> struct FullNodeActionClients {
+    rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigate;
+    rclcpp_action::Client<nav2_msgs::action::ComputePathToPose>::SharedPtr compute_path;
+};
 
 template <typename DerivedContextType> struct FullNodeContext : cake::Context {
     FullNodePublishers<DerivedContextType> publishers;
@@ -71,8 +79,12 @@ class FullNodeBase : public cake::BaseNode<"full_node", extend_options> {
         // init services
         ctx->services.reset = cake::create_service<std_srvs::srv::Trigger>(ctx, "/reset");
         // init service clients
-        ctx->service_clients.add_two_ints = ctx->node->template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints", rclcpp::ServicesQoS());
-        ctx->service_clients.compute = ctx->node->template create_client<example_interfaces::srv::AddTwoInts>("compute");
+        ctx->service_clients.compute = ctx->node->template create_client<example_interfaces::srv::AddTwoInts>("/compute");
+        // init actions
+        ctx->actions.fibonacci_server = cake::create_single_goal_action_server<example_interfaces::action::Fibonacci>(ctx, "fibonacci_server");
+        // init action clients
+        ctx->action_clients.navigate = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(ctx->node, "/navigate");
+        ctx->action_clients.compute_path = rclcpp_action::create_client<nav2_msgs::action::ComputePathToPose>(ctx->node, "compute_path");
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

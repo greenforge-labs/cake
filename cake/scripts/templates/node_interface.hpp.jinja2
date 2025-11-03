@@ -76,6 +76,17 @@ template <typename ContextType> struct {{ class_name }}Actions {
 
 template <typename ContextType> struct {{ class_name }}Actions {};
 {%- endif %}
+{%- if action_clients %}
+
+template <typename ContextType> struct {{ class_name }}ActionClients {
+{%- for client in action_clients %}
+    rclcpp_action::Client<{{ client.action_type }}>::SharedPtr {{ client.field_name }};
+{%- endfor %}
+};
+{%- else %}
+
+template <typename ContextType> struct {{ class_name }}ActionClients {};
+{%- endif %}
 
 template <typename DerivedContextType> struct {{ class_name }}Context : cake::Context {
     {{ class_name }}Publishers<DerivedContextType> publishers;
@@ -83,6 +94,7 @@ template <typename DerivedContextType> struct {{ class_name }}Context : cake::Co
     {{ class_name }}Services<DerivedContextType> services;
     {{ class_name }}ServiceClients<DerivedContextType> service_clients;
     {{ class_name }}Actions<DerivedContextType> actions;
+    {{ class_name }}ActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -135,6 +147,13 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
         // init actions
 {%- for action in actions %}
         ctx->actions.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx, "{{ action.name }}");
+{%- endfor %}
+
+{%- endif %}
+{%- if action_clients %}
+        // init action clients
+{%- for client in action_clients %}
+        ctx->action_clients.{{ client.field_name }} = rclcpp_action::create_client<{{ client.action_type }}>(ctx->node, "{{ client.name }}");
 {%- endfor %}
 
 {%- endif %}

@@ -27,12 +27,15 @@ template <typename ContextType> struct SimpleNodeServiceClients {};
 
 template <typename ContextType> struct SimpleNodeActions {};
 
+template <typename ContextType> struct SimpleNodeActionClients {};
+
 template <typename DerivedContextType> struct SimpleNodeContext : cake::Context {
     SimpleNodePublishers<DerivedContextType> publishers;
     SimpleNodeSubscribers<DerivedContextType> subscribers;
     SimpleNodeServices<DerivedContextType> services;
     SimpleNodeServiceClients<DerivedContextType> service_clients;
     SimpleNodeActions<DerivedContextType> actions;
+    SimpleNodeActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };

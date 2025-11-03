@@ -28,12 +28,15 @@ template <typename ContextType> struct CustomQosNodeServiceClients {};
 
 template <typename ContextType> struct CustomQosNodeActions {};
 
+template <typename ContextType> struct CustomQosNodeActionClients {};
+
 template <typename DerivedContextType> struct CustomQosNodeContext : cake::Context {
     CustomQosNodePublishers<DerivedContextType> publishers;
     CustomQosNodeSubscribers<DerivedContextType> subscribers;
     CustomQosNodeServices<DerivedContextType> services;
     CustomQosNodeServiceClients<DerivedContextType> service_clients;
     CustomQosNodeActions<DerivedContextType> actions;
+    CustomQosNodeActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
