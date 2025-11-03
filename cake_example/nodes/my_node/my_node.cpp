@@ -51,10 +51,14 @@ void bing_bong_request_handler(
 }
 
 void init(std::shared_ptr<Context> ctx) {
+    // Load parameters
+    ctx->params = ParamListener(ctx->node).get_params();
+
     RCLCPP_INFO(ctx->node->get_logger(), "Hello from the test range! This is **my_node**.");
+    RCLCPP_INFO(ctx->node->get_logger(), "spicy_param value: %s", ctx->params.spicy_param.c_str());
 
     auto msg = std_msgs::msg::String();
-    msg.data = "fire!";
+    msg.data = ctx->params.spicy_param;
     ctx->publishers.some_topic->publish(msg);
 
     ctx->subscribers.other_topic->set_callback(msg_callback);

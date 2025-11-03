@@ -1,0 +1,6 @@
+test_package::action_node:
+  __cake_dummy:
+    type: bool
+    default_value: true
+    description: Dummy parameter (cake generates this when no parameters are defined)
+    read_only: true

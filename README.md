@@ -53,6 +53,12 @@ node:
     name: my_node
     package: ${THIS_PACKAGE}
 
+parameters:
+    update_rate:
+        type: double
+        default_value: 10.0
+        description: "Update rate in Hz"
+
 publishers:
     - topic: /cmd_vel
       type: geometry_msgs/msg/Twist
@@ -88,13 +94,24 @@ cake_auto_package()
 
 ```cpp
 #include <my_package/my_node_interface.hpp>
+#include <my_package/my_node_parameters.hpp>
 
-struct MyContext : my_package::my_node::MyNodeContext<MyContext> {};
+namespace my_package::my_node {
+
+struct MyContext : MyNodeContext<MyContext> {
+    Params params;
+};
 
 void init(std::shared_ptr<MyContext> ctx) {
-    // Your initialization code
-    // ctx->publishers.cmd_vel is ready to use
-    // ctx->subscribers.odom is ready to use
+    // Load parameters
+    ctx->params = ParamListener(ctx->node).get_params();
+
+    // Access parameter values
+    RCLCPP_INFO(ctx->node->get_logger(), "Update rate: %.2f Hz", ctx->params.update_rate);
+
+    // Publishers and subscribers are ready to use
+    // ctx->publishers.cmd_vel
+    // ctx->subscribers.odom
 
     // Set up service handler
     ctx->services.reset->set_request_handler(
@@ -104,7 +121,9 @@ void init(std::shared_ptr<MyContext> ctx) {
     );
 }
 
-using MyNode = my_package::my_node::MyNodeBase<MyContext, init>;
+using MyNode = MyNodeBase<MyContext, init>;
+
+} // namespace my_package::my_node
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
@@ -130,6 +149,47 @@ node:
 - `${THIS_NODE}` - Automatically replaced with the node name (useful when using `cake_auto_package()` which auto-discovers nodes)
 
 These placeholders are particularly useful when using `cake_auto_package()`, which automatically discovers and registers nodes from the `nodes/` directory.
+
+### Parameters (Optional)
+
+You can define ROS2 parameters directly in the `interface.yaml` file. These will be automatically processed by `generate_parameter_library`:
+
+```yaml
+parameters:
+  update_rate:
+    type: double
+    default_value: 10.0
+    description: "Update rate in Hz"
+    validation:
+      gt<>: [0.0]  # Must be greater than 0
+  robot_name:
+    type: string
+    default_value: "robot1"
+    description: "Name of the robot"
+  joint_names:
+    type: string_array
+    default_value: ["joint1", "joint2", "joint3"]
+    description: "List of joint names"
+  read_only_param:
+    type: bool
+    default_value: true
+    description: "A read-only parameter"
+    read_only: true
+```
+
+**Supported Parameter Types:**
+- `bool`, `int`, `double`, `string`
+- Array types: `bool_array`, `int_array`, `double_array`, `string_array`
+- Fixed-size types: `string_fixed_N`, `double_array_fixed_N` (where N is the size)
+
+**Optional Fields:**
+- `validation` - Constraints for the parameter value (e.g., `gt<>`, `lt<>`, `one_of<>`, etc.)
+- `read_only` - If true, the parameter cannot be changed after initialization
+- `additional_constraints` - Custom validation constraints
+
+**Note:** A parameters library is always generated for each node, even if no parameters are defined in `interface.yaml`. If no parameters are specified, a dummy parameter is automatically created to satisfy `generate_parameter_library` requirements.
+
+For more details on parameter validation and advanced features, see the [generate_parameter_library documentation](https://github.com/PickNikRobotics/generate_parameter_library).
 
 ### Publishers
 

@@ -36,7 +36,6 @@ endfunction()
 #
 function(_cake_register_single_node TARGET_LIBRARY NODE_NAME NODE_DIR)
     set(INTERFACE_YAML "${NODE_DIR}/interface.yaml")
-    set(PARAMETERS_YAML "${NODE_DIR}/parameters.yaml")
 
     # Generate and link interface library if interface.yaml exists
     if(EXISTS ${INTERFACE_YAML})
@@ -46,13 +45,24 @@ function(_cake_register_single_node TARGET_LIBRARY NODE_NAME NODE_DIR)
         message(STATUS "cake: Generated interface library for node '${NODE_NAME}'")
     endif()
 
-    # Generate and link parameters library if parameters.yaml exists
-    if(EXISTS ${PARAMETERS_YAML})
-        set(PARAMETERS_LIB_NAME "${NODE_NAME}_parameters")
-        generate_parameter_library(${PARAMETERS_LIB_NAME} "nodes/${NODE_NAME}/parameters.yaml")
-        target_link_libraries(${TARGET_LIBRARY} ${PARAMETERS_LIB_NAME})
-        message(STATUS "cake: Generated parameters library for node '${NODE_NAME}'")
-    endif()
+    # Always generate and link parameters library Parameters are defined in interface.yaml and auto-generated as
+    # .params.yaml
+    set(GENERATED_PARAMETERS_YAML_ABS
+        "${CMAKE_CURRENT_BINARY_DIR}/include/${PROJECT_NAME}/${INTERFACE_LIB_NAME}.params.yaml"
+    )
+
+    # generate_parameter_library expects a path relative to CMAKE_CURRENT_SOURCE_DIR Compute the relative path from
+    # source to binary dir
+    file(RELATIVE_PATH GENERATED_PARAMETERS_YAML_REL ${CMAKE_CURRENT_SOURCE_DIR} ${GENERATED_PARAMETERS_YAML_ABS})
+
+    set(PARAMETERS_LIB_NAME "${NODE_NAME}_parameters")
+    generate_parameter_library(${PARAMETERS_LIB_NAME} ${GENERATED_PARAMETERS_YAML_REL})
+
+    # Make parameters library depend on interface library (which generates the .params.yaml)
+    add_dependencies(${PARAMETERS_LIB_NAME} ${INTERFACE_LIB_NAME})
+
+    target_link_libraries(${TARGET_LIBRARY} ${PARAMETERS_LIB_NAME})
+    message(STATUS "cake: Generated parameters library for node '${NODE_NAME}'")
 
     # Register the node as an rclcpp component Convention: ${PROJECT_NAME}::${NODE_NAME}::${NodeNamePascal}
     _cake_snake_to_pascal(NODE_CLASS_NAME ${NODE_NAME})

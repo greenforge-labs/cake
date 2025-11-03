@@ -2,6 +2,12 @@ node:
     name: ${THIS_NODE}
     package: ${THIS_PACKAGE}
 
+parameters:
+    spicy_param:
+        type: string
+        default_value: "oh hi mark"
+        description: "A real spicy one"
+
 publishers:
     - topic: some_topic
       type: std_msgs/msg/String

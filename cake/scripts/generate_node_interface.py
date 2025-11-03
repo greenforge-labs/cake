@@ -296,24 +296,43 @@ def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[st
     return sorted(includes)
 
 
-def get_namespace(interface_data: Dict[str, Any], package_name: str | None = None) -> str:
+def substitute_template_variables(interface_data: Dict[str, Any], package_name: str | None, node_name: str | None) -> None:
+    """
+    Substitute template variables (${THIS_PACKAGE}, ${THIS_NODE}) in interface_data in-place.
+    Raises SystemExit with error message if template is used but value not provided.
+    """
+    # Substitute ${THIS_NODE} in node.name
+    if interface_data["node"]["name"] == "${THIS_NODE}":
+        if node_name:
+            interface_data["node"]["name"] = node_name
+        else:
+            print(
+                "Error: interface.yaml uses ${THIS_NODE} but no --node-name argument was provided. "
+                "Please provide the node name via --node-name argument.",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
+    # Substitute ${THIS_PACKAGE} in node.package
+    if interface_data["node"].get("package", "") == "${THIS_PACKAGE}":
+        if package_name:
+            interface_data["node"]["package"] = package_name
+        else:
+            print(
+                "Error: interface.yaml uses ${THIS_PACKAGE} but no --package argument was provided. "
+                "Please provide the package name via --package argument.",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
+
+def get_namespace(interface_data: Dict[str, Any]) -> str:
     """
     Determine the C++ namespace based on package and node name.
-    Handles ${THIS_PACKAGE} substitution.
+    Assumes template variables have already been substituted.
     """
     node_name = interface_data["node"]["name"]
     package = interface_data["node"].get("package", "")
-
-    # Substitute ${THIS_PACKAGE} with actual package name if provided
-    if package == "${THIS_PACKAGE}":
-        if package_name:
-            package = package_name
-        else:
-            # Error: ${THIS_PACKAGE} used but no package name provided
-            raise ValueError(
-                "interface.yaml uses ${THIS_PACKAGE} but no --package argument was provided. "
-                "Please provide the package name via --package argument."
-            )
 
     if package:
         return f"{package}::{node_name}"
@@ -321,8 +340,10 @@ def get_namespace(interface_data: Dict[str, Any], package_name: str | None = Non
         return node_name
 
 
-def generate_header(interface_data: Dict[str, Any], package_name: str | None = None) -> str:
-    """Generate the complete C++ header file using Jinja2 template."""
+def generate_header(interface_data: Dict[str, Any]) -> str:
+    """Generate the complete C++ header file using Jinja2 template.
+    Assumes template variables have already been substituted in interface_data.
+    """
     # Set up Jinja2 environment
     template_dir = Path(__file__).parent / "templates"
     env = Environment(
@@ -347,7 +368,7 @@ def generate_header(interface_data: Dict[str, Any], package_name: str | None = N
     service_clients = prepare_service_clients(service_clients_raw)
     actions = prepare_actions(actions_raw)
     message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw, service_clients_raw, actions_raw)
-    namespace = get_namespace(interface_data, package_name)
+    namespace = get_namespace(interface_data)
     class_name = "".join(word.capitalize() for word in node_name.split("_"))
 
     # Render template
@@ -362,6 +383,37 @@ def generate_header(interface_data: Dict[str, Any], package_name: str | None = N
         service_clients=service_clients,
         actions=actions
     )
+
+
+def generate_parameters_yaml(interface_data: Dict[str, Any], package_name: str, node_name: str) -> str:
+    """
+    Generate parameters.yaml content from interface.yaml data.
+    Always returns valid YAML. If no parameters are defined, generates a dummy parameter
+    (generate_parameter_library requires at least one parameter).
+    """
+    # Format: namespace (package::node_name) with parameters underneath
+    namespace = f"{package_name}::{node_name}"
+
+    # Get parameters if they exist
+    parameters = interface_data.get("parameters", {})
+
+    # generate_parameter_library requires at least one parameter
+    # If no parameters are defined, add a dummy one
+    if not parameters:
+        parameters = {
+            "__cake_dummy": {
+                "type": "bool",
+                "default_value": True,
+                "description": "Dummy parameter (cake generates this when no parameters are defined)",
+                "read_only": True
+            }
+        }
+
+    # Build the YAML structure
+    yaml_dict = {namespace: parameters}
+
+    # Convert to YAML string
+    return yaml.dump(yaml_dict, default_flow_style=False, sort_keys=False)
 
 
 def main():
@@ -388,21 +440,11 @@ def main():
         print("Error: interface.yaml must contain 'node.name'", file=sys.stderr)
         sys.exit(1)
 
-    # Substitute ${THIS_NODE} with actual node name if provided
-    if interface_data["node"]["name"] == "${THIS_NODE}":
-        if args.node_name:
-            interface_data["node"]["name"] = args.node_name
-        else:
-            # Error: ${THIS_NODE} used but no node name provided
-            print(
-                "Error: interface.yaml uses ${THIS_NODE} but no --node-name argument was provided. "
-                "Please provide the node name via --node-name argument.",
-                file=sys.stderr
-            )
-            sys.exit(1)
+    # Substitute all template variables (${THIS_NODE}, ${THIS_PACKAGE}) in-place
+    substitute_template_variables(interface_data, args.package, args.node_name)
 
     # Generate header content
-    header_content = generate_header(interface_data, args.package)
+    header_content = generate_header(interface_data)
 
     # Ensure output directory exists
     output_file = Path(args.output_file)
@@ -413,6 +455,19 @@ def main():
         f.write(header_content)
 
     print(f"Generated: {output_file}")
+
+    # Always generate parameters.yaml (even if empty)
+    node_name = interface_data["node"]["name"]
+    package_name = interface_data["node"].get("package", "")
+
+    # Always generate parameters file if we have a package name
+    if package_name:
+        params_content = generate_parameters_yaml(interface_data, package_name, node_name)
+        # Generate parameters file alongside the header with .params.yaml extension
+        params_file = output_file.parent / f"{output_file.stem}.params.yaml"
+        with open(params_file, "w") as f:
+            f.write(params_content)
+        print(f"Generated: {params_file}")
 
 
 if __name__ == "__main__":

@@ -230,6 +230,93 @@ publishers: []
     assert "${THIS_NODE}" in result.stderr or "node" in result.stderr.lower()
 
 
+def test_parameters_generation(tmp_path):
+    """Test that parameters section in interface.yaml generates a .params.yaml file."""
+    # Create a YAML file with parameters section
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text("""node:
+    name: test_node
+    package: test_package
+
+parameters:
+  update_rate:
+    type: double
+    default_value: 10.0
+    description: "Update rate"
+  robot_name:
+    type: string
+    default_value: "robot1"
+    description: "Robot name"
+
+publishers: []
+""")
+    output_file = tmp_path / "output.hpp"
+
+    # Run the generator script
+    result = subprocess.run(
+        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
+        capture_output=True,
+        text=True
+    )
+
+    # Should succeed
+    assert result.returncode == 0, f"Script failed:\n{result.stderr}"
+
+    # Check that parameters file was generated
+    params_file = tmp_path / "output.params.yaml"
+    assert params_file.exists(), "Parameters file was not generated"
+
+    # Read and verify parameters file content
+    with open(params_file, 'r') as f:
+        params_content = f.read()
+
+    # Should have correct namespace
+    assert "test_package::test_node:" in params_content
+    # Should have the parameters
+    assert "update_rate:" in params_content
+    assert "type: double" in params_content
+    assert "robot_name:" in params_content
+    assert "type: string" in params_content
+
+
+def test_no_parameters_generates_dummy(tmp_path):
+    """Test that a .params.yaml file with dummy parameter is always generated, even without parameters section."""
+    # Create a YAML file WITHOUT parameters section
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text("""node:
+    name: test_node
+    package: test_package
+
+publishers:
+    - topic: /status
+      type: std_msgs/msg/String
+      qos: 10
+""")
+    output_file = tmp_path / "output.hpp"
+
+    # Run the generator script
+    result = subprocess.run(
+        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
+        capture_output=True,
+        text=True
+    )
+
+    # Should succeed
+    assert result.returncode == 0, f"Script failed:\n{result.stderr}"
+
+    # Check that parameters file WAS generated (always, even with no parameters)
+    params_file = tmp_path / "output.params.yaml"
+    assert params_file.exists(), "Parameters file should always be generated"
+
+    # Read and verify it has dummy parameter
+    with open(params_file, 'r') as f:
+        params_content = f.read()
+
+    # Should have namespace and dummy parameter
+    assert "test_package::test_node:" in params_content
+    assert "__cake_dummy:" in params_content
+
+
 if __name__ == "__main__":
     # Allow running directly with python
     pytest.main([__file__, "-v"])

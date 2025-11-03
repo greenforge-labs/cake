@@ -1,0 +1,18 @@
+node:
+    name: test_node
+    package: ${THIS_PACKAGE}
+
+parameters:
+  update_rate:
+    type: double
+    default_value: 10.0
+    description: "Update rate in Hz"
+  robot_name:
+    type: string
+    default_value: "robot1"
+    description: "Name of the robot"
+
+publishers:
+    - topic: /status
+      type: std_msgs/msg/String
+      qos: 10
