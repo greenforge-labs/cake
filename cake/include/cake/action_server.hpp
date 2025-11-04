@@ -24,7 +24,8 @@ template <typename ActionT> class SingleGoalActionServer {
         const std::string &server_name,
         const std::optional<SingleGoalActionServerOptions<ActionT>> &options = std::nullopt
     )
-        : node_(node), action_server_(nullptr), active_goal_handle_(nullptr), options_(options) {
+        : node_(node), server_name_(server_name), action_server_(nullptr), active_goal_handle_(nullptr),
+          options_(options) {
 
         action_server_ = rclcpp_action::create_server<ActionT>(
             node_,
@@ -34,7 +35,7 @@ template <typename ActionT> class SingleGoalActionServer {
             [this](auto goal_handle) { return handle_accepted(goal_handle); }
         );
 
-        RCLCPP_INFO(node_->get_logger(), "Action server '%s' initialized", server_name.c_str());
+        RCLCPP_INFO(node_->get_logger(), "Action server '%s' initialized", server_name_.c_str());
     }
 
     ~SingleGoalActionServer() {
@@ -56,7 +57,9 @@ template <typename ActionT> class SingleGoalActionServer {
 
     void publish_feedback(std::shared_ptr<typename ActionT::Feedback> feedback) {
         if (!active_goal_handle_) {
-            RCLCPP_WARN(node_->get_logger(), "Cannot publish feedback: no active goal");
+            RCLCPP_WARN(
+                node_->get_logger(), "Action server '%s': Cannot publish feedback, no active goal", server_name_.c_str()
+            );
             return;
         }
         active_goal_handle_->publish_feedback(feedback);
@@ -64,7 +67,9 @@ template <typename ActionT> class SingleGoalActionServer {
 
     void succeed(std::shared_ptr<typename ActionT::Result> result) {
         if (!active_goal_handle_) {
-            RCLCPP_WARN(node_->get_logger(), "Cannot succeed: no active goal");
+            RCLCPP_WARN(
+                node_->get_logger(), "Action server '%s': Cannot succeed, no active goal", server_name_.c_str()
+            );
             return;
         }
         active_goal_handle_->succeed(result);
@@ -73,7 +78,7 @@ template <typename ActionT> class SingleGoalActionServer {
 
     void abort(std::shared_ptr<typename ActionT::Result> result) {
         if (!active_goal_handle_) {
-            RCLCPP_WARN(node_->get_logger(), "Cannot abort: no active goal");
+            RCLCPP_WARN(node_->get_logger(), "Action server '%s': Cannot abort, no active goal", server_name_.c_str());
             return;
         }
         active_goal_handle_->abort(result);
@@ -82,6 +87,7 @@ template <typename ActionT> class SingleGoalActionServer {
 
   private:
     rclcpp::Node *node_;
+    std::string server_name_;
     rclcpp_action::Server<ActionT>::SharedPtr action_server_;
     std::shared_ptr<GoalHandle> active_goal_handle_;
     std::optional<SingleGoalActionServerOptions<ActionT>> options_;
@@ -91,36 +97,43 @@ template <typename ActionT> class SingleGoalActionServer {
         if (!options_.has_value()) {
             RCLCPP_WARN(
                 node_->get_logger(),
-                "Rejecting goal: action server options not configured. Call set_options() to configure."
+                "Action server '%s': Rejecting goal, options not configured. Call set_options() to configure.",
+                server_name_.c_str()
             );
             return rclcpp_action::GoalResponse::REJECT;
         }
 
         if (!options_.value().goal_validator(*goal)) {
-            RCLCPP_WARN(node_->get_logger(), "Rejecting goal, goal is invalid");
+            RCLCPP_WARN(
+                node_->get_logger(), "Action server '%s': Rejecting goal, goal is invalid", server_name_.c_str()
+            );
             return rclcpp_action::GoalResponse::REJECT;
         }
 
         if (active_goal_handle_) {
             if (options_.value().new_goals_replace_current_goal) {
-                RCLCPP_WARN(node_->get_logger(), "Cancelling current goal");
+                RCLCPP_WARN(node_->get_logger(), "Action server '%s': Cancelling current goal", server_name_.c_str());
                 handle_cancel(active_goal_handle_);
             } else {
-                RCLCPP_WARN(node_->get_logger(), "Rejecting goal, another goal is active");
+                RCLCPP_WARN(
+                    node_->get_logger(),
+                    "Action server '%s': Rejecting goal, another goal is active",
+                    server_name_.c_str()
+                );
                 return rclcpp_action::GoalResponse::REJECT;
             }
         }
 
-        RCLCPP_INFO(node_->get_logger(), "Accepting goal");
+        RCLCPP_INFO(node_->get_logger(), "Action server '%s': Accepting goal", server_name_.c_str());
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
     rclcpp_action::CancelResponse handle_cancel(std::shared_ptr<GoalHandle> goal_handle) {
-        RCLCPP_INFO(node_->get_logger(), "Received request to cancel goal");
+        RCLCPP_INFO(node_->get_logger(), "Action server '%s': Received request to cancel goal", server_name_.c_str());
 
         if (active_goal_handle_ && goal_handle->get_goal_id() == active_goal_handle_->get_goal_id()) {
             active_goal_handle_ = nullptr;
-            RCLCPP_INFO(node_->get_logger(), "Goal canceled");
+            RCLCPP_INFO(node_->get_logger(), "Action server '%s': Goal canceled", server_name_.c_str());
         }
 
         return rclcpp_action::CancelResponse::ACCEPT;
@@ -128,7 +141,7 @@ template <typename ActionT> class SingleGoalActionServer {
 
     void handle_accepted(std::shared_ptr<GoalHandle> goal_handle) {
         active_goal_handle_ = goal_handle;
-        RCLCPP_INFO(node_->get_logger(), "Goal accepted");
+        RCLCPP_INFO(node_->get_logger(), "Action server '%s': Goal accepted", server_name_.c_str());
     }
 };
 
