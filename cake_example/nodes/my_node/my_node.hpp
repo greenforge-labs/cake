@@ -1,7 +1,6 @@
 #include <memory>
 
 #include <cake_example/my_node_interface.hpp>
-#include <cake_example/my_node_parameters.hpp>
 
 namespace cake_example::my_node {
 
