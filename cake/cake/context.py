@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-
 from threading import Thread
 
 from rclpy.node import Node

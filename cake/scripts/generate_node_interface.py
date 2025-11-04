@@ -6,12 +6,14 @@ Parses interface.yaml and generates C++ header with publishers, subscribers, con
 """
 
 import argparse
+from pathlib import Path
 import re
 import sys
-from pathlib import Path
-from typing import Dict, List, Any
-import yaml
+
 from jinja2 import Environment, FileSystemLoader
+import yaml
+
+from typing import Any, Dict, List
 
 
 def camel_to_snake(name: str) -> str:
@@ -20,9 +22,9 @@ def camel_to_snake(name: str) -> str:
     Example: AddTwoInts -> add_two_ints, String -> string
     """
     # Insert underscore before uppercase letters that follow lowercase letters or digits
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
     # Insert underscore before uppercase letters that follow lowercase or digits
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
 def ros_type_to_cpp(ros_type: str) -> str:
@@ -148,12 +150,14 @@ def prepare_publishers(publishers_raw: List[Dict[str, Any]]) -> List[Dict[str, s
     publishers = []
     for pub in publishers_raw:
         if not pub.get("manually_created", False):
-            publishers.append({
-                'topic': pub['topic'],
-                'msg_type': ros_type_to_cpp(pub['type']),
-                'field_name': topic_to_field_name(pub['topic']),
-                'qos_code': generate_qos_code(pub.get('qos', 10))
-            })
+            publishers.append(
+                {
+                    "topic": pub["topic"],
+                    "msg_type": ros_type_to_cpp(pub["type"]),
+                    "field_name": topic_to_field_name(pub["topic"]),
+                    "qos_code": generate_qos_code(pub.get("qos", 10)),
+                }
+            )
     return publishers
 
 
@@ -165,12 +169,14 @@ def prepare_subscribers(subscribers_raw: List[Dict[str, Any]]) -> List[Dict[str,
     subscribers = []
     for sub in subscribers_raw:
         if not sub.get("manually_created", False):
-            subscribers.append({
-                'topic': sub['topic'],
-                'msg_type': ros_type_to_cpp(sub['type']),
-                'field_name': topic_to_field_name(sub['topic']),
-                'qos_code': generate_qos_code(sub.get('qos', 10))
-            })
+            subscribers.append(
+                {
+                    "topic": sub["topic"],
+                    "msg_type": ros_type_to_cpp(sub["type"]),
+                    "field_name": topic_to_field_name(sub["topic"]),
+                    "qos_code": generate_qos_code(sub.get("qos", 10)),
+                }
+            )
     return subscribers
 
 
@@ -224,15 +230,17 @@ def prepare_services(services_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]
         if not srv.get("manually_created", False):
             # Only generate QoS code if explicitly specified
             qos_code = None
-            if 'qos' in srv:
-                qos_code = generate_qos_code(srv['qos'])
+            if "qos" in srv:
+                qos_code = generate_qos_code(srv["qos"])
 
-            services.append({
-                'name': srv['name'],
-                'service_type': ros_type_to_cpp(srv['type']),
-                'field_name': service_to_field_name(srv['name']),
-                'qos_code': qos_code
-            })
+            services.append(
+                {
+                    "name": srv["name"],
+                    "service_type": ros_type_to_cpp(srv["type"]),
+                    "field_name": service_to_field_name(srv["name"]),
+                    "qos_code": qos_code,
+                }
+            )
     return services
 
 
@@ -246,15 +254,17 @@ def prepare_service_clients(service_clients_raw: List[Dict[str, Any]]) -> List[D
         if not client.get("manually_created", False):
             # Only generate QoS code if explicitly specified
             qos_code = None
-            if 'qos' in client:
-                qos_code = generate_qos_code(client['qos'])
+            if "qos" in client:
+                qos_code = generate_qos_code(client["qos"])
 
-            service_clients.append({
-                'name': client['name'],
-                'service_type': ros_type_to_cpp(client['type']),
-                'field_name': service_to_field_name(client['name']),
-                'qos_code': qos_code
-            })
+            service_clients.append(
+                {
+                    "name": client["name"],
+                    "service_type": ros_type_to_cpp(client["type"]),
+                    "field_name": service_to_field_name(client["name"]),
+                    "qos_code": qos_code,
+                }
+            )
     return service_clients
 
 
@@ -266,11 +276,13 @@ def prepare_actions(actions_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     actions = []
     for action in actions_raw:
         if not action.get("manually_created", False):
-            actions.append({
-                'name': action['name'],
-                'action_type': ros_type_to_cpp(action['type']),
-                'field_name': action_to_field_name(action['name'])
-            })
+            actions.append(
+                {
+                    "name": action["name"],
+                    "action_type": ros_type_to_cpp(action["type"]),
+                    "field_name": action_to_field_name(action["name"]),
+                }
+            )
     return actions
 
 
@@ -282,40 +294,51 @@ def prepare_action_clients(action_clients_raw: List[Dict[str, Any]]) -> List[Dic
     action_clients = []
     for client in action_clients_raw:
         if not client.get("manually_created", False):
-            action_clients.append({
-                'name': client['name'],
-                'action_type': ros_type_to_cpp(client['type']),
-                'field_name': action_to_field_name(client['name'])
-            })
+            action_clients.append(
+                {
+                    "name": client["name"],
+                    "action_type": ros_type_to_cpp(client["type"]),
+                    "field_name": action_to_field_name(client["name"]),
+                }
+            )
     return action_clients
 
 
-def collect_includes(publishers: List[Dict[str, Any]], subscribers: List[Dict[str, Any]], services: List[Dict[str, Any]], service_clients: List[Dict[str, Any]], actions: List[Dict[str, Any]], action_clients: List[Dict[str, Any]]) -> List[str]:
+def collect_includes(
+    publishers: List[Dict[str, Any]],
+    subscribers: List[Dict[str, Any]],
+    services: List[Dict[str, Any]],
+    service_clients: List[Dict[str, Any]],
+    actions: List[Dict[str, Any]],
+    action_clients: List[Dict[str, Any]],
+) -> List[str]:
     """Collect all required message, service, and action includes."""
     includes = set()
 
     for pub in publishers:
-        includes.add(ros_type_to_include(pub['type']))
+        includes.add(ros_type_to_include(pub["type"]))
 
     for sub in subscribers:
-        includes.add(ros_type_to_include(sub['type']))
+        includes.add(ros_type_to_include(sub["type"]))
 
     for srv in services:
-        includes.add(ros_type_to_service_include(srv['type']))
+        includes.add(ros_type_to_service_include(srv["type"]))
 
     for client in service_clients:
-        includes.add(ros_type_to_service_include(client['type']))
+        includes.add(ros_type_to_service_include(client["type"]))
 
     for action in actions:
-        includes.add(ros_type_to_action_include(action['type']))
+        includes.add(ros_type_to_action_include(action["type"]))
 
     for action_client in action_clients:
-        includes.add(ros_type_to_action_include(action_client['type']))
+        includes.add(ros_type_to_action_include(action_client["type"]))
 
     return sorted(includes)
 
 
-def substitute_template_variables(interface_data: Dict[str, Any], package_name: str | None, node_name: str | None) -> None:
+def substitute_template_variables(
+    interface_data: Dict[str, Any], package_name: str | None, node_name: str | None
+) -> None:
     """
     Substitute template variables (${THIS_PACKAGE}, ${THIS_NODE}) in interface_data in-place.
     Raises SystemExit with error message if template is used but value not provided.
@@ -328,7 +351,7 @@ def substitute_template_variables(interface_data: Dict[str, Any], package_name: 
             print(
                 "Error: interface.yaml uses ${THIS_NODE} but no --node-name argument was provided. "
                 "Please provide the node name via --node-name argument.",
-                file=sys.stderr
+                file=sys.stderr,
             )
             sys.exit(1)
 
@@ -340,7 +363,7 @@ def substitute_template_variables(interface_data: Dict[str, Any], package_name: 
             print(
                 "Error: interface.yaml uses ${THIS_PACKAGE} but no --package argument was provided. "
                 "Please provide the package name via --package argument.",
-                file=sys.stderr
+                file=sys.stderr,
             )
             sys.exit(1)
 
@@ -365,11 +388,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     """
     # Set up Jinja2 environment
     template_dir = Path(__file__).parent / "templates"
-    env = Environment(
-        loader=FileSystemLoader(template_dir),
-        trim_blocks=False,
-        lstrip_blocks=False
-    )
+    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=False, lstrip_blocks=False)
     template = env.get_template("node_interface.hpp.jinja2")
 
     # Extract data
@@ -389,7 +408,9 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     service_clients = prepare_service_clients(service_clients_raw)
     actions = prepare_actions(actions_raw)
     action_clients = prepare_action_clients(action_clients_raw)
-    message_includes = collect_includes(publishers_raw, subscribers_raw, services_raw, service_clients_raw, actions_raw, action_clients_raw)
+    message_includes = collect_includes(
+        publishers_raw, subscribers_raw, services_raw, service_clients_raw, actions_raw, action_clients_raw
+    )
     namespace = get_namespace(interface_data)
     class_name = "".join(word.capitalize() for word in node_name.split("_"))
 
@@ -405,7 +426,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         services=services,
         service_clients=service_clients,
         actions=actions,
-        action_clients=action_clients
+        action_clients=action_clients,
     )
 
 
@@ -429,7 +450,7 @@ def generate_parameters_yaml(interface_data: Dict[str, Any], package_name: str, 
                 "type": "bool",
                 "default_value": True,
                 "description": "Dummy parameter (cake generates this when no parameters are defined)",
-                "read_only": True
+                "read_only": True,
             }
         }
 
@@ -441,9 +462,7 @@ def generate_parameters_yaml(interface_data: Dict[str, Any], package_name: str, 
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate cake node interface header from YAML"
-    )
+    parser = argparse.ArgumentParser(description="Generate cake node interface header from YAML")
     parser.add_argument("output_file", help="Output header file path")
     parser.add_argument("interface_yaml", help="Path to interface.yaml file")
     parser.add_argument("--package", help="Package name to substitute for ${THIS_PACKAGE}", default=None)

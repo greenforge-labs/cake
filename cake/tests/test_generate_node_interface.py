@@ -4,11 +4,10 @@
 Tests for the cake node interface code generator.
 """
 
-import subprocess
 from pathlib import Path
+import subprocess
 
 import pytest
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "generate_node_interface.py"
@@ -17,14 +16,14 @@ SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "generate_node_interfac
 def normalize_whitespace(content: str) -> str:
     """Normalize whitespace for comparison."""
     # Split into lines, strip trailing whitespace, remove empty lines at start/end
-    lines = [line.rstrip() for line in content.split('\n')]
+    lines = [line.rstrip() for line in content.split("\n")]
     # Remove trailing empty lines
     while lines and not lines[-1]:
         lines.pop()
     # Remove leading empty lines
     while lines and not lines[0]:
         lines.pop(0)
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 def get_test_cases():
@@ -47,18 +46,18 @@ def test_generate_node_interface(test_name, input_file, expected_file, generated
     result = subprocess.run(
         ["python3", str(SCRIPT_PATH), str(generated_file), str(input_file), "--package", "test_package"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Check that script ran successfully
     assert result.returncode == 0, f"Generator script failed for {test_name}:\n{result.stderr}"
 
     # Read expected output
-    with open(expected_file, 'r') as f:
+    with open(expected_file, "r") as f:
         expected_output = f.read()
 
     # Read generated output
-    with open(generated_file, 'r') as f:
+    with open(generated_file, "r") as f:
         generated_output = f.read()
 
     # Normalize whitespace for comparison
@@ -85,16 +84,18 @@ def test_missing_node_name(tmp_path):
     """Test that missing node.name causes script to fail."""
     # Create a YAML file with missing node.name
     yaml_file = tmp_path / "invalid.yaml"
-    yaml_file.write_text("""node:
+    yaml_file.write_text(
+        """node:
     package: ${THIS_PACKAGE}
-""")
+"""
+    )
     output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
         ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should fail with non-zero exit code
@@ -106,15 +107,17 @@ def test_missing_node_section(tmp_path):
     """Test that missing node section causes script to fail."""
     # Create a YAML file with missing node section
     yaml_file = tmp_path / "invalid.yaml"
-    yaml_file.write_text("""publishers: []
-""")
+    yaml_file.write_text(
+        """publishers: []
+"""
+    )
     output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
         ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should fail with non-zero exit code
@@ -126,26 +129,28 @@ def test_empty_publishers_and_subscribers(tmp_path):
     """Test that empty lists are handled correctly."""
     # Create a YAML file with empty publishers and subscribers
     yaml_file = tmp_path / "empty.yaml"
-    yaml_file.write_text("""node:
+    yaml_file.write_text(
+        """node:
     name: test_node
     package: ${THIS_PACKAGE}
 publishers: []
 subscribers: []
-""")
+"""
+    )
     output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
         ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should succeed
     assert result.returncode == 0, f"Script failed:\n{result.stderr}"
 
     # Read generated output
-    with open(output_file, 'r') as f:
+    with open(output_file, "r") as f:
         output = f.read()
 
     # Should generate empty structs
@@ -157,18 +162,18 @@ def test_this_package_without_package_arg(tmp_path):
     """Test that ${THIS_PACKAGE} without --package argument causes script to fail."""
     # Create a YAML file using ${THIS_PACKAGE}
     yaml_file = tmp_path / "test.yaml"
-    yaml_file.write_text("""node:
+    yaml_file.write_text(
+        """node:
     name: test_node
     package: ${THIS_PACKAGE}
 publishers: []
-""")
+"""
+    )
     output_file = tmp_path / "output.hpp"
 
     # Run the generator script WITHOUT --package argument
     result = subprocess.run(
-        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file)],
-        capture_output=True,
-        text=True
+        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file)], capture_output=True, text=True
     )
 
     # Should fail with non-zero exit code
@@ -180,26 +185,37 @@ def test_this_node_substitution(tmp_path):
     """Test that ${THIS_NODE} is substituted correctly when --node-name is provided."""
     # Create a YAML file using ${THIS_NODE}
     yaml_file = tmp_path / "test.yaml"
-    yaml_file.write_text("""node:
+    yaml_file.write_text(
+        """node:
     name: ${THIS_NODE}
     package: test_package
 publishers: []
 subscribers: []
-""")
+"""
+    )
     output_file = tmp_path / "output.hpp"
 
     # Run the generator script WITH --node-name argument
     result = subprocess.run(
-        ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package", "--node-name", "my_test_node"],
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(output_file),
+            str(yaml_file),
+            "--package",
+            "test_package",
+            "--node-name",
+            "my_test_node",
+        ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should succeed
     assert result.returncode == 0, f"Script failed:\n{result.stderr}"
 
     # Read generated output
-    with open(output_file, 'r') as f:
+    with open(output_file, "r") as f:
         output = f.read()
 
     # Check that node name was substituted correctly
@@ -211,18 +227,20 @@ def test_this_node_without_node_name_arg(tmp_path):
     """Test that ${THIS_NODE} without --node-name argument causes script to fail."""
     # Create a YAML file using ${THIS_NODE}
     yaml_file = tmp_path / "test.yaml"
-    yaml_file.write_text("""node:
+    yaml_file.write_text(
+        """node:
     name: ${THIS_NODE}
     package: test_package
 publishers: []
-""")
+"""
+    )
     output_file = tmp_path / "output.hpp"
 
     # Run the generator script WITHOUT --node-name argument
     result = subprocess.run(
         ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should fail with non-zero exit code
@@ -234,7 +252,8 @@ def test_parameters_generation(tmp_path):
     """Test that parameters section in interface.yaml generates a .params.yaml file."""
     # Create a YAML file with parameters section
     yaml_file = tmp_path / "test.yaml"
-    yaml_file.write_text("""node:
+    yaml_file.write_text(
+        """node:
     name: test_node
     package: test_package
 
@@ -249,14 +268,15 @@ parameters:
     description: "Robot name"
 
 publishers: []
-""")
+"""
+    )
     output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
         ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should succeed
@@ -267,7 +287,7 @@ publishers: []
     assert params_file.exists(), "Parameters file was not generated"
 
     # Read and verify parameters file content
-    with open(params_file, 'r') as f:
+    with open(params_file, "r") as f:
         params_content = f.read()
 
     # Should have correct namespace
@@ -283,7 +303,8 @@ def test_no_parameters_generates_dummy(tmp_path):
     """Test that a .params.yaml file with dummy parameter is always generated, even without parameters section."""
     # Create a YAML file WITHOUT parameters section
     yaml_file = tmp_path / "test.yaml"
-    yaml_file.write_text("""node:
+    yaml_file.write_text(
+        """node:
     name: test_node
     package: test_package
 
@@ -291,14 +312,15 @@ publishers:
     - topic: /status
       type: std_msgs/msg/String
       qos: 10
-""")
+"""
+    )
     output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
         ["python3", str(SCRIPT_PATH), str(output_file), str(yaml_file), "--package", "test_package"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should succeed
@@ -309,7 +331,7 @@ publishers:
     assert params_file.exists(), "Parameters file should always be generated"
 
     # Read and verify it has dummy parameter
-    with open(params_file, 'r') as f:
+    with open(params_file, "r") as f:
         params_content = f.read()
 
     # Should have namespace and dummy parameter

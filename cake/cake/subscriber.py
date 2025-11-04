@@ -1,9 +1,9 @@
-from rclpy.subscription import Subscription
 from rclpy.qos import QoSProfile
+from rclpy.subscription import Subscription
 
 from .context import Context
 
-from typing import Callable, Generic, TypeVar, cast, Any
+from typing import Any, Callable, Generic, TypeVar, cast
 
 MessageT = TypeVar("MessageT")
 
@@ -38,9 +38,7 @@ class Subscriber(Generic[MessageT]):
 
     def set_callback(self, callback: Callable[[Any, MessageT], None]):
         if self._subscription is None:
-            raise RuntimeError(
-                "Can't set callback. Subscriber has not been initialised! This is an error in cake."
-            )
+            raise RuntimeError("Can't set callback. Subscriber has not been initialised! This is an error in cake.")
         self._callback = callback
 
 

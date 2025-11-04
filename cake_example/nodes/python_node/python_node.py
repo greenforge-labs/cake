@@ -1,13 +1,13 @@
+from time import sleep
+
 import rclpy
 
-from time import sleep
+from std_msgs.msg import Bool, String
 
 import cake
 
 # from cake_example.python_node import PythonNodeContext, run
 from cake.dummy_python_node import PythonNodeContext, run
-
-from std_msgs.msg import Bool, String
 
 
 class Context(PythonNodeContext):
@@ -31,9 +31,7 @@ def thread_func(ctx: Context):
 
 def init(ctx: Context):
     ctx.logger.info("Hello from python cake!")
-    ctx.logger.info(
-        f"The parameter is: {ctx.params.special_number}. The context value is: {ctx.important_number}"
-    )
+    ctx.logger.info(f"The parameter is: {ctx.params.special_number}. The context value is: {ctx.important_number}")
     ctx.subscribers.another_topic.set_callback(topic_callback)
     cake.create_thread(ctx, thread_func)
 

@@ -2,28 +2,24 @@
 
 # auto-generated DO NOT EDIT
 
-from rcl_interfaces.msg import ParameterDescriptor
-from rcl_interfaces.msg import SetParametersResult
-from rcl_interfaces.msg import FloatingPointRange, IntegerRange
+import copy
+
+from generate_parameter_library_py.python_validators import ParameterValidators
+import rclpy
 from rclpy.clock import Clock
 from rclpy.exceptions import InvalidParameterValueException
-from rclpy.time import Time
-import copy
-import rclpy
 import rclpy.parameter
-from generate_parameter_library_py.python_validators import ParameterValidators
+from rclpy.time import Time
 
+from rcl_interfaces.msg import FloatingPointRange, IntegerRange, ParameterDescriptor, SetParametersResult
 
 
 class parameters:
-
     class Params:
         # for detecting if the parameter struct has been updated
         stamp_ = Time()
 
         special_number = 420
-
-
 
     class ParamListener:
         def __init__(self, node, prefix=""):
@@ -63,15 +59,16 @@ class parameters:
                 # Unroll nested parameters
                 if isinstance(param_value, dict):
                     nested_params = self.unpack_parameter_dict(
-                            namespace=full_param_name + rclpy.parameter.PARAMETER_SEPARATOR_STRING,
-                            parameter_dict=param_value)
+                        namespace=full_param_name + rclpy.parameter.PARAMETER_SEPARATOR_STRING,
+                        parameter_dict=param_value,
+                    )
                     parameters.extend(nested_params)
                 else:
                     parameters.append(rclpy.parameter.Parameter(full_param_name, value=param_value))
             return parameters
 
         def set_params_from_dict(self, param_dict):
-            params_to_set = self.unpack_parameter_dict('', param_dict)
+            params_to_set = self.unpack_parameter_dict("", param_dict)
             self.update(params_to_set)
 
         def set_user_callback(self, callback):
@@ -86,7 +83,6 @@ class parameters:
 
             # declare any new dynamic parameters
 
-
         def update(self, parameters):
             updated_params = self.get_params()
 
@@ -94,8 +90,6 @@ class parameters:
                 if param.name == self.prefix_ + "special_number":
                     updated_params.special_number = param.value
                     self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
-
-
 
             updated_params.stamp_ = self.clock_.now()
             self.update_internal_params(updated_params)
@@ -110,7 +104,7 @@ class parameters:
             updated_params = self.get_params()
             # declare all parameters and give default values to non-required ones
             if not self.node_.has_parameter(self.prefix_ + "special_number"):
-                descriptor = ParameterDescriptor(description="42 * 10", read_only = False)
+                descriptor = ParameterDescriptor(description="42 * 10", read_only=False)
                 parameter = updated_params.special_number
                 self.node_.declare_parameter(self.prefix_ + "special_number", parameter, descriptor)
 
@@ -119,6 +113,5 @@ class parameters:
             param = self.node_.get_parameter(self.prefix_ + "special_number")
             self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
             updated_params.special_number = param.value
-
 
             self.update_internal_params(updated_params)

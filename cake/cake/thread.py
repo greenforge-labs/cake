@@ -2,7 +2,7 @@ import threading
 
 from .context import Context
 
-from typing import Callable, Any
+from typing import Any, Callable
 
 
 def create_thread(context: Context, func: Callable[[Any], None]):

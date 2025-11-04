@@ -4,15 +4,13 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.publisher import Publisher
-from rclpy.qos import qos_profile_sensor_data
-from rclpy.qos import qos_profile_system_default
+from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
 
-from std_msgs.msg import String
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 
 import cake
 
-from typing import Callable, TypeVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
     from cake.dummy_python_node import ParamListener, Params
@@ -68,9 +66,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise subscribers
-    ctx.subscribers.another_topic._initialise(
-        ctx, Bool, "another_topic", qos_profile_sensor_data
-    )
+    ctx.subscribers.another_topic._initialise(ctx, Bool, "another_topic", qos_profile_sensor_data)
 
     init_func(ctx)
 
