@@ -1,0 +1,117 @@
+# auto-generated DO NOT EDIT
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import rclpy
+{%- if publishers %}
+from rclpy.publisher import Publisher
+{%- endif %}
+{%- if qos_imports %}
+from rclpy.qos import (
+{%- for qos_import in qos_imports|sort %}
+    {{ qos_import }},
+{%- endfor %}
+)
+{%- endif %}
+
+{%- for import_stmt in message_imports|sort %}
+{{ import_stmt }}
+{%- endfor %}
+
+import cake
+
+from typing import TYPE_CHECKING, Callable, TypeVar
+
+if TYPE_CHECKING:
+    from {{ package_name }}.{{ node_name }}._parameters import parameters
+
+
+@dataclass
+class Publishers:
+{%- if publishers %}
+{%- for pub in publishers %}
+    {{ pub.field_name }}: Publisher  # msg_type: {{ pub.msg_type }}
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class Subscribers:
+{%- if subscribers %}
+{%- for sub in subscribers %}
+    {{ sub.field_name }}: cake.Subscriber[{{ sub.msg_class }}] = field(default_factory=cake.Subscriber[{{ sub.msg_class }}])
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class {{ context_class }}(cake.Context):
+    publishers: Publishers
+    subscribers: Subscribers
+
+    param_listener: parameters.ParamListener
+    params: parameters.Params
+
+
+T = TypeVar("T", bound={{ context_class }})
+
+
+def run(context_type: type[T], init_func: Callable[[T], None]):
+
+    rclpy.init()
+
+    node = rclpy.create_node("{{ node_name }}")
+
+    # initialise publishers
+{%- if publishers %}
+    publishers = Publishers(
+{%- for pub in publishers %}
+        {{ pub.field_name }}=node.create_publisher({{ pub.msg_class }}, "{{ pub.topic }}", {{ pub.qos_code }}),
+{%- endfor %}
+    )
+{%- else %}
+    publishers = Publishers()
+{%- endif %}
+
+    # create subscribers - using default constructors
+    subscribers = Subscribers()
+
+    from {{ package_name }}.{{ node_name }}._parameters import parameters
+
+    param_listener = parameters.ParamListener(node)
+    params = param_listener.get_params()
+
+    ctx = context_type(
+        node=node,
+        publishers=publishers,
+        subscribers=subscribers,
+        param_listener=param_listener,
+        params=params,
+    )
+
+    # initialise subscribers
+{%- for sub in subscribers %}
+    ctx.subscribers.{{ sub.field_name }}._initialise(ctx, {{ sub.msg_class }}, "{{ sub.topic }}", {{ sub.qos_code }})
+{%- endfor %}
+
+    init_func(ctx)
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        # note rclpy installs signal handlers during rclpy.init() that respond to SIGINT (Ctrl+C) and shutdown the
+        # context so no logging or anything should be done here.
+        pass
+    finally:
+        for thread in ctx.threads:
+            thread.join(timeout=2.0)  # give each thread 2 seconds to finish gracefully
+        node.destroy_node()
+        if rclpy.ok():
+            # since the context is _probably_ shutdown already here, we are doing this just to be certain
+            rclpy.shutdown()

@@ -9,11 +9,12 @@ import argparse
 from pathlib import Path
 import re
 import sys
+import tempfile
 
 from jinja2 import Environment, FileSystemLoader
 import yaml
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 
 def camel_to_snake(name: str) -> str:
@@ -304,6 +305,199 @@ def prepare_action_clients(action_clients_raw: List[Dict[str, Any]]) -> List[Dic
     return action_clients
 
 
+def ros_type_to_python_import(ros_type: str) -> str:
+    """
+    Convert ROS message type to Python import statement.
+    Example: std_msgs/msg/String -> "from std_msgs.msg import String"
+    """
+    parts = ros_type.split("/")
+    if len(parts) >= 3:
+        package = parts[0]
+        msg_type = parts[1]  # 'msg', 'srv', or 'action'
+        class_name = parts[2]
+        return f"from {package}.{msg_type} import {class_name}"
+    return ""
+
+
+def ros_type_to_python_class(ros_type: str) -> str:
+    """
+    Extract just the class name from ROS type.
+    Example: std_msgs/msg/String -> "String"
+    """
+    parts = ros_type.split("/")
+    if len(parts) >= 3:
+        return parts[2]
+    return ""
+
+
+def generate_python_qos_code(qos_spec: Any) -> tuple[str, Set[str]]:
+    """
+    Generate Python QoS code from YAML QoS specification.
+    Returns tuple of (qos_code, required_imports)
+
+    Supports:
+    - Integer: 10 -> ("10", set())
+    - String (predefined profile): "SensorDataQoS" -> ("qos_profile_sensor_data", {"qos_profile_sensor_data"})
+    - Dict (custom parameters): {reliability: reliable, depth: 10} ->
+        ("QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)",
+         {"QoSProfile", "ReliabilityPolicy"})
+    """
+    required_imports = set()
+
+    # Backward compatible: integer
+    if isinstance(qos_spec, int):
+        return (str(qos_spec), required_imports)
+
+    # Predefined profile: string
+    if isinstance(qos_spec, str):
+        # Map C++ profile names to Python equivalents
+        profile_map = {
+            "SensorDataQoS": "qos_profile_sensor_data",
+            "SystemDefaultsQoS": "qos_profile_system_default",
+            "ServicesQoS": "qos_profile_services_default",
+            "ParametersQoS": "qos_profile_parameters",
+            "ParameterEventsQoS": "qos_profile_parameter_events",
+        }
+        python_profile = profile_map.get(qos_spec, qos_spec)
+        required_imports.add(python_profile)
+        return (python_profile, required_imports)
+
+    # Custom parameters: dict
+    if isinstance(qos_spec, dict):
+        # Check if it's only a profile without overrides
+        if "profile" in qos_spec and len(qos_spec) == 1:
+            # Just a profile, treat as string
+            profile_map = {
+                "SensorDataQoS": "qos_profile_sensor_data",
+                "SystemDefaultsQoS": "qos_profile_system_default",
+                "ServicesQoS": "qos_profile_services_default",
+                "ParametersQoS": "qos_profile_parameters",
+                "ParameterEventsQoS": "qos_profile_parameter_events",
+            }
+            python_profile = profile_map.get(qos_spec["profile"], qos_spec["profile"])
+            required_imports.add(python_profile)
+            return (python_profile, required_imports)
+
+        required_imports.add("QoSProfile")
+
+        # Build constructor arguments
+        args = []
+
+        # Depth
+        if "depth" in qos_spec:
+            args.append(f"depth={qos_spec['depth']}")
+        elif "profile" not in qos_spec:
+            args.append("depth=10")
+
+        # Reliability
+        if "reliability" in qos_spec:
+            required_imports.add("ReliabilityPolicy")
+            if qos_spec["reliability"] == "reliable":
+                args.append("reliability=ReliabilityPolicy.RELIABLE")
+            elif qos_spec["reliability"] == "best_effort":
+                args.append("reliability=ReliabilityPolicy.BEST_EFFORT")
+
+        # Durability
+        if "durability" in qos_spec:
+            required_imports.add("DurabilityPolicy")
+            if qos_spec["durability"] == "volatile":
+                args.append("durability=DurabilityPolicy.VOLATILE")
+            elif qos_spec["durability"] == "transient_local":
+                args.append("durability=DurabilityPolicy.TRANSIENT_LOCAL")
+
+        # History
+        if "history" in qos_spec:
+            required_imports.add("HistoryPolicy")
+            if qos_spec["history"] == "keep_last":
+                args.append("history=HistoryPolicy.KEEP_LAST")
+            elif qos_spec["history"] == "keep_all":
+                args.append("history=HistoryPolicy.KEEP_ALL")
+
+        # Liveliness
+        if "liveliness" in qos_spec:
+            required_imports.add("LivelinessPolicy")
+            if qos_spec["liveliness"] == "automatic":
+                args.append("liveliness=LivelinessPolicy.AUTOMATIC")
+            elif qos_spec["liveliness"] == "manual_by_topic":
+                args.append("liveliness=LivelinessPolicy.MANUAL_BY_TOPIC")
+
+        # Deadline and lifespan (Duration)
+        if "deadline" in qos_spec or "lifespan" in qos_spec:
+            required_imports.add("Duration")
+
+            if "deadline" in qos_spec:
+                deadline = qos_spec["deadline"]
+                if isinstance(deadline, dict):
+                    sec = deadline.get("sec", 0)
+                    nsec = deadline.get("nsec", 0)
+                    args.append(f"deadline=Duration(seconds={sec}, nanoseconds={nsec})")
+
+            if "lifespan" in qos_spec:
+                lifespan = qos_spec["lifespan"]
+                if isinstance(lifespan, dict):
+                    sec = lifespan.get("sec", 0)
+                    nsec = lifespan.get("nsec", 0)
+                    args.append(f"lifespan=Duration(seconds={sec}, nanoseconds={nsec})")
+
+        qos_code = f"QoSProfile({', '.join(args)})"
+        return (qos_code, required_imports)
+
+    # Default fallback
+    return ("10", required_imports)
+
+
+def prepare_python_publishers(publishers_raw: List[Dict[str, Any]]) -> tuple[List[Dict[str, str]], Set[str]]:
+    """
+    Prepare publisher data for Python template rendering.
+    Returns tuple of (publishers_list, qos_imports_needed)
+    """
+    publishers = []
+    all_qos_imports = set()
+
+    for pub in publishers_raw:
+        if not pub.get("manually_created", False):
+            qos_code, qos_imports = generate_python_qos_code(pub.get("qos", 10))
+            all_qos_imports.update(qos_imports)
+
+            publishers.append(
+                {
+                    "topic": pub["topic"],
+                    "msg_type": pub["type"],
+                    "msg_class": ros_type_to_python_class(pub["type"]),
+                    "field_name": topic_to_field_name(pub["topic"]),
+                    "qos_code": qos_code,
+                    "import_stmt": ros_type_to_python_import(pub["type"]),
+                }
+            )
+    return publishers, all_qos_imports
+
+
+def prepare_python_subscribers(subscribers_raw: List[Dict[str, Any]]) -> tuple[List[Dict[str, str]], Set[str]]:
+    """
+    Prepare subscriber data for Python template rendering.
+    Returns tuple of (subscribers_list, qos_imports_needed)
+    """
+    subscribers = []
+    all_qos_imports = set()
+
+    for sub in subscribers_raw:
+        if not sub.get("manually_created", False):
+            qos_code, qos_imports = generate_python_qos_code(sub.get("qos", 10))
+            all_qos_imports.update(qos_imports)
+
+            subscribers.append(
+                {
+                    "topic": sub["topic"],
+                    "msg_type": sub["type"],
+                    "msg_class": ros_type_to_python_class(sub["type"]),
+                    "field_name": topic_to_field_name(sub["topic"]),
+                    "qos_code": qos_code,
+                    "import_stmt": ros_type_to_python_import(sub["type"]),
+                }
+            )
+    return subscribers, all_qos_imports
+
+
 def collect_includes(
     publishers: List[Dict[str, Any]],
     subscribers: List[Dict[str, Any]],
@@ -430,6 +624,53 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     )
 
 
+def generate_python_interface(interface_data: Dict[str, Any]) -> str:
+    """Generate the complete Python interface file using Jinja2 template.
+    Assumes template variables have already been substituted in interface_data.
+    """
+    # Set up Jinja2 environment
+    template_dir = Path(__file__).parent / "templates"
+    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=False, lstrip_blocks=False)
+    template = env.get_template("node_interface.py.jinja2")
+
+    # Extract data
+    node_name = interface_data["node"]["name"]
+    package_name = interface_data["node"].get("package", "")
+    publishers_raw = interface_data.get("publishers", [])
+    subscribers_raw = interface_data.get("subscribers", [])
+
+    # Prepare template data (Python only supports pub/sub for now)
+    publishers, pub_qos_imports = prepare_python_publishers(publishers_raw)
+    subscribers, sub_qos_imports = prepare_python_subscribers(subscribers_raw)
+
+    # Collect all QoS imports
+    qos_imports = pub_qos_imports | sub_qos_imports
+
+    # Collect unique import statements
+    message_imports = set()
+    for pub in publishers:
+        if pub["import_stmt"]:
+            message_imports.add(pub["import_stmt"])
+    for sub in subscribers:
+        if sub["import_stmt"]:
+            message_imports.add(sub["import_stmt"])
+
+    # Convert node_name to context class name
+    class_name = "".join(word.capitalize() for word in node_name.split("_"))
+    context_class = f"{class_name}Context"
+
+    # Render template
+    return template.render(
+        node_name=node_name,
+        package_name=package_name,
+        context_class=context_class,
+        message_imports=message_imports,
+        qos_imports=qos_imports,
+        publishers=publishers,
+        subscribers=subscribers,
+    )
+
+
 def generate_parameters_yaml(interface_data: Dict[str, Any], package_name: str, node_name: str) -> str:
     """
     Generate parameters.yaml content from interface.yaml data.
@@ -461,14 +702,85 @@ def generate_parameters_yaml(interface_data: Dict[str, Any], package_name: str, 
     return yaml.dump(yaml_dict, default_flow_style=False, sort_keys=False)
 
 
+def generate_parameters_module(interface_data: Dict[str, Any]) -> str:
+    """
+    Generate _parameters.py Python module using generate_parameter_library_py.
+    Uses static 'parameters' namespace for consistency across all nodes.
+    """
+    try:
+        from generate_parameter_library_py.parse_yaml import GenerateCode
+    except ImportError:
+        print(
+            "Error: generate_parameter_library_py not found. "
+            "Install it with: pip install generate_parameter_library",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Get parameters if they exist
+    parameters = interface_data.get("parameters", {})
+
+    # generate_parameter_library requires at least one parameter
+    if not parameters:
+        parameters = {
+            "__cake_dummy": {
+                "type": "bool",
+                "default_value": True,
+                "description": "Dummy parameter",
+                "read_only": True,
+            }
+        }
+
+    # Static namespace - all nodes use "parameters"
+    yaml_dict = {"parameters": parameters}
+
+    # Use TemporaryDirectory for automatic cleanup
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yaml_path = Path(tmpdir) / "params.yaml"
+        with open(yaml_path, "w") as f:
+            yaml.dump(yaml_dict, f, default_flow_style=False)
+
+        gen = GenerateCode("python")
+        gen.parse(str(yaml_path), "")
+        return str(gen)
+
+
+def generate_init_module(node_name: str) -> str:
+    """
+    Generate __init__.py that re-exports from _interface.py and _parameters.py.
+    """
+    # Convert node_name to class name (PascalCase)
+    class_name = "".join(word.capitalize() for word in node_name.split("_"))
+    context_class = f"{class_name}Context"
+
+    return f"""from ._interface import {context_class}, run
+from ._parameters import parameters
+
+Params = parameters.Params
+ParamListener = parameters.ParamListener
+
+__all__ = ["{context_class}", "run", "Params", "ParamListener"]
+"""
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Generate cake node interface header from YAML")
-    parser.add_argument("output_file", help="Output header file path")
+    parser = argparse.ArgumentParser(description="Generate cake node interface from YAML")
     parser.add_argument("interface_yaml", help="Path to interface.yaml file")
-    parser.add_argument("--package", help="Package name to substitute for ${THIS_PACKAGE}", default=None)
-    parser.add_argument("--node-name", help="Node name to substitute for ${THIS_NODE}", default=None)
+    parser.add_argument("--language", choices=["cpp", "python"], default="cpp", help="Target language")
+    parser.add_argument("--package", help="Package name to substitute for ${THIS_PACKAGE}", required=True)
+    parser.add_argument("--node-name", help="Node name to substitute for ${THIS_NODE}", required=True)
+    parser.add_argument("--output-file", help="Output file path (for C++ header)")
+    parser.add_argument("--output-dir", help="Output directory path (for Python module)")
 
     args = parser.parse_args()
+
+    # Validate output arguments based on language
+    if args.language == "cpp" and not args.output_file:
+        print("Error: --output-file is required for C++ generation", file=sys.stderr)
+        sys.exit(1)
+    if args.language == "python" and not args.output_dir:
+        print("Error: --output-dir is required for Python generation", file=sys.stderr)
+        sys.exit(1)
 
     # Read and parse YAML
     interface_path = Path(args.interface_yaml)
@@ -486,31 +798,57 @@ def main():
     # Substitute all template variables (${THIS_NODE}, ${THIS_PACKAGE}) in-place
     substitute_template_variables(interface_data, args.package, args.node_name)
 
-    # Generate header content
-    header_content = generate_header(interface_data)
-
-    # Ensure output directory exists
-    output_file = Path(args.output_file)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write output file
-    with open(output_file, "w") as f:
-        f.write(header_content)
-
-    print(f"Generated: {output_file}")
-
-    # Always generate parameters.yaml (even if empty)
     node_name = interface_data["node"]["name"]
     package_name = interface_data["node"].get("package", "")
 
-    # Always generate parameters file if we have a package name
-    if package_name:
-        params_content = generate_parameters_yaml(interface_data, package_name, node_name)
-        # Generate parameters file alongside the header with .params.yaml extension
-        params_file = output_file.parent / f"{output_file.stem}.params.yaml"
-        with open(params_file, "w") as f:
-            f.write(params_content)
-        print(f"Generated: {params_file}")
+    if args.language == "cpp":
+        # Generate C++ header
+        header_content = generate_header(interface_data)
+
+        # Ensure output directory exists
+        output_file = Path(args.output_file)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write output file
+        with open(output_file, "w") as f:
+            f.write(header_content)
+
+        print(f"Generated: {output_file}")
+
+        # Always generate parameters.yaml (even if empty)
+        if package_name:
+            params_content = generate_parameters_yaml(interface_data, package_name, node_name)
+            # Generate parameters file alongside the header with .params.yaml extension
+            params_file = output_file.parent / f"{output_file.stem}.params.yaml"
+            with open(params_file, "w") as f:
+                f.write(params_content)
+            print(f"Generated: {params_file}")
+
+    elif args.language == "python":
+        # Generate Python module files
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate _interface.py
+        interface_content = generate_python_interface(interface_data)
+        interface_file = output_dir / "_interface.py"
+        with open(interface_file, "w") as f:
+            f.write(interface_content)
+        print(f"Generated: {interface_file}")
+
+        # Generate _parameters.py
+        parameters_content = generate_parameters_module(interface_data)
+        parameters_file = output_dir / "_parameters.py"
+        with open(parameters_file, "w") as f:
+            f.write(parameters_content)
+        print(f"Generated: {parameters_file}")
+
+        # Generate __init__.py
+        init_content = generate_init_module(node_name)
+        init_file = output_dir / "__init__.py"
+        with open(init_file, "w") as f:
+            f.write(init_content)
+        print(f"Generated: {init_file}")
 
 
 if __name__ == "__main__":
