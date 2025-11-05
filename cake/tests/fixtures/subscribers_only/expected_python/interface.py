@@ -5,56 +5,52 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
-from std_msgs.msg import String
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import LaserScan
 
 import cake
 
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import Callable, TypeVar
 
-if TYPE_CHECKING:
-    from test_package.with_parameters._parameters import parameters
+from .parameters import Params, ParamListener
 
 
 @dataclass
 class Publishers:
-    status: Publisher  # msg_type: std_msgs/msg/String
-
-
-@dataclass
-class Subscribers:
     pass
 
 
 @dataclass
-class WithParametersContext(cake.Context):
+class Subscribers:
+    sensor_data: cake.Subscriber[LaserScan] = field(default_factory=cake.Subscriber[LaserScan])
+    camera_image: cake.Subscriber[Image] = field(default_factory=cake.Subscriber[Image])
+
+
+@dataclass
+class SubscribersOnlyContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
 
-    param_listener: parameters.ParamListener
-    params: parameters.Params
+    param_listener: ParamListener
+    params: Params
 
 
-T = TypeVar("T", bound=WithParametersContext)
+T = TypeVar("T", bound=SubscribersOnlyContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("with_parameters")
+    node = rclpy.create_node("subscribers_only")
 
     # initialise publishers
-    publishers = Publishers(
-        status=node.create_publisher(String, "/status", 10),
-    )
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
 
-    from test_package.with_parameters._parameters import parameters
-
-    param_listener = parameters.ParamListener(node)
+    param_listener = ParamListener(node)
     params = param_listener.get_params()
 
     ctx = context_type(
@@ -66,6 +62,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise subscribers
+    ctx.subscribers.sensor_data._initialise(ctx, LaserScan, "sensor_data", 10)
+    ctx.subscribers.camera_image._initialise(ctx, Image, "camera_image", 1)
 
     init_func(ctx)
 

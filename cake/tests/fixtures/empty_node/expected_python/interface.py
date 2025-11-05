@@ -8,10 +8,9 @@ import rclpy
 
 import cake
 
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import Callable, TypeVar
 
-if TYPE_CHECKING:
-    from test_package.empty_node._parameters import parameters
+from .parameters import Params, ParamListener
 
 
 @dataclass
@@ -29,8 +28,8 @@ class EmptyNodeContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
 
-    param_listener: parameters.ParamListener
-    params: parameters.Params
+    param_listener: ParamListener
+    params: Params
 
 
 T = TypeVar("T", bound=EmptyNodeContext)
@@ -48,9 +47,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # create subscribers - using default constructors
     subscribers = Subscribers()
 
-    from test_package.empty_node._parameters import parameters
-
-    param_listener = parameters.ParamListener(node)
+    param_listener = ParamListener(node)
     params = param_listener.get_params()
 
     ctx = context_type(

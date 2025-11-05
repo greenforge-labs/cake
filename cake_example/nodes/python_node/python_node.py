@@ -1,6 +1,6 @@
 from time import sleep
 
-from cake_example.python_node import PythonNodeContext, run
+from cake_example.python_node.interface import PythonNodeContext, run
 import rclpy
 
 from std_msgs.msg import Bool, String

@@ -6,56 +6,61 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.publisher import Publisher
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
+from rclpy.qos import (
+    qos_profile_parameters,
+    qos_profile_sensor_data,
+    qos_profile_services_default,
+    qos_profile_system_default,
+)
+from std_msgs.msg import String
 
 import cake
 
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import Callable, TypeVar
 
-if TYPE_CHECKING:
-    from test_package.simple_node._parameters import parameters
+from .parameters import Params, ParamListener
 
 
 @dataclass
 class Publishers:
-    cmd_vel: Publisher  # msg_type: geometry_msgs/msg/Twist
+    sensor_data_topic: Publisher  # msg_type: std_msgs/msg/String
+    system_defaults_topic: Publisher  # msg_type: std_msgs/msg/String
 
 
 @dataclass
 class Subscribers:
-    odom: cake.Subscriber[Odometry] = field(default_factory=cake.Subscriber[Odometry])
+    parameters_topic: cake.Subscriber[String] = field(default_factory=cake.Subscriber[String])
+    services_topic: cake.Subscriber[String] = field(default_factory=cake.Subscriber[String])
 
 
 @dataclass
-class SimpleNodeContext(cake.Context):
+class QosPredefinedContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
 
-    param_listener: parameters.ParamListener
-    params: parameters.Params
+    param_listener: ParamListener
+    params: Params
 
 
-T = TypeVar("T", bound=SimpleNodeContext)
+T = TypeVar("T", bound=QosPredefinedContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("simple_node")
+    node = rclpy.create_node("qos_predefined")
 
     # initialise publishers
     publishers = Publishers(
-        cmd_vel=node.create_publisher(Twist, "/cmd_vel", 10),
+        sensor_data_topic=node.create_publisher(String, "sensor_data_topic", qos_profile_sensor_data),
+        system_defaults_topic=node.create_publisher(String, "system_defaults_topic", qos_profile_system_default),
     )
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
 
-    from test_package.simple_node._parameters import parameters
-
-    param_listener = parameters.ParamListener(node)
+    param_listener = ParamListener(node)
     params = param_listener.get_params()
 
     ctx = context_type(
@@ -67,7 +72,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise subscribers
-    ctx.subscribers.odom._initialise(ctx, Odometry, "/odom", 10)
+    ctx.subscribers.parameters_topic._initialise(ctx, String, "parameters_topic", qos_profile_parameters)
+    ctx.subscribers.services_topic._initialise(ctx, String, "services_topic", qos_profile_services_default)
 
     init_func(ctx)
 

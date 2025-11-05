@@ -577,7 +577,7 @@ subscribers:
     assert result.returncode == 0, f"Script failed:\n{result.stderr}"
 
     # Verify all generated files compile
-    for py_file in ["_interface.py", "_parameters.py", "__init__.py"]:
+    for py_file in ["interface.py", "_parameters.py", "parameters.py", "__init__.py"]:
         file_path = output_dir / py_file
         assert file_path.exists(), f"{py_file} not generated"
         try:
@@ -667,14 +667,14 @@ publishers: []
     assert "class parameters:" in params_content, "Parameters should use 'parameters' namespace"
     assert "my_package::my_node" not in params_content, "Should NOT use package::node namespace"
 
-    # Check _interface.py imports from static namespace
-    interface_file = output_dir / "_interface.py"
+    # Check interface.py uses relative imports
+    interface_file = output_dir / "interface.py"
     with open(interface_file, "r") as f:
         interface_content = f.read()
 
     assert (
-        "from my_package.my_node._parameters import parameters" in interface_content
-    ), "Should import from static namespace"
+        "from .parameters import Params, ParamListener" in interface_content
+    ), "Should use relative import from parameters wrapper"
 
 
 def test_python_publisher_import_conditional(tmp_path):
@@ -713,7 +713,7 @@ publishers:
     )
 
     assert result.returncode == 0
-    with open(output_with_pubs / "_interface.py", "r") as f:
+    with open(output_with_pubs / "interface.py", "r") as f:
         content = f.read()
     assert "from rclpy.publisher import Publisher" in content, "Should import Publisher when publishers exist"
 
@@ -751,7 +751,7 @@ subscribers:
     )
 
     assert result.returncode == 0
-    with open(output_no_pubs / "_interface.py", "r") as f:
+    with open(output_no_pubs / "interface.py", "r") as f:
         content = f.read()
     assert "from rclpy.publisher import Publisher" not in content, "Should NOT import Publisher when no publishers"
 
@@ -798,7 +798,7 @@ subscribers:
     )
 
     assert result.returncode == 0
-    with open(output_dir / "_interface.py", "r") as f:
+    with open(output_dir / "interface.py", "r") as f:
         content = f.read()
 
     # Check imports

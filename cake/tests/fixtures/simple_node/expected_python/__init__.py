@@ -1,7 +1,6 @@
-from ._interface import SimpleNodeContext, run
-from ._parameters import parameters
+# auto-generated DO NOT EDIT
 
-Params = parameters.Params
-ParamListener = parameters.ParamListener
+from . import interface
+from . import parameters
 
-__all__ = ["SimpleNodeContext", "run", "Params", "ParamListener"]
+__all__ = ["interface", "parameters"]

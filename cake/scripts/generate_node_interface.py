@@ -1102,21 +1102,32 @@ def generate_parameters_module(interface_data: Dict[str, Any]) -> str:
         return str(gen)
 
 
-def generate_init_module(node_name: str) -> str:
+def generate_parameters_wrapper() -> str:
     """
-    Generate __init__.py that re-exports from _interface.py and _parameters.py.
+    Generate parameters.py wrapper that flattens the _parameters module structure.
     """
-    # Convert node_name to class name (PascalCase)
-    class_name = "".join(word.capitalize() for word in node_name.split("_"))
-    context_class = f"{class_name}Context"
+    return """# auto-generated DO NOT EDIT
 
-    return f"""from ._interface import {context_class}, run
 from ._parameters import parameters
 
+# Flatten the nested structure for cleaner API
 Params = parameters.Params
 ParamListener = parameters.ParamListener
 
-__all__ = ["{context_class}", "run", "Params", "ParamListener"]
+__all__ = ["Params", "ParamListener"]
+"""
+
+
+def generate_init_module() -> str:
+    """
+    Generate __init__.py that exposes interface and parameters as submodules.
+    """
+    return """# auto-generated DO NOT EDIT
+
+from . import interface
+from . import parameters
+
+__all__ = ["interface", "parameters"]
 """
 
 
@@ -1181,22 +1192,29 @@ def main():
         output_dir = Path(args.output)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate _interface.py
+        # Generate interface.py (main interface module)
         interface_content = generate_python_interface(interface_data)
-        interface_file = output_dir / "_interface.py"
+        interface_file = output_dir / "interface.py"
         with open(interface_file, "w") as f:
             f.write(interface_content)
         print(f"Generated: {interface_file}")
 
-        # Generate _parameters.py
+        # Generate _parameters.py (from external library)
         parameters_content = generate_parameters_module(interface_data)
-        parameters_file = output_dir / "_parameters.py"
-        with open(parameters_file, "w") as f:
+        parameters_internal_file = output_dir / "_parameters.py"
+        with open(parameters_internal_file, "w") as f:
             f.write(parameters_content)
+        print(f"Generated: {parameters_internal_file}")
+
+        # Generate parameters.py (wrapper for clean API)
+        parameters_wrapper_content = generate_parameters_wrapper()
+        parameters_file = output_dir / "parameters.py"
+        with open(parameters_file, "w") as f:
+            f.write(parameters_wrapper_content)
         print(f"Generated: {parameters_file}")
 
-        # Generate __init__.py
-        init_content = generate_init_module(node_name)
+        # Generate __init__.py (exposes submodules)
+        init_content = generate_init_module()
         init_file = output_dir / "__init__.py"
         with open(init_file, "w") as f:
             f.write(init_content)

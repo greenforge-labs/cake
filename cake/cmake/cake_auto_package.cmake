@@ -242,8 +242,10 @@ function(_cake_generate_python_node NODE_NAME NODE_DIR INTERFACE_YAML)
     set(PYTHON_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/python_generated/${NODE_NAME})
     file(MAKE_DIRECTORY ${PYTHON_GEN_DIR})
 
-    set(INTERFACE_PY ${PYTHON_GEN_DIR}/_interface.py)
-    set(PARAMETERS_PY ${PYTHON_GEN_DIR}/_parameters.py)
+    # Generated files
+    set(INTERFACE_PY ${PYTHON_GEN_DIR}/interface.py)
+    set(PARAMETERS_INTERNAL_PY ${PYTHON_GEN_DIR}/_parameters.py)
+    set(PARAMETERS_PY ${PYTHON_GEN_DIR}/parameters.py)
     set(INIT_PY ${PYTHON_GEN_DIR}/__init__.py)
 
     set(
@@ -261,7 +263,7 @@ function(_cake_generate_python_node NODE_NAME NODE_DIR INTERFACE_YAML)
     )
 
     add_custom_command(
-        OUTPUT ${INTERFACE_PY} ${PARAMETERS_PY} ${INIT_PY}
+        OUTPUT ${INTERFACE_PY} ${PARAMETERS_INTERNAL_PY} ${PARAMETERS_PY} ${INIT_PY}
         COMMAND ${CODEGEN_CMD}
         DEPENDS ${INTERFACE_YAML}
         DEPENDS ${cake_codegen_script_BIN}
@@ -269,7 +271,9 @@ function(_cake_generate_python_node NODE_NAME NODE_DIR INTERFACE_YAML)
         VERBATIM
     )
 
-    add_custom_target(${NODE_NAME}_interface ALL DEPENDS ${INTERFACE_PY} ${PARAMETERS_PY} ${INIT_PY})
+    add_custom_target(
+        ${NODE_NAME}_interface ALL DEPENDS ${INTERFACE_PY} ${PARAMETERS_INTERNAL_PY} ${PARAMETERS_PY} ${INIT_PY}
+    )
 
     # Install user Python files to site-packages/${PROJECT_NAME}/${NODE_NAME}/
     file(GLOB USER_PY_FILES "${NODE_DIR}/*.py")
