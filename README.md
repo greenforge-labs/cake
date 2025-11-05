@@ -6,11 +6,13 @@ A collection of tools to make ROS2 development easier.
 
 Cake provides code generation tools that reduce boilerplate and make ROS2 node development more maintainable:
 
-- **Node Interface Generator**: Automatically generate C++ node interfaces from YAML definitions
-- **Type-safe Context**: Generated context structures with compile-time type checking
-- **Declarative ROS2 Interfaces**: Define publishers, subscribers, services, service clients, and actions in YAML instead of C++
+- **Node Interface Generator**: Automatically generate C++ and Python node interfaces from YAML definitions
+- **Multi-language Support**: Write nodes in C++, Python, or mix both in the same package
+- **Type-safe Context**: Generated context structures with compile-time (C++) and runtime (Python) type safety
+- **Declarative ROS2 Interfaces**: Define publishers, subscribers, services, service clients, and actions in YAML
 - **Flexible QoS Configuration**: Support for predefined profiles and custom parameters
 - **Polling-based Actions**: Simple action server implementation designed for main-loop processing
+- **Automatic Parameter Generation**: Parameters defined in YAML are automatically integrated into your node
 
 ## Quick Start
 
@@ -18,6 +20,7 @@ Cake provides code generation tools that reduce boilerplate and make ROS2 node d
 
 Organize your nodes in a `nodes/` directory:
 
+**C++ Node:**
 ```
 my_package/
 ├── CMakeLists.txt
@@ -26,11 +29,25 @@ my_package/
     └── my_node/
         ├── my_node.hpp
         ├── my_node.cpp
-        ├── interface.yaml
-        └── parameters.yaml (optional)
+        └── interface.yaml
 ```
 
+**Python Node:**
+```
+my_package/
+├── CMakeLists.txt
+├── package.xml
+└── nodes/
+    └── my_python_node/
+        ├── my_python_node.py
+        └── interface.yaml
+```
+
+**Note:** Parameters are defined directly in `interface.yaml` - there's no separate parameters file needed.
+
 **Important:** Make sure your `package.xml` includes all required dependencies:
+
+**For C++ nodes:**
 ```xml
 <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
@@ -42,7 +59,35 @@ my_package/
 <depend>std_msgs</depend>
 ```
 
-Dependencies listed in `package.xml` are automatically found and linked by `cake_auto_package()`. Note: You don't need to add `generate_parameter_library` - it's automatically found by cake.
+**For Python nodes:**
+```xml
+<buildtool_depend>ament_cmake_auto</buildtool_depend>
+<buildtool_depend>ament_cmake_python</buildtool_depend>
+
+<depend>rclpy</depend>
+<depend>cake</depend>
+
+<!-- Add your message/service dependencies -->
+<depend>std_msgs</depend>
+```
+
+**For packages with both C++ and Python nodes:**
+```xml
+<buildtool_depend>ament_cmake_auto</buildtool_depend>
+<buildtool_depend>ament_cmake_python</buildtool_depend>
+
+<depend>rclcpp</depend>
+<depend>rclcpp_components</depend>
+<depend>rclpy</depend>
+<depend>cake</depend>
+
+<!-- Add your message/service dependencies -->
+<depend>std_msgs</depend>
+```
+
+Dependencies listed in `package.xml` are automatically found and linked by `cake_auto_package()`.
+
+**Note:** You don't need to add `generate_parameter_library` - it's automatically found by cake.
 
 ### 2. Define Your Node Interface
 
@@ -128,6 +173,59 @@ int main(int argc, char** argv) {
     rclcpp::shutdown();
     return 0;
 }
+```
+
+### 5. Python Usage
+
+For Python nodes, cake generates a clean interface structure:
+
+```python
+from my_package.my_python_node.interface import PythonNodeContext, run
+from my_package.my_python_node.parameters import Params, ParamListener
+import cake
+
+class Context(PythonNodeContext):
+    # Add your custom context members here
+    my_value: float = 0.0
+
+def init(ctx: Context):
+    # Parameters are automatically loaded
+    ctx.logger.info(f"Update rate: {ctx.params.update_rate}")
+
+    # Set up subscriber callback
+    ctx.subscribers.odom.set_callback(handle_odom)
+
+    # Create a thread for background work
+    cake.create_thread(ctx, background_thread)
+
+def handle_odom(ctx: Context, msg):
+    ctx.logger.info(f"Received odometry: {msg.pose}")
+    # Publish using the generated publisher
+    ctx.publishers.cmd_vel.publish(twist_msg)
+
+def background_thread(ctx: Context):
+    while rclpy.ok():
+        ctx.my_value += 1
+        time.sleep(0.1)
+
+if __name__ == "__main__":
+    run(Context, init)
+```
+
+**Generated Python API:**
+- `interface.py` - Contains context class and `run()` function
+- `parameters.py` - Exposes `Params` and `ParamListener`
+- `__init__.py` - Makes the module importable
+
+**Import patterns:**
+```python
+# Direct imports (recommended)
+from my_package.my_node.interface import PythonNodeContext, run
+from my_package.my_node.parameters import Params, ParamListener
+
+# Or via submodule
+from my_package.my_node import interface, parameters
+interface.run(Context, init)
 ```
 
 ## Interface YAML Reference
@@ -579,18 +677,32 @@ The code generator includes comprehensive tests. See [tests/README.md](cake/test
 
 ### `cake_auto_package()`
 
-Completely automates cake package setup - handles dependencies, library creation, node registration, and package finalization.
+Completely automates cake package setup - handles dependencies, library creation, node registration, and package finalization for both C++ and Python nodes.
 
 **What it does:**
 - Finds all build dependencies via `ament_auto_find_build_dependencies()`
-- Creates the main SHARED library from all source files in `nodes/`
-- Sets C++20 as the required C++ standard
+- Detects languages used in `nodes/` directory (C++ and/or Python)
+- **For C++ nodes:**
+  - Creates the main SHARED library from all `.cpp` files in `nodes/`
+  - Sets C++20 as the required C++ standard
+- **For Python nodes:**
+  - Sets up Python package structure
+  - Creates top-level `__init__.py`
 - Scans the `nodes/` directory for node subdirectories
-- For each node found:
-  - Generates interface library if `interface.yaml` exists
-  - Generates parameters library if `parameters.yaml` exists
-  - Links both libraries to `${PROJECT_NAME}`
-  - Registers the node as an rclcpp component with the correct naming convention
+- **For each node found:**
+  - Validates that `interface.yaml` exists (REQUIRED)
+  - Detects node language (C++ or Python)
+  - Generates interface code from `interface.yaml`
+  - Generates parameters library (always, even if no parameters defined)
+  - **For C++ nodes:**
+    - Creates interface library target
+    - Creates parameters library target
+    - Links both libraries to `${PROJECT_NAME}`
+    - Registers as rclcpp_component with executable wrapper
+  - **For Python nodes:**
+    - Generates `interface.py`, `_parameters.py`, `parameters.py`, `__init__.py`
+    - Installs user Python files
+    - Creates executable wrapper using `runpy.run_module()`
 - Finalizes the package with `ament_auto_package()`
 
 **Requirements:**
@@ -598,6 +710,10 @@ Completely automates cake package setup - handles dependencies, library creation
 - Nodes must be organized in a `nodes/` directory at the project root
 - Each node has its own subdirectory (e.g., `nodes/my_node/`)
 - Node directory names must be in snake_case (e.g., `my_node`)
+- Each node directory must contain `interface.yaml`
+- **C++ nodes:** Must contain at least one `.cpp` file
+- **Python nodes:** Must contain at least one `.py` file (typically `<node_name>.py`)
+- Mixed language nodes (both C++ and Python) are not supported
 
 **Dependencies:**
 
@@ -635,16 +751,26 @@ The `ament_auto_find_build_dependencies()` call inside `cake_auto_package()` wil
 **Note:** You don't need to add `generate_parameter_library` to your `package.xml` - it's automatically found by `cake_auto_package()` since it's an internal implementation detail of cake.
 
 **Conventions Enforced:**
+
+**C++ Nodes:**
 - **Main library**: Named `${PROJECT_NAME}`, type SHARED
 - **C++ standard**: C++20
 - **Source location**: `nodes/` directory
 - **Node directory**: snake_case (e.g., `my_node`)
 - **C++ namespace**: `${PROJECT_NAME}::my_node`
-- **C++ class name**: PascalCase (e.g., `MyNode`, auto-converted)
+- **C++ class name**: PascalCase (e.g., `MyNode`, auto-converted from snake_case)
 - **Plugin class**: `${PROJECT_NAME}::my_node::MyNode`
 - **Interface library**: `my_node_interface`
 - **Parameters library**: `my_node_parameters`
 - **Executable**: `my_node`
+
+**Python Nodes:**
+- **Package structure**: `${PROJECT_NAME}.${node_name}`
+- **Node directory**: snake_case (e.g., `my_node`)
+- **Context class name**: PascalCase with `Context` suffix (e.g., `MyNodeContext`)
+- **Generated files**: `interface.py`, `_parameters.py`, `parameters.py`, `__init__.py`
+- **Executable**: `my_node` (wrapper script using `runpy.run_module()`)
+- **Installation**: `lib/${PROJECT_NAME}/${node_name}` for executable, `lib/python3.X/site-packages/${PROJECT_NAME}/${node_name}/` for Python files
 
 **Example CMakeLists.txt:**
 ```cmake
@@ -696,19 +822,24 @@ my_package/
 ├── CMakeLists.txt
 ├── package.xml
 └── nodes/
-    ├── my_node/
-    │   ├── my_node.hpp
-    │   ├── my_node.cpp
-    │   ├── interface.yaml
-    │   └── parameters.yaml
-    └── another_node/
-        ├── another_node.hpp
-        ├── another_node.cpp
-        ├── interface.yaml
-        └── parameters.yaml
+    ├── cpp_node/              # C++ node
+    │   ├── cpp_node.hpp
+    │   ├── cpp_node.cpp
+    │   └── interface.yaml
+    ├── python_node/           # Python node
+    │   ├── python_node.py
+    │   └── interface.yaml
+    └── another_cpp_node/      # Another C++ node
+        ├── another_cpp_node.hpp
+        ├── another_cpp_node.cpp
+        └── interface.yaml
 ```
 
-With this structure, `cake_auto_package()` will automatically register both `my_node` and `another_node` with all their interfaces and parameters.
+With this structure, `cake_auto_package()` will automatically:
+- Detect and build C++ nodes as components in the shared library
+- Set up Python nodes with their package structure and executables
+- Generate interfaces and parameters for all nodes
+- Register executables for all nodes (both C++ and Python)
 
 ---
 
