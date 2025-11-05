@@ -1,3 +1,13 @@
+# ============================================================================
+# cake_auto_package.cmake
+#
+# Automated build system for ROS 2 packages with cake nodes. Expects nodes/ directory with subdirectories containing
+# interface.yaml and C++ or Python implementation files.
+# ============================================================================
+
+# Detect which languages (C++ and/or Python) are present in a directory Args: DIR - Directory to scan for source files
+# OUT_HAS_CPP - Output variable, set to TRUE if .cpp files found OUT_HAS_PYTHON - Output variable, set to TRUE if .py
+# files found
 function(_cake_detect_languages DIR OUT_HAS_CPP OUT_HAS_PYTHON)
     file(GLOB_RECURSE CPP_SOURCE_FILES "${DIR}/*.cpp")
     file(GLOB_RECURSE PY_SOURCE_FILES "${DIR}/*.py")
@@ -14,6 +24,8 @@ function(_cake_detect_languages DIR OUT_HAS_CPP OUT_HAS_PYTHON)
     endif()
 endfunction()
 
+# Convert snake_case to PascalCase (e.g., "my_node" -> "MyNode") Args: OUTPUT_VAR - Variable name to store the result
+# INPUT_STRING - snake_case string to convert
 function(_cake_snake_to_pascal OUTPUT_VAR INPUT_STRING)
     string(REPLACE "_" ";" WORD_LIST ${INPUT_STRING})
     set(RESULT "")
@@ -29,6 +41,9 @@ function(_cake_snake_to_pascal OUTPUT_VAR INPUT_STRING)
     set(${OUTPUT_VAR} ${RESULT} PARENT_SCOPE)
 endfunction()
 
+# Main entry point for cake build system Automates the entire build process for ROS 2 packages with cake nodes. Detects
+# languages, generates interfaces, builds libraries, and registers components. Requires: nodes/ directory with at least
+# one .cpp or .py file
 function(cake_auto_package)
     find_package(ament_cmake_auto REQUIRED)
     ament_auto_find_build_dependencies()
@@ -67,6 +82,7 @@ function(cake_auto_package)
     ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
 endfunction()
 
+# Build shared C++ library for all C++ nodes Creates a shared library from all .cpp files in nodes/ directory
 function(_cake_build_package_shared_cpp_library)
     # NOTE: this uses a slightly implicit path "nodes" because ament_auto_add_library uses a relative path we have
     # already checked the nodes directory exists in cake_auto_package before calling this function
@@ -75,6 +91,7 @@ function(_cake_build_package_shared_cpp_library)
     message(STATUS "cake: Created C++ library '${CAKE_CPP_PACKAGE_TARGET}'")
 endfunction()
 
+# Create top-level Python package __init__.py Generates and installs __init__.py to make package importable
 function(_cake_create_top_level_python_package)
     # Create top-level __init__.py for the package
     set(PACKAGE_INIT_PY "${CMAKE_CURRENT_BINARY_DIR}/python_package_init/__init__.py")
@@ -83,6 +100,8 @@ function(_cake_create_top_level_python_package)
     message(STATUS "cake: Created Python package '${PROJECT_NAME}'")
 endfunction()
 
+# Discover and process all nodes in the nodes/ directory Args: NODES_DIR - Path to nodes/ directory containing node
+# subdirectories
 function(_cake_generate_nodes NODES_DIR)
     file(GLOB NODE_DIRS RELATIVE ${NODES_DIR} ${NODES_DIR}/*)
     if(NOT NODE_DIRS)
@@ -112,6 +131,9 @@ function(_cake_generate_nodes NODES_DIR)
     endforeach()
 endfunction()
 
+# Process a single node and generate language-specific interfaces Validates interface.yaml exists and dispatches to C++
+# or Python generation. Mixed language nodes are not supported. Args: NODE_NAME - Name of the node NODE_DIR - Full path
+# to the node's directory
 function(_cake_generate_node NODE_NAME NODE_DIR)
     set(INTERFACE_YAML "${NODE_DIR}/interface.yaml")
     if(NOT EXISTS ${INTERFACE_YAML})
@@ -137,6 +159,9 @@ function(_cake_generate_node NODE_NAME NODE_DIR)
     endif()
 endfunction()
 
+# Generate C++ interface, parameters, and component registration Creates interface header, parameter library, and
+# registers as rclcpp_component. Plugin class follows pattern: ${PROJECT_NAME}::${NODE_NAME}::${NodeNamePascal} Args:
+# NODE_NAME - Name of the node INTERFACE_YAML - Path to interface.yaml file
 function(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
     find_package(rclcpp REQUIRED)
     find_package(rclcpp_components REQUIRED)
@@ -210,6 +235,9 @@ function(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
     message(STATUS "cake: Registered component '${PLUGIN_CLASS}' with executable '${NODE_NAME}'")
 endfunction()
 
+# Generate Python interface and executable wrapper Creates _interface.py, _parameters.py, and executable using
+# runpy.run_module(). Installs to ${PYTHON_INSTALL_DIR}/${PROJECT_NAME}/${NODE_NAME}/ Args: NODE_NAME - Name of the node
+# NODE_DIR - Full path to node directory INTERFACE_YAML - Path to interface.yaml file
 function(_cake_generate_python_node NODE_NAME NODE_DIR INTERFACE_YAML)
     set(PYTHON_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/python_generated/${NODE_NAME})
     file(MAKE_DIRECTORY ${PYTHON_GEN_DIR})
