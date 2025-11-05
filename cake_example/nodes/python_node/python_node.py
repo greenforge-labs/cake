@@ -1,13 +1,11 @@
 from time import sleep
 
+from cake_example.python_node import PythonNodeContext, run
 import rclpy
 
 from std_msgs.msg import Bool, String
 
 import cake
-
-# from cake_example.python_node import PythonNodeContext, run
-from cake.dummy_python_node import PythonNodeContext, run
 
 
 class Context(PythonNodeContext):
