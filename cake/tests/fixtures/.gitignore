@@ -1,2 +1,6 @@
 # Ignore generated test outputs
-*/generated_output.hpp
+*/*_interface.hpp
+*/*_interface.params.yaml
+
+# Python generated outputs
+*/generated_python/

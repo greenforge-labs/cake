@@ -9,32 +9,32 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/service.hpp>
-#include <test_package/default_qos_service_node_parameters.hpp>
+#include <test_package/services_default_qos_parameters.hpp>
 
-namespace test_package::default_qos_service_node {
+namespace test_package::services_default_qos {
 
-template <typename ContextType> struct DefaultQosServiceNodePublishers {};
+template <typename ContextType> struct ServicesDefaultQosPublishers {};
 
-template <typename ContextType> struct DefaultQosServiceNodeSubscribers {};
+template <typename ContextType> struct ServicesDefaultQosSubscribers {};
 
-template <typename ContextType> struct DefaultQosServiceNodeServices {
+template <typename ContextType> struct ServicesDefaultQosServices {
     std::shared_ptr<cake::Service<std_srvs::srv::Trigger, ContextType>> trigger_service;
     std::shared_ptr<cake::Service<example_interfaces::srv::AddTwoInts, ContextType>> compute;
 };
 
-template <typename ContextType> struct DefaultQosServiceNodeServiceClients {};
+template <typename ContextType> struct ServicesDefaultQosServiceClients {};
 
-template <typename ContextType> struct DefaultQosServiceNodeActions {};
+template <typename ContextType> struct ServicesDefaultQosActions {};
 
-template <typename ContextType> struct DefaultQosServiceNodeActionClients {};
+template <typename ContextType> struct ServicesDefaultQosActionClients {};
 
-template <typename DerivedContextType> struct DefaultQosServiceNodeContext : cake::Context {
-    DefaultQosServiceNodePublishers<DerivedContextType> publishers;
-    DefaultQosServiceNodeSubscribers<DerivedContextType> subscribers;
-    DefaultQosServiceNodeServices<DerivedContextType> services;
-    DefaultQosServiceNodeServiceClients<DerivedContextType> service_clients;
-    DefaultQosServiceNodeActions<DerivedContextType> actions;
-    DefaultQosServiceNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct ServicesDefaultQosContext : cake::Context {
+    ServicesDefaultQosPublishers<DerivedContextType> publishers;
+    ServicesDefaultQosSubscribers<DerivedContextType> subscribers;
+    ServicesDefaultQosServices<DerivedContextType> services;
+    ServicesDefaultQosServiceClients<DerivedContextType> service_clients;
+    ServicesDefaultQosActions<DerivedContextType> actions;
+    ServicesDefaultQosActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -44,11 +44,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class DefaultQosServiceNodeBase : public cake::BaseNode<"default_qos_service_node", extend_options> {
+class ServicesDefaultQosBase : public cake::BaseNode<"services_default_qos", extend_options> {
   public:
-    explicit DefaultQosServiceNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"default_qos_service_node", extend_options>(options) {
+    explicit ServicesDefaultQosBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"services_default_qos", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<DefaultQosServiceNodeContext<ContextType>, ContextType>, "ContextType must be a child of DefaultQosServiceNodeContext"
+            std::is_base_of_v<ServicesDefaultQosContext<ContextType>, ContextType>, "ContextType must be a child of ServicesDefaultQosContext"
         );
 
         // init context
@@ -65,4 +65,4 @@ class DefaultQosServiceNodeBase : public cake::BaseNode<"default_qos_service_nod
     }
 };
 
-} // namespace test_package::default_qos_service_node
+} // namespace test_package::services_default_qos

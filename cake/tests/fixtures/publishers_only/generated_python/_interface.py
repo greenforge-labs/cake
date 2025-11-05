@@ -14,7 +14,7 @@ import cake
 from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
-    from test_package.pub_node._parameters import parameters
+    from test_package.publishers_only._parameters import parameters
 
 
 @dataclass
@@ -29,7 +29,7 @@ class Subscribers:
 
 
 @dataclass
-class PubNodeContext(cake.Context):
+class PublishersOnlyContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
 
@@ -37,14 +37,14 @@ class PubNodeContext(cake.Context):
     params: parameters.Params
 
 
-T = TypeVar("T", bound=PubNodeContext)
+T = TypeVar("T", bound=PublishersOnlyContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("pub_node")
+    node = rclpy.create_node("publishers_only")
 
     # initialise publishers
     publishers = Publishers(
@@ -55,7 +55,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # create subscribers - using default constructors
     subscribers = Subscribers()
 
-    from test_package.pub_node._parameters import parameters
+    from test_package.publishers_only._parameters import parameters
 
     param_listener = parameters.ParamListener(node)
     params = param_listener.get_params()

@@ -9,32 +9,32 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
-#include <test_package/sub_node_parameters.hpp>
+#include <test_package/subscribers_only_parameters.hpp>
 
-namespace test_package::sub_node {
+namespace test_package::subscribers_only {
 
-template <typename ContextType> struct SubNodePublishers {};
+template <typename ContextType> struct SubscribersOnlyPublishers {};
 
-template <typename ContextType> struct SubNodeSubscribers {
+template <typename ContextType> struct SubscribersOnlySubscribers {
     std::shared_ptr<cake::Subscriber<sensor_msgs::msg::LaserScan, ContextType>> sensor_data;
     std::shared_ptr<cake::Subscriber<sensor_msgs::msg::Image, ContextType>> camera_image;
 };
 
-template <typename ContextType> struct SubNodeServices {};
+template <typename ContextType> struct SubscribersOnlyServices {};
 
-template <typename ContextType> struct SubNodeServiceClients {};
+template <typename ContextType> struct SubscribersOnlyServiceClients {};
 
-template <typename ContextType> struct SubNodeActions {};
+template <typename ContextType> struct SubscribersOnlyActions {};
 
-template <typename ContextType> struct SubNodeActionClients {};
+template <typename ContextType> struct SubscribersOnlyActionClients {};
 
-template <typename DerivedContextType> struct SubNodeContext : cake::Context {
-    SubNodePublishers<DerivedContextType> publishers;
-    SubNodeSubscribers<DerivedContextType> subscribers;
-    SubNodeServices<DerivedContextType> services;
-    SubNodeServiceClients<DerivedContextType> service_clients;
-    SubNodeActions<DerivedContextType> actions;
-    SubNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct SubscribersOnlyContext : cake::Context {
+    SubscribersOnlyPublishers<DerivedContextType> publishers;
+    SubscribersOnlySubscribers<DerivedContextType> subscribers;
+    SubscribersOnlyServices<DerivedContextType> services;
+    SubscribersOnlyServiceClients<DerivedContextType> service_clients;
+    SubscribersOnlyActions<DerivedContextType> actions;
+    SubscribersOnlyActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -44,11 +44,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class SubNodeBase : public cake::BaseNode<"sub_node", extend_options> {
+class SubscribersOnlyBase : public cake::BaseNode<"subscribers_only", extend_options> {
   public:
-    explicit SubNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"sub_node", extend_options>(options) {
+    explicit SubscribersOnlyBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"subscribers_only", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<SubNodeContext<ContextType>, ContextType>, "ContextType must be a child of SubNodeContext"
+            std::is_base_of_v<SubscribersOnlyContext<ContextType>, ContextType>, "ContextType must be a child of SubscribersOnlyContext"
         );
 
         // init context
@@ -65,4 +65,4 @@ class SubNodeBase : public cake::BaseNode<"sub_node", extend_options> {
     }
 };
 
-} // namespace test_package::sub_node
+} // namespace test_package::subscribers_only

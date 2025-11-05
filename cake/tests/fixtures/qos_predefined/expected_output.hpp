@@ -8,35 +8,35 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
-#include <test_package/qos_test_node_parameters.hpp>
+#include <test_package/qos_predefined_parameters.hpp>
 
-namespace test_package::qos_test_node {
+namespace test_package::qos_predefined {
 
-template <typename ContextType> struct QosTestNodePublishers {
+template <typename ContextType> struct QosPredefinedPublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr sensor_data_topic;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr system_defaults_topic;
 };
 
-template <typename ContextType> struct QosTestNodeSubscribers {
+template <typename ContextType> struct QosPredefinedSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> parameters_topic;
     std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> services_topic;
 };
 
-template <typename ContextType> struct QosTestNodeServices {};
+template <typename ContextType> struct QosPredefinedServices {};
 
-template <typename ContextType> struct QosTestNodeServiceClients {};
+template <typename ContextType> struct QosPredefinedServiceClients {};
 
-template <typename ContextType> struct QosTestNodeActions {};
+template <typename ContextType> struct QosPredefinedActions {};
 
-template <typename ContextType> struct QosTestNodeActionClients {};
+template <typename ContextType> struct QosPredefinedActionClients {};
 
-template <typename DerivedContextType> struct QosTestNodeContext : cake::Context {
-    QosTestNodePublishers<DerivedContextType> publishers;
-    QosTestNodeSubscribers<DerivedContextType> subscribers;
-    QosTestNodeServices<DerivedContextType> services;
-    QosTestNodeServiceClients<DerivedContextType> service_clients;
-    QosTestNodeActions<DerivedContextType> actions;
-    QosTestNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct QosPredefinedContext : cake::Context {
+    QosPredefinedPublishers<DerivedContextType> publishers;
+    QosPredefinedSubscribers<DerivedContextType> subscribers;
+    QosPredefinedServices<DerivedContextType> services;
+    QosPredefinedServiceClients<DerivedContextType> service_clients;
+    QosPredefinedActions<DerivedContextType> actions;
+    QosPredefinedActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -46,11 +46,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class QosTestNodeBase : public cake::BaseNode<"qos_test_node", extend_options> {
+class QosPredefinedBase : public cake::BaseNode<"qos_predefined", extend_options> {
   public:
-    explicit QosTestNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"qos_test_node", extend_options>(options) {
+    explicit QosPredefinedBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"qos_predefined", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<QosTestNodeContext<ContextType>, ContextType>, "ContextType must be a child of QosTestNodeContext"
+            std::is_base_of_v<QosPredefinedContext<ContextType>, ContextType>, "ContextType must be a child of QosPredefinedContext"
         );
 
         // init context
@@ -71,4 +71,4 @@ class QosTestNodeBase : public cake::BaseNode<"qos_test_node", extend_options> {
     }
 };
 
-} // namespace test_package::qos_test_node
+} // namespace test_package::qos_predefined

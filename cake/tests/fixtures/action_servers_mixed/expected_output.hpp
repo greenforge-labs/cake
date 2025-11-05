@@ -13,37 +13,37 @@
 #include <cake/subscriber.hpp>
 #include <cake/service.hpp>
 #include <cake/action_server.hpp>
-#include <test_package/mixed_node_parameters.hpp>
+#include <test_package/action_servers_mixed_parameters.hpp>
 
-namespace test_package::mixed_node {
+namespace test_package::action_servers_mixed {
 
-template <typename ContextType> struct MixedNodePublishers {
+template <typename ContextType> struct ActionServersMixedPublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status;
 };
 
-template <typename ContextType> struct MixedNodeSubscribers {
+template <typename ContextType> struct ActionServersMixedSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::Bool, ContextType>> cmd;
 };
 
-template <typename ContextType> struct MixedNodeServices {
+template <typename ContextType> struct ActionServersMixedServices {
     std::shared_ptr<cake::Service<std_srvs::srv::Trigger, ContextType>> reset;
 };
 
-template <typename ContextType> struct MixedNodeServiceClients {};
+template <typename ContextType> struct ActionServersMixedServiceClients {};
 
-template <typename ContextType> struct MixedNodeActions {
+template <typename ContextType> struct ActionServersMixedActions {
     std::shared_ptr<cake::SingleGoalActionServer<example_interfaces::action::Fibonacci>> navigate;
 };
 
-template <typename ContextType> struct MixedNodeActionClients {};
+template <typename ContextType> struct ActionServersMixedActionClients {};
 
-template <typename DerivedContextType> struct MixedNodeContext : cake::Context {
-    MixedNodePublishers<DerivedContextType> publishers;
-    MixedNodeSubscribers<DerivedContextType> subscribers;
-    MixedNodeServices<DerivedContextType> services;
-    MixedNodeServiceClients<DerivedContextType> service_clients;
-    MixedNodeActions<DerivedContextType> actions;
-    MixedNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct ActionServersMixedContext : cake::Context {
+    ActionServersMixedPublishers<DerivedContextType> publishers;
+    ActionServersMixedSubscribers<DerivedContextType> subscribers;
+    ActionServersMixedServices<DerivedContextType> services;
+    ActionServersMixedServiceClients<DerivedContextType> service_clients;
+    ActionServersMixedActions<DerivedContextType> actions;
+    ActionServersMixedActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -53,11 +53,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class MixedNodeBase : public cake::BaseNode<"mixed_node", extend_options> {
+class ActionServersMixedBase : public cake::BaseNode<"action_servers_mixed", extend_options> {
   public:
-    explicit MixedNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"mixed_node", extend_options>(options) {
+    explicit ActionServersMixedBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"action_servers_mixed", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<MixedNodeContext<ContextType>, ContextType>, "ContextType must be a child of MixedNodeContext"
+            std::is_base_of_v<ActionServersMixedContext<ContextType>, ContextType>, "ContextType must be a child of ActionServersMixedContext"
         );
 
         // init context
@@ -80,4 +80,4 @@ class MixedNodeBase : public cake::BaseNode<"mixed_node", extend_options> {
     }
 };
 
-} // namespace test_package::mixed_node
+} // namespace test_package::action_servers_mixed

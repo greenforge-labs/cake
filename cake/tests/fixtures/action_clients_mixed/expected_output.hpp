@@ -16,42 +16,42 @@
 #include <cake/subscriber.hpp>
 #include <cake/service.hpp>
 #include <cake/action_server.hpp>
-#include <test_package/full_node_parameters.hpp>
+#include <test_package/action_clients_mixed_parameters.hpp>
 
-namespace test_package::full_node {
+namespace test_package::action_clients_mixed {
 
-template <typename ContextType> struct FullNodePublishers {
+template <typename ContextType> struct ActionClientsMixedPublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status;
 };
 
-template <typename ContextType> struct FullNodeSubscribers {
+template <typename ContextType> struct ActionClientsMixedSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::Bool, ContextType>> command;
 };
 
-template <typename ContextType> struct FullNodeServices {
+template <typename ContextType> struct ActionClientsMixedServices {
     std::shared_ptr<cake::Service<std_srvs::srv::Trigger, ContextType>> reset;
 };
 
-template <typename ContextType> struct FullNodeServiceClients {
+template <typename ContextType> struct ActionClientsMixedServiceClients {
     rclcpp::Client<example_interfaces::srv::AddTwoInts>::SharedPtr compute;
 };
 
-template <typename ContextType> struct FullNodeActions {
+template <typename ContextType> struct ActionClientsMixedActions {
     std::shared_ptr<cake::SingleGoalActionServer<example_interfaces::action::Fibonacci>> fibonacci_server;
 };
 
-template <typename ContextType> struct FullNodeActionClients {
+template <typename ContextType> struct ActionClientsMixedActionClients {
     rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigate;
     rclcpp_action::Client<nav2_msgs::action::ComputePathToPose>::SharedPtr compute_path;
 };
 
-template <typename DerivedContextType> struct FullNodeContext : cake::Context {
-    FullNodePublishers<DerivedContextType> publishers;
-    FullNodeSubscribers<DerivedContextType> subscribers;
-    FullNodeServices<DerivedContextType> services;
-    FullNodeServiceClients<DerivedContextType> service_clients;
-    FullNodeActions<DerivedContextType> actions;
-    FullNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct ActionClientsMixedContext : cake::Context {
+    ActionClientsMixedPublishers<DerivedContextType> publishers;
+    ActionClientsMixedSubscribers<DerivedContextType> subscribers;
+    ActionClientsMixedServices<DerivedContextType> services;
+    ActionClientsMixedServiceClients<DerivedContextType> service_clients;
+    ActionClientsMixedActions<DerivedContextType> actions;
+    ActionClientsMixedActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -61,11 +61,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class FullNodeBase : public cake::BaseNode<"full_node", extend_options> {
+class ActionClientsMixedBase : public cake::BaseNode<"action_clients_mixed", extend_options> {
   public:
-    explicit FullNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"full_node", extend_options>(options) {
+    explicit ActionClientsMixedBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"action_clients_mixed", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<FullNodeContext<ContextType>, ContextType>, "ContextType must be a child of FullNodeContext"
+            std::is_base_of_v<ActionClientsMixedContext<ContextType>, ContextType>, "ContextType must be a child of ActionClientsMixedContext"
         );
 
         // init context
@@ -93,4 +93,4 @@ class FullNodeBase : public cake::BaseNode<"full_node", extend_options> {
     }
 };
 
-} // namespace test_package::full_node
+} // namespace test_package::action_clients_mixed

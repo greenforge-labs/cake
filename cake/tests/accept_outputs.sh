@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to accept all test outputs by copying generated_output.hpp to expected_output.hpp
+# Script to accept all test outputs by copying {fixture_name}_interface.hpp to expected_output.hpp
 # This updates the expected outputs for all test fixtures
 
 set -e
@@ -21,7 +21,8 @@ count=0
 for fixture_dir in "$FIXTURES_DIR"/*/; do
     if [ -d "$fixture_dir" ]; then
         fixture_name=$(basename "$fixture_dir")
-        generated_file="$fixture_dir/generated_output.hpp"
+        # New filename pattern: {fixture_name}_interface.hpp
+        generated_file="$fixture_dir/${fixture_name}_interface.hpp"
         expected_file="$fixture_dir/expected_output.hpp"
 
         if [ -f "$generated_file" ]; then
@@ -29,7 +30,7 @@ for fixture_dir in "$FIXTURES_DIR"/*/; do
             echo "✓ Accepted: $fixture_name"
             count=$((count + 1))
         else
-            echo "⚠ Skipped: $fixture_name (no generated_output.hpp found)"
+            echo "⚠ Skipped: $fixture_name (no ${fixture_name}_interface.hpp found)"
         fi
     fi
 done

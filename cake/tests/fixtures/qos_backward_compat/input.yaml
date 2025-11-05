@@ -1,5 +1,5 @@
 node:
-    name: backward_compat_node
+    name: ${THIS_NODE}
     package: ${THIS_PACKAGE}
 
 publishers:

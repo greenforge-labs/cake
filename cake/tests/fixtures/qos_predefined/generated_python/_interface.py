@@ -20,7 +20,7 @@ import cake
 from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
-    from test_package.qos_test_node._parameters import parameters
+    from test_package.qos_predefined._parameters import parameters
 
 
 @dataclass
@@ -36,7 +36,7 @@ class Subscribers:
 
 
 @dataclass
-class QosTestNodeContext(cake.Context):
+class QosPredefinedContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
 
@@ -44,14 +44,14 @@ class QosTestNodeContext(cake.Context):
     params: parameters.Params
 
 
-T = TypeVar("T", bound=QosTestNodeContext)
+T = TypeVar("T", bound=QosPredefinedContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("qos_test_node")
+    node = rclpy.create_node("qos_predefined")
 
     # initialise publishers
     publishers = Publishers(
@@ -62,7 +62,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # create subscribers - using default constructors
     subscribers = Subscribers()
 
-    from test_package.qos_test_node._parameters import parameters
+    from test_package.qos_predefined._parameters import parameters
 
     param_listener = parameters.ParamListener(node)
     params = param_listener.get_params()

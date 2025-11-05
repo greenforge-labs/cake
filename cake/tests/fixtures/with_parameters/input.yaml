@@ -1,5 +1,5 @@
 node:
-    name: test_node
+    name: ${THIS_NODE}
     package: ${THIS_PACKAGE}
 
 parameters:

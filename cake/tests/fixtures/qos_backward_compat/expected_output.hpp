@@ -8,35 +8,35 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
-#include <test_package/backward_compat_node_parameters.hpp>
+#include <test_package/qos_backward_compat_parameters.hpp>
 
-namespace test_package::backward_compat_node {
+namespace test_package::qos_backward_compat {
 
-template <typename ContextType> struct BackwardCompatNodePublishers {
+template <typename ContextType> struct QosBackwardCompatPublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr int_qos_pub;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr default_qos_pub;
 };
 
-template <typename ContextType> struct BackwardCompatNodeSubscribers {
+template <typename ContextType> struct QosBackwardCompatSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> int_qos_sub;
     std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> default_qos_sub;
 };
 
-template <typename ContextType> struct BackwardCompatNodeServices {};
+template <typename ContextType> struct QosBackwardCompatServices {};
 
-template <typename ContextType> struct BackwardCompatNodeServiceClients {};
+template <typename ContextType> struct QosBackwardCompatServiceClients {};
 
-template <typename ContextType> struct BackwardCompatNodeActions {};
+template <typename ContextType> struct QosBackwardCompatActions {};
 
-template <typename ContextType> struct BackwardCompatNodeActionClients {};
+template <typename ContextType> struct QosBackwardCompatActionClients {};
 
-template <typename DerivedContextType> struct BackwardCompatNodeContext : cake::Context {
-    BackwardCompatNodePublishers<DerivedContextType> publishers;
-    BackwardCompatNodeSubscribers<DerivedContextType> subscribers;
-    BackwardCompatNodeServices<DerivedContextType> services;
-    BackwardCompatNodeServiceClients<DerivedContextType> service_clients;
-    BackwardCompatNodeActions<DerivedContextType> actions;
-    BackwardCompatNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct QosBackwardCompatContext : cake::Context {
+    QosBackwardCompatPublishers<DerivedContextType> publishers;
+    QosBackwardCompatSubscribers<DerivedContextType> subscribers;
+    QosBackwardCompatServices<DerivedContextType> services;
+    QosBackwardCompatServiceClients<DerivedContextType> service_clients;
+    QosBackwardCompatActions<DerivedContextType> actions;
+    QosBackwardCompatActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -46,11 +46,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class BackwardCompatNodeBase : public cake::BaseNode<"backward_compat_node", extend_options> {
+class QosBackwardCompatBase : public cake::BaseNode<"qos_backward_compat", extend_options> {
   public:
-    explicit BackwardCompatNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"backward_compat_node", extend_options>(options) {
+    explicit QosBackwardCompatBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"qos_backward_compat", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<BackwardCompatNodeContext<ContextType>, ContextType>, "ContextType must be a child of BackwardCompatNodeContext"
+            std::is_base_of_v<QosBackwardCompatContext<ContextType>, ContextType>, "ContextType must be a child of QosBackwardCompatContext"
         );
 
         // init context
@@ -71,4 +71,4 @@ class BackwardCompatNodeBase : public cake::BaseNode<"backward_compat_node", ext
     }
 };
 
-} // namespace test_package::backward_compat_node
+} // namespace test_package::qos_backward_compat

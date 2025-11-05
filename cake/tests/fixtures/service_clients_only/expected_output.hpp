@@ -8,32 +8,32 @@
 #include <std_srvs/srv/trigger.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
-#include <test_package/client_node_parameters.hpp>
+#include <test_package/service_clients_only_parameters.hpp>
 
-namespace test_package::client_node {
+namespace test_package::service_clients_only {
 
-template <typename ContextType> struct ClientNodePublishers {};
+template <typename ContextType> struct ServiceClientsOnlyPublishers {};
 
-template <typename ContextType> struct ClientNodeSubscribers {};
+template <typename ContextType> struct ServiceClientsOnlySubscribers {};
 
-template <typename ContextType> struct ClientNodeServices {};
+template <typename ContextType> struct ServiceClientsOnlyServices {};
 
-template <typename ContextType> struct ClientNodeServiceClients {
+template <typename ContextType> struct ServiceClientsOnlyServiceClients {
     rclcpp::Client<example_interfaces::srv::AddTwoInts>::SharedPtr add_two_ints;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr trigger_service;
 };
 
-template <typename ContextType> struct ClientNodeActions {};
+template <typename ContextType> struct ServiceClientsOnlyActions {};
 
-template <typename ContextType> struct ClientNodeActionClients {};
+template <typename ContextType> struct ServiceClientsOnlyActionClients {};
 
-template <typename DerivedContextType> struct ClientNodeContext : cake::Context {
-    ClientNodePublishers<DerivedContextType> publishers;
-    ClientNodeSubscribers<DerivedContextType> subscribers;
-    ClientNodeServices<DerivedContextType> services;
-    ClientNodeServiceClients<DerivedContextType> service_clients;
-    ClientNodeActions<DerivedContextType> actions;
-    ClientNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct ServiceClientsOnlyContext : cake::Context {
+    ServiceClientsOnlyPublishers<DerivedContextType> publishers;
+    ServiceClientsOnlySubscribers<DerivedContextType> subscribers;
+    ServiceClientsOnlyServices<DerivedContextType> services;
+    ServiceClientsOnlyServiceClients<DerivedContextType> service_clients;
+    ServiceClientsOnlyActions<DerivedContextType> actions;
+    ServiceClientsOnlyActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -43,11 +43,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class ClientNodeBase : public cake::BaseNode<"client_node", extend_options> {
+class ServiceClientsOnlyBase : public cake::BaseNode<"service_clients_only", extend_options> {
   public:
-    explicit ClientNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"client_node", extend_options>(options) {
+    explicit ServiceClientsOnlyBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"service_clients_only", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<ClientNodeContext<ContextType>, ContextType>, "ContextType must be a child of ClientNodeContext"
+            std::is_base_of_v<ServiceClientsOnlyContext<ContextType>, ContextType>, "ContextType must be a child of ServiceClientsOnlyContext"
         );
 
         // init context
@@ -64,4 +64,4 @@ class ClientNodeBase : public cake::BaseNode<"client_node", extend_options> {
     }
 };
 
-} // namespace test_package::client_node
+} // namespace test_package::service_clients_only

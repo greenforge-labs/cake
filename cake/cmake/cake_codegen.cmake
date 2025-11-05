@@ -1,8 +1,7 @@
 # CMake module for cake code generation
 
-macro(cake_generate_node_interface LIB_NAME YAML_FILE)
-    # Parse optional NODE_NAME argument (can be passed as third argument)
-    set(NODE_NAME_ARG "${ARGV2}")
+macro(cake_generate_node_interface LIB_NAME YAML_FILE NODE_NAME)
+    # NODE_NAME is now a required third argument
     unset(cake_codegen_script_BIN CACHE) # Unset the cache variable
     find_program(
         cake_codegen_script_BIN
@@ -25,18 +24,28 @@ macro(cake_generate_node_interface LIB_NAME YAML_FILE)
         message(FATAL_ERROR "Interface YAML file not found: ${YAML_FILE_PATH}")
     endif()
 
-    # Set the output header file name
-    set(INTERFACE_HEADER_FILE ${LIB_INCLUDE_DIR}/${LIB_NAME}.hpp)
+    # Set the output file names based on node name
+    set(INTERFACE_HEADER_FILE ${LIB_INCLUDE_DIR}/${NODE_NAME}_interface.hpp)
+    set(INTERFACE_PARAMS_FILE ${LIB_INCLUDE_DIR}/${NODE_NAME}_interface.params.yaml)
 
-    # Build the command with optional --node-name argument
-    set(CODEGEN_CMD ${cake_codegen_script_BIN} ${INTERFACE_HEADER_FILE} ${YAML_FILE_PATH} --package ${PROJECT_NAME})
-    if(NODE_NAME_ARG)
-        list(APPEND CODEGEN_CMD --node-name ${NODE_NAME_ARG})
-    endif()
+    # Build the command with new unified CLI
+    set(
+        CODEGEN_CMD
+        ${cake_codegen_script_BIN}
+        ${YAML_FILE_PATH}
+        --language
+        cpp
+        --package
+        ${PROJECT_NAME}
+        --node-name
+        ${NODE_NAME}
+        --output
+        ${LIB_INCLUDE_DIR}
+    )
 
-    # Generate the header for the library
+    # Generate the header and params files for the library
     add_custom_command(
-        OUTPUT ${INTERFACE_HEADER_FILE}
+        OUTPUT ${INTERFACE_HEADER_FILE} ${INTERFACE_PARAMS_FILE}
         COMMAND ${CODEGEN_CMD}
         DEPENDS ${YAML_FILE_PATH}
         COMMENT "Running `${CODEGEN_CMD}`"

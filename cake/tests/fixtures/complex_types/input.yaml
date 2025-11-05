@@ -1,5 +1,5 @@
 node:
-    name: complex_node
+    name: ${THIS_NODE}
     package: ${THIS_PACKAGE}
 
 publishers:

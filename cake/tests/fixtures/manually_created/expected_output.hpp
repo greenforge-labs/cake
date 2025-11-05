@@ -11,33 +11,33 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
-#include <test_package/manual_node_parameters.hpp>
+#include <test_package/manually_created_parameters.hpp>
 
-namespace test_package::manual_node {
+namespace test_package::manually_created {
 
-template <typename ContextType> struct ManualNodePublishers {
+template <typename ContextType> struct ManuallyCreatedPublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr auto_topic;
 };
 
-template <typename ContextType> struct ManualNodeSubscribers {
+template <typename ContextType> struct ManuallyCreatedSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::Bool, ContextType>> auto_sub;
 };
 
-template <typename ContextType> struct ManualNodeServices {};
+template <typename ContextType> struct ManuallyCreatedServices {};
 
-template <typename ContextType> struct ManualNodeServiceClients {};
+template <typename ContextType> struct ManuallyCreatedServiceClients {};
 
-template <typename ContextType> struct ManualNodeActions {};
+template <typename ContextType> struct ManuallyCreatedActions {};
 
-template <typename ContextType> struct ManualNodeActionClients {};
+template <typename ContextType> struct ManuallyCreatedActionClients {};
 
-template <typename DerivedContextType> struct ManualNodeContext : cake::Context {
-    ManualNodePublishers<DerivedContextType> publishers;
-    ManualNodeSubscribers<DerivedContextType> subscribers;
-    ManualNodeServices<DerivedContextType> services;
-    ManualNodeServiceClients<DerivedContextType> service_clients;
-    ManualNodeActions<DerivedContextType> actions;
-    ManualNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct ManuallyCreatedContext : cake::Context {
+    ManuallyCreatedPublishers<DerivedContextType> publishers;
+    ManuallyCreatedSubscribers<DerivedContextType> subscribers;
+    ManuallyCreatedServices<DerivedContextType> services;
+    ManuallyCreatedServiceClients<DerivedContextType> service_clients;
+    ManuallyCreatedActions<DerivedContextType> actions;
+    ManuallyCreatedActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -47,11 +47,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class ManualNodeBase : public cake::BaseNode<"manual_node", extend_options> {
+class ManuallyCreatedBase : public cake::BaseNode<"manually_created", extend_options> {
   public:
-    explicit ManualNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"manual_node", extend_options>(options) {
+    explicit ManuallyCreatedBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"manually_created", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<ManualNodeContext<ContextType>, ContextType>, "ContextType must be a child of ManualNodeContext"
+            std::is_base_of_v<ManuallyCreatedContext<ContextType>, ContextType>, "ContextType must be a child of ManuallyCreatedContext"
         );
 
         // init context
@@ -70,4 +70,4 @@ class ManualNodeBase : public cake::BaseNode<"manual_node", extend_options> {
     }
 };
 
-} // namespace test_package::manual_node
+} // namespace test_package::manually_created

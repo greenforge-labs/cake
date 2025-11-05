@@ -29,7 +29,7 @@ pytest -v test_generate_node_interface.py::test_generate_node_interface[simple_n
 Tests use a fixture-based approach where each test case consists of:
 - `input.yaml` - The interface definition (committed)
 - `expected_output.hpp` - The expected generated code (committed)
-- `generated_output.hpp` - Temporary file created during test run (gitignored)
+- `{fixture_name}_interface.hpp` - Temporary file created during test run (gitignored)
 
 Tests run the actual generator script as a subprocess and compare the generated output file with the expected output file.
 
@@ -72,19 +72,28 @@ Located in `fixtures/`:
 3. Generate the expected output:
    ```bash
    python3 ../scripts/generate_node_interface.py \
-       fixtures/my_test_case/expected_output.hpp \
        fixtures/my_test_case/input.yaml \
-       --package test_package
+       --language cpp \
+       --package test_package \
+       --node-name my_test_case \
+       --output fixtures/my_test_case
+   ```
+   This will generate `my_test_case_interface.hpp` in the fixture directory.
+
+4. Rename the generated file to `expected_output.hpp`:
+   ```bash
+   mv fixtures/my_test_case/my_test_case_interface.hpp \
+      fixtures/my_test_case/expected_output.hpp
    ```
 
-4. Review the generated `expected_output.hpp` file and commit it
+5. Review the generated `expected_output.hpp` file and commit it
 
-5. Run tests to verify:
+6. Run tests to verify:
    ```bash
    ./run_tests.sh
    ```
 
-Note: Tests will create `generated_output.hpp` files during execution, which are gitignored and can be used for debugging.
+Note: Tests will create `{fixture_name}_interface.hpp` files during execution, which are gitignored and can be used for debugging.
 
 ## Accepting Test Outputs
 
@@ -97,7 +106,7 @@ cd cake/tests
 ./run_tests.sh                # Verify all tests pass
 ```
 
-The `accept_outputs.sh` script copies all `generated_output.hpp` files to their corresponding `expected_output.hpp` files across all test fixtures. Use this after making generator changes that affect output formatting or functionality.
+The `accept_outputs.sh` script copies all `{fixture_name}_interface.hpp` files to their corresponding `expected_output.hpp` files across all test fixtures. Use this after making generator changes that affect output formatting or functionality.
 
 ## Dependencies
 
@@ -114,7 +123,7 @@ pip install pytest pyyaml
 - These tests are **not** integrated into the colcon build system
 - They are meant to be run manually during development
 - Tests run the generator script as a subprocess (testing actual usage)
-- Generated output files (`generated_output.hpp`) are created during tests and gitignored
+- Generated output files (`{fixture_name}_interface.hpp`) are created during tests and gitignored
 - Whitespace differences are normalized during comparison
 - Tests verify both valid inputs and error cases
 - For debugging, you can inspect the generated files in each fixture directory after running tests

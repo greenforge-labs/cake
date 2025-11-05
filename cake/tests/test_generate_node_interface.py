@@ -42,7 +42,10 @@ def get_test_cases():
 @pytest.mark.parametrize("test_name,input_file,expected_file,generated_file", get_test_cases())
 def test_generate_node_interface(test_name, input_file, expected_file, generated_file):
     """Test code generation for each fixture."""
-    # Run the generator script with new argument structure
+    # Output directory is the fixture directory
+    output_dir = input_file.parent
+
+    # Run the generator script with new unified argument structure
     result = subprocess.run(
         [
             "python3",
@@ -54,8 +57,8 @@ def test_generate_node_interface(test_name, input_file, expected_file, generated
             "test_package",
             "--node-name",
             test_name,
-            "--output-file",
-            str(generated_file),
+            "--output",
+            str(output_dir),
         ],
         capture_output=True,
         text=True,
@@ -64,12 +67,15 @@ def test_generate_node_interface(test_name, input_file, expected_file, generated
     # Check that script ran successfully
     assert result.returncode == 0, f"Generator script failed for {test_name}:\n{result.stderr}"
 
+    # Generated file will be named {test_name}_interface.hpp
+    actual_generated_file = output_dir / f"{test_name}_interface.hpp"
+
     # Read expected output
     with open(expected_file, "r") as f:
         expected_output = f.read()
 
     # Read generated output
-    with open(generated_file, "r") as f:
+    with open(actual_generated_file, "r") as f:
         generated_output = f.read()
 
     # Normalize whitespace for comparison
@@ -101,7 +107,6 @@ def test_missing_node_name(tmp_path):
     package: ${THIS_PACKAGE}
 """
     )
-    output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
@@ -115,8 +120,8 @@ def test_missing_node_name(tmp_path):
             "test_package",
             "--node-name",
             "test_node",
-            "--output-file",
-            str(output_file),
+            "--output",
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
@@ -135,7 +140,6 @@ def test_missing_node_section(tmp_path):
         """publishers: []
 """
     )
-    output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
@@ -149,8 +153,8 @@ def test_missing_node_section(tmp_path):
             "test_package",
             "--node-name",
             "test_node",
-            "--output-file",
-            str(output_file),
+            "--output",
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
@@ -173,7 +177,6 @@ publishers: []
 subscribers: []
 """
     )
-    output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
@@ -187,8 +190,8 @@ subscribers: []
             "test_package",
             "--node-name",
             "test_node",
-            "--output-file",
-            str(output_file),
+            "--output",
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
@@ -198,6 +201,7 @@ subscribers: []
     assert result.returncode == 0, f"Script failed:\n{result.stderr}"
 
     # Read generated output
+    output_file = tmp_path / "test_node_interface.hpp"
     with open(output_file, "r") as f:
         output = f.read()
 
@@ -217,7 +221,6 @@ def test_this_package_without_package_arg(tmp_path):
 publishers: []
 """
     )
-    output_file = tmp_path / "output.hpp"
 
     # Run the generator script WITHOUT --package argument
     result = subprocess.run(
@@ -229,8 +232,8 @@ publishers: []
             "cpp",
             "--node-name",
             "test_node",
-            "--output-file",
-            str(output_file),
+            "--output",
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
@@ -253,7 +256,6 @@ publishers: []
 subscribers: []
 """
     )
-    output_file = tmp_path / "output.hpp"
 
     # Run the generator script WITH --node-name argument
     result = subprocess.run(
@@ -267,8 +269,8 @@ subscribers: []
             "test_package",
             "--node-name",
             "my_test_node",
-            "--output-file",
-            str(output_file),
+            "--output",
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
@@ -278,6 +280,7 @@ subscribers: []
     assert result.returncode == 0, f"Script failed:\n{result.stderr}"
 
     # Read generated output
+    output_file = tmp_path / "my_test_node_interface.hpp"
     with open(output_file, "r") as f:
         output = f.read()
 
@@ -297,7 +300,6 @@ def test_this_node_without_node_name_arg(tmp_path):
 publishers: []
 """
     )
-    output_file = tmp_path / "output.hpp"
 
     # Run the generator script WITH --node-name missing
     result = subprocess.run(
@@ -309,8 +311,8 @@ publishers: []
             "cpp",
             "--package",
             "test_package",
-            "--output-file",
-            str(output_file),
+            "--output",
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
@@ -343,7 +345,6 @@ parameters:
 publishers: []
 """
     )
-    output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
@@ -357,8 +358,8 @@ publishers: []
             "test_package",
             "--node-name",
             "test_node",
-            "--output-file",
-            str(output_file),
+            "--output",
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
@@ -368,7 +369,7 @@ publishers: []
     assert result.returncode == 0, f"Script failed:\n{result.stderr}"
 
     # Check that parameters file was generated
-    params_file = tmp_path / "output.params.yaml"
+    params_file = tmp_path / "test_node_interface.params.yaml"
     assert params_file.exists(), "Parameters file was not generated"
 
     # Read and verify parameters file content
@@ -399,7 +400,6 @@ publishers:
       qos: 10
 """
     )
-    output_file = tmp_path / "output.hpp"
 
     # Run the generator script
     result = subprocess.run(
@@ -413,8 +413,8 @@ publishers:
             "test_package",
             "--node-name",
             "test_node",
-            "--output-file",
-            str(output_file),
+            "--output",
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
@@ -424,7 +424,7 @@ publishers:
     assert result.returncode == 0, f"Script failed:\n{result.stderr}"
 
     # Check that parameters file WAS generated (always, even with no parameters)
-    params_file = tmp_path / "output.params.yaml"
+    params_file = tmp_path / "test_node_interface.params.yaml"
     assert params_file.exists(), "Parameters file should always be generated"
 
     # Read and verify it has dummy parameter
@@ -485,7 +485,7 @@ def test_generate_python_interface(
             "test_package",
             "--node-name",
             test_name,
-            "--output-dir",
+            "--output",
             str(output_dir),
         ],
         capture_output=True,
@@ -609,7 +609,7 @@ subscribers:
             "test_package",
             "--node-name",
             "test_node",
-            "--output-dir",
+            "--output",
             str(output_dir),
         ],
         capture_output=True,
@@ -629,7 +629,7 @@ subscribers:
 
 
 def test_python_missing_output_dir(tmp_path):
-    """Test that Python generation fails without --output-dir."""
+    """Test that Python generation fails without --output."""
     yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """node:
@@ -639,7 +639,7 @@ publishers: []
 """
     )
 
-    # Run WITHOUT --output-dir
+    # Run WITHOUT --output
     result = subprocess.run(
         [
             "python3",
@@ -657,8 +657,8 @@ publishers: []
     )
 
     # Should fail
-    assert result.returncode != 0, "Script should fail without --output-dir for Python"
-    assert "output-dir" in result.stderr.lower(), "Error message should mention output-dir"
+    assert result.returncode != 0, "Script should fail without --output for Python"
+    assert "output" in result.stderr.lower(), "Error message should mention output"
 
 
 def test_python_parameters_static_namespace(tmp_path):
@@ -692,7 +692,7 @@ publishers: []
             "my_package",
             "--node-name",
             "my_node",
-            "--output-dir",
+            "--output",
             str(output_dir),
         ],
         capture_output=True,
@@ -747,7 +747,7 @@ publishers:
             "test_package",
             "--node-name",
             "pub_node",
-            "--output-dir",
+            "--output",
             str(output_with_pubs),
         ],
         capture_output=True,
@@ -785,7 +785,7 @@ subscribers:
             "test_package",
             "--node-name",
             "sub_node",
-            "--output-dir",
+            "--output",
             str(output_no_pubs),
         ],
         capture_output=True,
@@ -832,7 +832,7 @@ subscribers:
             "test_package",
             "--node-name",
             "test_node",
-            "--output-dir",
+            "--output",
             str(output_dir),
         ],
         capture_output=True,

@@ -1,5 +1,5 @@
 node:
-    name: action_node
+    name: ${THIS_NODE}
     package: ${THIS_PACKAGE}
 
 actions:

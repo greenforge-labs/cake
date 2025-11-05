@@ -11,35 +11,35 @@
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
 #include <cake/subscriber.hpp>
-#include <test_package/complex_node_parameters.hpp>
+#include <test_package/complex_types_parameters.hpp>
 
-namespace test_package::complex_node {
+namespace test_package::complex_types {
 
-template <typename ContextType> struct ComplexNodePublishers {
+template <typename ContextType> struct ComplexTypesPublishers {
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path;
 };
 
-template <typename ContextType> struct ComplexNodeSubscribers {
+template <typename ContextType> struct ComplexTypesSubscribers {
     std::shared_ptr<cake::Subscriber<sensor_msgs::msg::JointState, ContextType>> joint_states;
     std::shared_ptr<cake::Subscriber<sensor_msgs::msg::PointCloud2, ContextType>> point_cloud;
 };
 
-template <typename ContextType> struct ComplexNodeServices {};
+template <typename ContextType> struct ComplexTypesServices {};
 
-template <typename ContextType> struct ComplexNodeServiceClients {};
+template <typename ContextType> struct ComplexTypesServiceClients {};
 
-template <typename ContextType> struct ComplexNodeActions {};
+template <typename ContextType> struct ComplexTypesActions {};
 
-template <typename ContextType> struct ComplexNodeActionClients {};
+template <typename ContextType> struct ComplexTypesActionClients {};
 
-template <typename DerivedContextType> struct ComplexNodeContext : cake::Context {
-    ComplexNodePublishers<DerivedContextType> publishers;
-    ComplexNodeSubscribers<DerivedContextType> subscribers;
-    ComplexNodeServices<DerivedContextType> services;
-    ComplexNodeServiceClients<DerivedContextType> service_clients;
-    ComplexNodeActions<DerivedContextType> actions;
-    ComplexNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct ComplexTypesContext : cake::Context {
+    ComplexTypesPublishers<DerivedContextType> publishers;
+    ComplexTypesSubscribers<DerivedContextType> subscribers;
+    ComplexTypesServices<DerivedContextType> services;
+    ComplexTypesServiceClients<DerivedContextType> service_clients;
+    ComplexTypesActions<DerivedContextType> actions;
+    ComplexTypesActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -49,11 +49,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class ComplexNodeBase : public cake::BaseNode<"complex_node", extend_options> {
+class ComplexTypesBase : public cake::BaseNode<"complex_types", extend_options> {
   public:
-    explicit ComplexNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"complex_node", extend_options>(options) {
+    explicit ComplexTypesBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"complex_types", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<ComplexNodeContext<ContextType>, ContextType>, "ContextType must be a child of ComplexNodeContext"
+            std::is_base_of_v<ComplexTypesContext<ContextType>, ContextType>, "ContextType must be a child of ComplexTypesContext"
         );
 
         // init context
@@ -74,4 +74,4 @@ class ComplexNodeBase : public cake::BaseNode<"complex_node", extend_options> {
     }
 };
 
-} // namespace test_package::complex_node
+} // namespace test_package::complex_types

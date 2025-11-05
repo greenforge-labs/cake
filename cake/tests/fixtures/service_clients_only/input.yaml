@@ -1,5 +1,5 @@
 node:
-  name: client_node
+  name: ${THIS_NODE}
   package: ${THIS_PACKAGE}
 
 service_clients:

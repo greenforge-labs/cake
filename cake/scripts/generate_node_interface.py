@@ -769,18 +769,9 @@ def main():
     parser.add_argument("--language", choices=["cpp", "python"], default="cpp", help="Target language")
     parser.add_argument("--package", help="Package name to substitute for ${THIS_PACKAGE}", required=True)
     parser.add_argument("--node-name", help="Node name to substitute for ${THIS_NODE}", required=True)
-    parser.add_argument("--output-file", help="Output file path (for C++ header)")
-    parser.add_argument("--output-dir", help="Output directory path (for Python module)")
+    parser.add_argument("--output", required=True, help="Output directory path (for both C++ and Python)")
 
     args = parser.parse_args()
-
-    # Validate output arguments based on language
-    if args.language == "cpp" and not args.output_file:
-        print("Error: --output-file is required for C++ generation", file=sys.stderr)
-        sys.exit(1)
-    if args.language == "python" and not args.output_dir:
-        print("Error: --output-dir is required for Python generation", file=sys.stderr)
-        sys.exit(1)
 
     # Read and parse YAML
     interface_path = Path(args.interface_yaml)
@@ -806,27 +797,27 @@ def main():
         header_content = generate_header(interface_data)
 
         # Ensure output directory exists
-        output_file = Path(args.output_file)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_dir = Path(args.output)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write output file
-        with open(output_file, "w") as f:
+        # Generate files with node-name-based filenames
+        header_file = output_dir / f"{node_name}_interface.hpp"
+        with open(header_file, "w") as f:
             f.write(header_content)
 
-        print(f"Generated: {output_file}")
+        print(f"Generated: {header_file}")
 
         # Always generate parameters.yaml (even if empty)
         if package_name:
             params_content = generate_parameters_yaml(interface_data, package_name, node_name)
-            # Generate parameters file alongside the header with .params.yaml extension
-            params_file = output_file.parent / f"{output_file.stem}.params.yaml"
+            params_file = output_dir / f"{node_name}_interface.params.yaml"
             with open(params_file, "w") as f:
                 f.write(params_content)
             print(f"Generated: {params_file}")
 
     elif args.language == "python":
         # Generate Python module files
-        output_dir = Path(args.output_dir)
+        output_dir = Path(args.output)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate _interface.py

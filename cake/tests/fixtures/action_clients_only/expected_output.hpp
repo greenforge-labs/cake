@@ -8,32 +8,32 @@
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
-#include <test_package/action_client_node_parameters.hpp>
+#include <test_package/action_clients_only_parameters.hpp>
 
-namespace test_package::action_client_node {
+namespace test_package::action_clients_only {
 
-template <typename ContextType> struct ActionClientNodePublishers {};
+template <typename ContextType> struct ActionClientsOnlyPublishers {};
 
-template <typename ContextType> struct ActionClientNodeSubscribers {};
+template <typename ContextType> struct ActionClientsOnlySubscribers {};
 
-template <typename ContextType> struct ActionClientNodeServices {};
+template <typename ContextType> struct ActionClientsOnlyServices {};
 
-template <typename ContextType> struct ActionClientNodeServiceClients {};
+template <typename ContextType> struct ActionClientsOnlyServiceClients {};
 
-template <typename ContextType> struct ActionClientNodeActions {};
+template <typename ContextType> struct ActionClientsOnlyActions {};
 
-template <typename ContextType> struct ActionClientNodeActionClients {
+template <typename ContextType> struct ActionClientsOnlyActionClients {
     rclcpp_action::Client<example_interfaces::action::Fibonacci>::SharedPtr fibonacci;
     rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigate_to_pose;
 };
 
-template <typename DerivedContextType> struct ActionClientNodeContext : cake::Context {
-    ActionClientNodePublishers<DerivedContextType> publishers;
-    ActionClientNodeSubscribers<DerivedContextType> subscribers;
-    ActionClientNodeServices<DerivedContextType> services;
-    ActionClientNodeServiceClients<DerivedContextType> service_clients;
-    ActionClientNodeActions<DerivedContextType> actions;
-    ActionClientNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct ActionClientsOnlyContext : cake::Context {
+    ActionClientsOnlyPublishers<DerivedContextType> publishers;
+    ActionClientsOnlySubscribers<DerivedContextType> subscribers;
+    ActionClientsOnlyServices<DerivedContextType> services;
+    ActionClientsOnlyServiceClients<DerivedContextType> service_clients;
+    ActionClientsOnlyActions<DerivedContextType> actions;
+    ActionClientsOnlyActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -43,11 +43,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class ActionClientNodeBase : public cake::BaseNode<"action_client_node", extend_options> {
+class ActionClientsOnlyBase : public cake::BaseNode<"action_clients_only", extend_options> {
   public:
-    explicit ActionClientNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"action_client_node", extend_options>(options) {
+    explicit ActionClientsOnlyBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"action_clients_only", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<ActionClientNodeContext<ContextType>, ContextType>, "ContextType must be a child of ActionClientNodeContext"
+            std::is_base_of_v<ActionClientsOnlyContext<ContextType>, ContextType>, "ContextType must be a child of ActionClientsOnlyContext"
         );
 
         // init context
@@ -64,4 +64,4 @@ class ActionClientNodeBase : public cake::BaseNode<"action_client_node", extend_
     }
 };
 
-} // namespace test_package::action_client_node
+} // namespace test_package::action_clients_only

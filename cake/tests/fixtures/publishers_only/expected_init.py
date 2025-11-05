@@ -1,7 +1,7 @@
-from ._interface import PubNodeContext, run
+from ._interface import PublishersOnlyContext, run
 from ._parameters import parameters
 
 Params = parameters.Params
 ParamListener = parameters.ParamListener
 
-__all__ = ["PubNodeContext", "run", "Params", "ParamListener"]
+__all__ = ["PublishersOnlyContext", "run", "Params", "ParamListener"]

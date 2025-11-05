@@ -8,32 +8,32 @@
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
-#include <test_package/pub_node_parameters.hpp>
+#include <test_package/publishers_only_parameters.hpp>
 
-namespace test_package::pub_node {
+namespace test_package::publishers_only {
 
-template <typename ContextType> struct PubNodePublishers {
+template <typename ContextType> struct PublishersOnlyPublishers {
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr counter;
 };
 
-template <typename ContextType> struct PubNodeSubscribers {};
+template <typename ContextType> struct PublishersOnlySubscribers {};
 
-template <typename ContextType> struct PubNodeServices {};
+template <typename ContextType> struct PublishersOnlyServices {};
 
-template <typename ContextType> struct PubNodeServiceClients {};
+template <typename ContextType> struct PublishersOnlyServiceClients {};
 
-template <typename ContextType> struct PubNodeActions {};
+template <typename ContextType> struct PublishersOnlyActions {};
 
-template <typename ContextType> struct PubNodeActionClients {};
+template <typename ContextType> struct PublishersOnlyActionClients {};
 
-template <typename DerivedContextType> struct PubNodeContext : cake::Context {
-    PubNodePublishers<DerivedContextType> publishers;
-    PubNodeSubscribers<DerivedContextType> subscribers;
-    PubNodeServices<DerivedContextType> services;
-    PubNodeServiceClients<DerivedContextType> service_clients;
-    PubNodeActions<DerivedContextType> actions;
-    PubNodeActionClients<DerivedContextType> action_clients;
+template <typename DerivedContextType> struct PublishersOnlyContext : cake::Context {
+    PublishersOnlyPublishers<DerivedContextType> publishers;
+    PublishersOnlySubscribers<DerivedContextType> subscribers;
+    PublishersOnlyServices<DerivedContextType> services;
+    PublishersOnlyServiceClients<DerivedContextType> service_clients;
+    PublishersOnlyActions<DerivedContextType> actions;
+    PublishersOnlyActionClients<DerivedContextType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -43,11 +43,11 @@ template <
     typename ContextType,
     auto init_func,
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class PubNodeBase : public cake::BaseNode<"pub_node", extend_options> {
+class PublishersOnlyBase : public cake::BaseNode<"publishers_only", extend_options> {
   public:
-    explicit PubNodeBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"pub_node", extend_options>(options) {
+    explicit PublishersOnlyBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"publishers_only", extend_options>(options) {
         static_assert(
-            std::is_base_of_v<PubNodeContext<ContextType>, ContextType>, "ContextType must be a child of PubNodeContext"
+            std::is_base_of_v<PublishersOnlyContext<ContextType>, ContextType>, "ContextType must be a child of PublishersOnlyContext"
         );
 
         // init context
@@ -65,4 +65,4 @@ class PubNodeBase : public cake::BaseNode<"pub_node", extend_options> {
     }
 };
 
-} // namespace test_package::pub_node
+} // namespace test_package::publishers_only
