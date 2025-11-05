@@ -446,11 +446,6 @@ publishers:
     assert "__cake_dummy:" in params_content
 
 
-# ============================================================================
-# Python code generation tests
-# ============================================================================
-
-
 def get_python_test_cases():
     """Discover all test fixtures with Python expected outputs."""
     test_cases = []
@@ -813,6 +808,511 @@ subscribers:
     # Check usage
     assert "qos_profile_system_default" in content.split("def run")[1], "Should use qos_profile_system_default"
     assert "qos_profile_sensor_data" in content.split("def run")[1], "Should use qos_profile_sensor_data"
+
+
+def test_qos_invalid_reliability_value(tmp_path):
+    """Test that invalid QoS reliability value produces clear error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      reliability: invalid_value
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid QoS reliability" in result.stderr
+    assert "invalid_value" in result.stderr
+    assert "best_effort" in result.stderr or "reliable" in result.stderr
+
+
+def test_qos_unknown_parameter(tmp_path):
+    """Test that unknown QoS parameter (typo) produces helpful error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      reliabilty: reliable
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Unknown QoS parameter" in result.stderr
+    assert "reliabilty" in result.stderr
+
+
+def test_qos_negative_depth(tmp_path):
+    """Test that negative QoS depth produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      depth: -5
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid QoS depth" in result.stderr
+    assert "non-negative" in result.stderr
+
+
+def test_qos_invalid_profile_name(tmp_path):
+    """Test that invalid QoS profile name produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos: UnknownProfileQoS
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Unknown QoS profile" in result.stderr
+    assert "UnknownProfileQoS" in result.stderr
+
+
+def test_ros_type_missing_slash(tmp_path):
+    """Test that malformed ROS type (missing slash) produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+    type: std_msgsmsgString
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid" in result.stderr and "type" in result.stderr
+    assert "std_msgsmsgString" in result.stderr
+
+
+def test_ros_type_empty_package(tmp_path):
+    """Test that ROS type with empty package name produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+    type: /msg/String
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid" in result.stderr and "type" in result.stderr
+    assert "empty" in result.stderr
+
+
+def test_topic_invalid_characters(tmp_path):
+    """Test that topic name with invalid characters produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test@topic#
+    type: std_msgs/msg/String
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid" in result.stderr and "name" in result.stderr
+    assert "invalid characters" in result.stderr
+
+
+def test_topic_valid_without_leading_slash(tmp_path):
+    """Test that topic name without leading slash is accepted."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: cmd_vel
+    type: geometry_msgs/msg/Twist
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Should accept topic without leading slash. stderr: {result.stderr}"
+
+
+def test_publisher_missing_topic(tmp_path):
+    """Test that publisher without topic field produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - type: std_msgs/msg/String
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "missing required field 'topic'" in result.stderr
+
+
+def test_publisher_missing_type(tmp_path):
+    """Test that publisher without type field produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "missing required field 'type'" in result.stderr
+
+
+def test_subscriber_missing_fields(tmp_path):
+    """Test that subscriber without required fields produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+subscribers:
+  - topic: /test
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "missing required field 'type'" in result.stderr
+
+
+def test_service_missing_name(tmp_path):
+    """Test that service without name field produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+services:
+  - type: example_interfaces/srv/AddTwoInts
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "missing required field 'name'" in result.stderr
+
+
+def test_very_long_topic_name(tmp_path):
+    """Test that very long topic name is accepted."""
+    long_name = "/" + "a" * 200
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        f"""node:
+  name: test_node
+  package: ${{THIS_PACKAGE}}
+publishers:
+  - topic: {long_name}
+    type: std_msgs/msg/String
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Should accept long topic names. stderr: {result.stderr}"
+
+
+def test_qos_negative_deadline(tmp_path):
+    """Test that negative deadline duration produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      deadline:
+        sec: -1
+        nsec: 0
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid QoS deadline" in result.stderr
+    assert "non-negative" in result.stderr
 
 
 if __name__ == "__main__":

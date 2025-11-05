@@ -110,7 +110,7 @@ class parameters:
             updated_params = self.get_params()
             # declare all parameters and give default values to non-required ones
             if not self.node_.has_parameter(self.prefix_ + "__cake_dummy"):
-                descriptor = ParameterDescriptor(description="Dummy parameter", read_only = True)
+                descriptor = ParameterDescriptor(description="Dummy parameter (cake generates this when no parameters are defined)", read_only = True)
                 parameter = updated_params.__cake_dummy
                 self.node_.declare_parameter(self.prefix_ + "__cake_dummy", parameter, descriptor)
 
