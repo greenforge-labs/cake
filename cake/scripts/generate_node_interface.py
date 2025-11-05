@@ -1123,10 +1123,10 @@ __all__ = ["{context_class}", "run", "Params", "ParamListener"]
 def main():
     parser = argparse.ArgumentParser(description="Generate cake node interface from YAML")
     parser.add_argument("interface_yaml", help="Path to interface.yaml file")
-    parser.add_argument("--language", choices=["cpp", "python"], default="cpp", help="Target language")
+    parser.add_argument("--language", help="Target language (cpp or python)", choices=["cpp", "python"], required=True)
     parser.add_argument("--package", help="Package name to substitute for ${THIS_PACKAGE}", required=True)
     parser.add_argument("--node-name", help="Node name to substitute for ${THIS_NODE}", required=True)
-    parser.add_argument("--output", required=True, help="Output directory path (for both C++ and Python)")
+    parser.add_argument("--output", help="Output directory path (for both C++ and Python)", required=True)
 
     args = parser.parse_args()
 
