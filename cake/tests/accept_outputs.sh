@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to accept all test outputs by copying {fixture_name}_interface.hpp to expected_output.hpp
+# Script to accept all test outputs by copying generated_* directories to expected_* directories
 # This updates the expected outputs for all test fixtures
 
 set -e
@@ -17,25 +17,43 @@ fi
 echo "Accepting all test outputs..."
 echo "================================"
 
-count=0
+cpp_count=0
+python_count=0
+
 for fixture_dir in "$FIXTURES_DIR"/*/; do
     if [ -d "$fixture_dir" ]; then
         fixture_name=$(basename "$fixture_dir")
-        # New filename pattern: {fixture_name}_interface.hpp
-        generated_file="$fixture_dir/${fixture_name}_interface.hpp"
-        expected_file="$fixture_dir/expected_output.hpp"
 
-        if [ -f "$generated_file" ]; then
-            cp "$generated_file" "$expected_file"
-            echo "✓ Accepted: $fixture_name"
-            count=$((count + 1))
-        else
-            echo "⚠ Skipped: $fixture_name (no ${fixture_name}_interface.hpp found)"
+        # Accept C++ outputs
+        generated_cpp="$fixture_dir/generated_cpp"
+        expected_cpp="$fixture_dir/expected_cpp"
+
+        if [ -d "$generated_cpp" ]; then
+            # Remove old expected_cpp if it exists
+            rm -rf "$expected_cpp"
+            # Copy entire directory
+            cp -r "$generated_cpp" "$expected_cpp"
+            echo "✓ Accepted C++: $fixture_name"
+            cpp_count=$((cpp_count + 1))
+        fi
+
+        # Accept Python outputs
+        generated_python="$fixture_dir/generated_python"
+        expected_python="$fixture_dir/expected_python"
+
+        if [ -d "$generated_python" ]; then
+            # Remove old expected_python if it exists
+            rm -rf "$expected_python"
+            # Copy entire directory
+            cp -r "$generated_python" "$expected_python"
+            echo "✓ Accepted Python: $fixture_name"
+            python_count=$((python_count + 1))
         fi
     fi
 done
 
 echo "================================"
-echo "Accepted $count fixture output(s)"
+echo "Accepted $cpp_count C++ fixture(s)"
+echo "Accepted $python_count Python fixture(s)"
 echo ""
 echo "Note: Run ./run_tests.sh to verify the changes"

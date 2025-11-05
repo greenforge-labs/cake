@@ -2,24 +2,29 @@
 
 # auto-generated DO NOT EDIT
 
-import copy
-
-from generate_parameter_library_py.python_validators import ParameterValidators
-import rclpy
+from rcl_interfaces.msg import ParameterDescriptor
+from rcl_interfaces.msg import SetParametersResult
+from rcl_interfaces.msg import FloatingPointRange, IntegerRange
 from rclpy.clock import Clock
 from rclpy.exceptions import InvalidParameterValueException
-import rclpy.parameter
 from rclpy.time import Time
+import copy
+import rclpy
+import rclpy.parameter
+from generate_parameter_library_py.python_validators import ParameterValidators
 
-from rcl_interfaces.msg import FloatingPointRange, IntegerRange, ParameterDescriptor, SetParametersResult
 
 
 class parameters:
+
     class Params:
         # for detecting if the parameter struct has been updated
         stamp_ = Time()
 
-        __cake_dummy = True
+        robot_name = "robot1"
+        update_rate = 10.0
+
+
 
     class ParamListener:
         def __init__(self, node, prefix=""):
@@ -59,16 +64,15 @@ class parameters:
                 # Unroll nested parameters
                 if isinstance(param_value, dict):
                     nested_params = self.unpack_parameter_dict(
-                        namespace=full_param_name + rclpy.parameter.PARAMETER_SEPARATOR_STRING,
-                        parameter_dict=param_value,
-                    )
+                            namespace=full_param_name + rclpy.parameter.PARAMETER_SEPARATOR_STRING,
+                            parameter_dict=param_value)
                     parameters.extend(nested_params)
                 else:
                     parameters.append(rclpy.parameter.Parameter(full_param_name, value=param_value))
             return parameters
 
         def set_params_from_dict(self, param_dict):
-            params_to_set = self.unpack_parameter_dict("", param_dict)
+            params_to_set = self.unpack_parameter_dict('', param_dict)
             self.update(params_to_set)
 
         def set_user_callback(self, callback):
@@ -83,13 +87,20 @@ class parameters:
 
             # declare any new dynamic parameters
 
+
         def update(self, parameters):
             updated_params = self.get_params()
 
             for param in parameters:
-                if param.name == self.prefix_ + "__cake_dummy":
-                    updated_params.__cake_dummy = param.value
+                if param.name == self.prefix_ + "robot_name":
+                    updated_params.robot_name = param.value
                     self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
+
+                if param.name == self.prefix_ + "update_rate":
+                    updated_params.update_rate = param.value
+                    self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
+
+
 
             updated_params.stamp_ = self.clock_.now()
             self.update_internal_params(updated_params)
@@ -103,15 +114,24 @@ class parameters:
         def declare_params(self):
             updated_params = self.get_params()
             # declare all parameters and give default values to non-required ones
-            if not self.node_.has_parameter(self.prefix_ + "__cake_dummy"):
-                descriptor = ParameterDescriptor(description="Dummy parameter", read_only=True)
-                parameter = updated_params.__cake_dummy
-                self.node_.declare_parameter(self.prefix_ + "__cake_dummy", parameter, descriptor)
+            if not self.node_.has_parameter(self.prefix_ + "robot_name"):
+                descriptor = ParameterDescriptor(description="Name of the robot", read_only = False)
+                parameter = updated_params.robot_name
+                self.node_.declare_parameter(self.prefix_ + "robot_name", parameter, descriptor)
+
+            if not self.node_.has_parameter(self.prefix_ + "update_rate"):
+                descriptor = ParameterDescriptor(description="Update rate in Hz", read_only = False)
+                parameter = updated_params.update_rate
+                self.node_.declare_parameter(self.prefix_ + "update_rate", parameter, descriptor)
 
             # TODO: need validation
             # get parameters and fill struct fields
-            param = self.node_.get_parameter(self.prefix_ + "__cake_dummy")
+            param = self.node_.get_parameter(self.prefix_ + "robot_name")
             self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
-            updated_params.__cake_dummy = param.value
+            updated_params.robot_name = param.value
+            param = self.node_.get_parameter(self.prefix_ + "update_rate")
+            self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
+            updated_params.update_rate = param.value
+
 
             self.update_internal_params(updated_params)

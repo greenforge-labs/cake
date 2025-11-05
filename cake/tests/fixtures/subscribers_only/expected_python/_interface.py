@@ -5,31 +5,30 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
-
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import LaserScan
 
 import cake
 
 from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
-    from test_package.simple_node._parameters import parameters
+    from test_package.subscribers_only._parameters import parameters
 
 
 @dataclass
 class Publishers:
-    cmd_vel: Publisher  # msg_type: geometry_msgs/msg/Twist
+    pass
 
 
 @dataclass
 class Subscribers:
-    odom: cake.Subscriber[Odometry] = field(default_factory=cake.Subscriber[Odometry])
+    sensor_data: cake.Subscriber[LaserScan] = field(default_factory=cake.Subscriber[LaserScan])
+    camera_image: cake.Subscriber[Image] = field(default_factory=cake.Subscriber[Image])
 
 
 @dataclass
-class SimpleNodeContext(cake.Context):
+class SubscribersOnlyContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
 
@@ -37,24 +36,22 @@ class SimpleNodeContext(cake.Context):
     params: parameters.Params
 
 
-T = TypeVar("T", bound=SimpleNodeContext)
+T = TypeVar("T", bound=SubscribersOnlyContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("simple_node")
+    node = rclpy.create_node("subscribers_only")
 
     # initialise publishers
-    publishers = Publishers(
-        cmd_vel=node.create_publisher(Twist, "/cmd_vel", 10),
-    )
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
 
-    from test_package.simple_node._parameters import parameters
+    from test_package.subscribers_only._parameters import parameters
 
     param_listener = parameters.ParamListener(node)
     params = param_listener.get_params()
@@ -68,7 +65,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise subscribers
-    ctx.subscribers.odom._initialise(ctx, Odometry, "/odom", 10)
+    ctx.subscribers.sensor_data._initialise(ctx, LaserScan, "sensor_data", 10)
+    ctx.subscribers.camera_image._initialise(ctx, Image, "camera_image", 1)
 
     init_func(ctx)
 

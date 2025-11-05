@@ -10,10 +10,12 @@ repos:
   rev: 22.10.0
   hooks:
   - id: black
+    exclude: ^cake/tests/fixtures/  # Exclude the fixtures folder
 - repo: https://github.com/pycqa/isort
   rev: 5.13.2
   hooks:
   - id: isort
+    exclude: ^cake/tests/fixtures/  # Exclude the fixtures folder
 - repo: https://github.com/pre-commit/mirrors-clang-format
   rev: v18.1.5
   hooks:

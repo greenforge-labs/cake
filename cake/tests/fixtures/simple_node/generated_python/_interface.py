@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.publisher import Publisher
-
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 

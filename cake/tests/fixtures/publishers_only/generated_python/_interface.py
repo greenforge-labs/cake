@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.publisher import Publisher
-
-from std_msgs.msg import Int32, String
+from std_msgs.msg import Int32
+from std_msgs.msg import String
 
 import cake
 

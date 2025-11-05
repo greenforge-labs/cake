@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-
-from sensor_msgs.msg import Image, LaserScan
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import LaserScan
 
 import cake
 

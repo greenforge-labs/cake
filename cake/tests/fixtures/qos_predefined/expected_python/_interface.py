@@ -12,7 +12,6 @@ from rclpy.qos import (
     qos_profile_services_default,
     qos_profile_system_default,
 )
-
 from std_msgs.msg import String
 
 import cake

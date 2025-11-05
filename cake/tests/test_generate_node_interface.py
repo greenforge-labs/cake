@@ -32,18 +32,22 @@ def get_test_cases():
     for fixture_dir in sorted(FIXTURES_DIR.iterdir()):
         if fixture_dir.is_dir():
             input_file = fixture_dir / "input.yaml"
-            expected_file = fixture_dir / "expected_output.hpp"
-            if input_file.exists() and expected_file.exists():
-                generated_file = fixture_dir / "generated_output.hpp"
-                test_cases.append((fixture_dir.name, input_file, expected_file, generated_file))
+            expected_dir = fixture_dir / "expected_cpp"
+            if input_file.exists() and expected_dir.exists():
+                generated_dir = fixture_dir / "generated_cpp"
+                test_cases.append((fixture_dir.name, input_file, expected_dir, generated_dir))
     return test_cases
 
 
-@pytest.mark.parametrize("test_name,input_file,expected_file,generated_file", get_test_cases())
-def test_generate_node_interface(test_name, input_file, expected_file, generated_file):
+@pytest.mark.parametrize("test_name,input_file,expected_dir,generated_dir", get_test_cases())
+def test_generate_node_interface(test_name, input_file, expected_dir, generated_dir):
     """Test code generation for each fixture."""
-    # Output directory is the fixture directory
-    output_dir = input_file.parent
+    # Clean and create generated directory
+    if generated_dir.exists():
+        import shutil
+
+        shutil.rmtree(generated_dir)
+    generated_dir.mkdir(parents=True)
 
     # Run the generator script with new unified argument structure
     result = subprocess.run(
@@ -58,7 +62,7 @@ def test_generate_node_interface(test_name, input_file, expected_file, generated
             "--node-name",
             test_name,
             "--output",
-            str(output_dir),
+            str(generated_dir),
         ],
         capture_output=True,
         text=True,
@@ -67,35 +71,41 @@ def test_generate_node_interface(test_name, input_file, expected_file, generated
     # Check that script ran successfully
     assert result.returncode == 0, f"Generator script failed for {test_name}:\n{result.stderr}"
 
-    # Generated file will be named {test_name}_interface.hpp
-    actual_generated_file = output_dir / f"{test_name}_interface.hpp"
+    # Compare all files in expected vs generated directories
+    expected_files = sorted(expected_dir.glob("*"))
+    generated_files = sorted(generated_dir.glob("*"))
 
-    # Read expected output
-    with open(expected_file, "r") as f:
-        expected_output = f.read()
+    # Check same number of files
+    assert len(expected_files) == len(generated_files), (
+        f"File count mismatch for {test_name}: " f"expected {len(expected_files)} files, got {len(generated_files)}"
+    )
 
-    # Read generated output
-    with open(actual_generated_file, "r") as f:
-        generated_output = f.read()
+    # Compare each file
+    for exp_file, gen_file in zip(expected_files, generated_files):
+        assert exp_file.name == gen_file.name, f"Filename mismatch for {test_name}: {exp_file.name} != {gen_file.name}"
 
-    # Normalize whitespace for comparison
-    expected_normalized = normalize_whitespace(expected_output)
-    generated_normalized = normalize_whitespace(generated_output)
+        with open(exp_file, "r") as f:
+            expected_content = f.read()
+        with open(gen_file, "r") as f:
+            generated_content = f.read()
 
-    # Compare
-    if expected_normalized != generated_normalized:
-        # Print diff for debugging
-        print(f"\n{'='*60}")
-        print(f"Test: {test_name}")
-        print(f"{'='*60}")
-        print("EXPECTED:")
-        print(expected_normalized)
-        print(f"\n{'-'*60}\n")
-        print("GENERATED:")
-        print(generated_normalized)
-        print(f"{'='*60}\n")
+        # Normalize whitespace for comparison
+        expected_normalized = normalize_whitespace(expected_content)
+        generated_normalized = normalize_whitespace(generated_content)
 
-    assert expected_normalized == generated_normalized, f"Generated output differs for {test_name}"
+        if expected_normalized != generated_normalized:
+            # Print diff for debugging
+            print(f"\n{'='*60}")
+            print(f"Test: {test_name} - File: {exp_file.name}")
+            print(f"{'='*60}")
+            print("EXPECTED:")
+            print(expected_normalized)
+            print(f"\n{'-'*60}\n")
+            print("GENERATED:")
+            print(generated_normalized)
+            print(f"{'='*60}\n")
+
+        assert expected_normalized == generated_normalized, f"Content differs for {test_name} in file {exp_file.name}"
 
 
 def test_missing_node_name(tmp_path):
@@ -447,31 +457,23 @@ def get_python_test_cases():
     for fixture_dir in sorted(FIXTURES_DIR.iterdir()):
         if fixture_dir.is_dir():
             input_file = fixture_dir / "input.yaml"
-            expected_interface = fixture_dir / "expected_interface.py"
-            expected_params = fixture_dir / "expected_parameters.py"
-            expected_init = fixture_dir / "expected_init.py"
+            expected_dir = fixture_dir / "expected_python"
 
-            # Only include if at least the interface file exists
-            if input_file.exists() and expected_interface.exists():
+            # Only include if expected_python directory exists
+            if input_file.exists() and expected_dir.exists():
                 generated_dir = fixture_dir / "generated_python"
-                test_cases.append(
-                    (fixture_dir.name, input_file, expected_interface, expected_params, expected_init, generated_dir)
-                )
+                test_cases.append((fixture_dir.name, input_file, expected_dir, generated_dir))
     return test_cases
 
 
-@pytest.mark.parametrize(
-    "test_name,input_file,expected_interface,expected_params,expected_init,output_dir", get_python_test_cases()
-)
-def test_generate_python_interface(
-    test_name, input_file, expected_interface, expected_params, expected_init, output_dir
-):
+@pytest.mark.parametrize("test_name,input_file,expected_dir,generated_dir", get_python_test_cases())
+def test_generate_python_interface(test_name, input_file, expected_dir, generated_dir):
     """Test Python code generation for each fixture."""
-    # Clean output directory
-    if output_dir.exists():
+    # Clean and create generated directory
+    if generated_dir.exists():
         import shutil
 
-        shutil.rmtree(output_dir)
+        shutil.rmtree(generated_dir)
 
     # Run the generator script with Python language
     result = subprocess.run(
@@ -486,7 +488,7 @@ def test_generate_python_interface(
             "--node-name",
             test_name,
             "--output",
-            str(output_dir),
+            str(generated_dir),
         ],
         capture_output=True,
         text=True,
@@ -495,82 +497,43 @@ def test_generate_python_interface(
     # Check that script ran successfully
     assert result.returncode == 0, f"Generator script failed for {test_name}:\n{result.stderr}"
 
-    # Verify _interface.py
-    generated_interface = output_dir / "_interface.py"
-    assert generated_interface.exists(), f"_interface.py not generated for {test_name}"
+    # Compare all files in expected vs generated directories
+    expected_files = sorted(expected_dir.glob("*.py"))
+    generated_files = sorted(generated_dir.glob("*.py"))
 
-    with open(expected_interface, "r") as f:
-        expected_output = f.read()
-    with open(generated_interface, "r") as f:
-        generated_output = f.read()
+    # Check same number of files
+    assert len(expected_files) == len(generated_files), (
+        f"File count mismatch for {test_name}: " f"expected {len(expected_files)} files, got {len(generated_files)}"
+    )
 
-    expected_normalized = normalize_whitespace(expected_output)
-    generated_normalized = normalize_whitespace(generated_output)
+    # Compare each file
+    for exp_file, gen_file in zip(expected_files, generated_files):
+        assert exp_file.name == gen_file.name, f"Filename mismatch for {test_name}: {exp_file.name} != {gen_file.name}"
 
-    if expected_normalized != generated_normalized:
-        print(f"\n{'='*60}")
-        print(f"Test: {test_name} - _interface.py")
-        print(f"{'='*60}")
-        print("EXPECTED:")
-        print(expected_normalized)
-        print(f"\n{'-'*60}\n")
-        print("GENERATED:")
-        print(generated_normalized)
-        print(f"{'='*60}\n")
+        with open(exp_file, "r") as f:
+            expected_content = f.read()
+        with open(gen_file, "r") as f:
+            generated_content = f.read()
 
-    assert expected_normalized == generated_normalized, f"_interface.py differs for {test_name}"
-
-    # Verify _parameters.py (if expected file exists)
-    generated_params = output_dir / "_parameters.py"
-    assert generated_params.exists(), f"_parameters.py not generated for {test_name}"
-
-    if expected_params.exists():
-        with open(expected_params, "r") as f:
-            expected_output = f.read()
-        with open(generated_params, "r") as f:
-            generated_output = f.read()
-
-        expected_normalized = normalize_whitespace(expected_output)
-        generated_normalized = normalize_whitespace(generated_output)
+        # Normalize whitespace for comparison
+        expected_normalized = normalize_whitespace(expected_content)
+        generated_normalized = normalize_whitespace(generated_content)
 
         if expected_normalized != generated_normalized:
+            # Print diff for debugging
             print(f"\n{'='*60}")
-            print(f"Test: {test_name} - _parameters.py")
+            print(f"Test: {test_name} - File: {exp_file.name}")
             print(f"{'='*60}")
             print("EXPECTED:")
-            print(expected_normalized[:1000])  # Limit output for params
+            # Limit output for parameters files which can be long
+            max_len = 1000 if "_parameters" in exp_file.name else None
+            print(expected_normalized[:max_len])
             print(f"\n{'-'*60}\n")
             print("GENERATED:")
-            print(generated_normalized[:1000])
+            print(generated_normalized[:max_len])
             print(f"{'='*60}\n")
 
-        assert expected_normalized == generated_normalized, f"_parameters.py differs for {test_name}"
-
-    # Verify __init__.py
-    generated_init = output_dir / "__init__.py"
-    assert generated_init.exists(), f"__init__.py not generated for {test_name}"
-
-    if expected_init.exists():
-        with open(expected_init, "r") as f:
-            expected_output = f.read()
-        with open(generated_init, "r") as f:
-            generated_output = f.read()
-
-        expected_normalized = normalize_whitespace(expected_output)
-        generated_normalized = normalize_whitespace(generated_output)
-
-        if expected_normalized != generated_normalized:
-            print(f"\n{'='*60}")
-            print(f"Test: {test_name} - __init__.py")
-            print(f"{'='*60}")
-            print("EXPECTED:")
-            print(expected_normalized)
-            print(f"\n{'-'*60}\n")
-            print("GENERATED:")
-            print(generated_normalized)
-            print(f"{'='*60}\n")
-
-        assert expected_normalized == generated_normalized, f"__init__.py differs for {test_name}"
+        assert expected_normalized == generated_normalized, f"Content differs for {test_name} in file {exp_file.name}"
 
 
 def test_python_syntax_validation(tmp_path):

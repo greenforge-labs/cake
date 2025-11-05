@@ -28,10 +28,17 @@ pytest -v test_generate_node_interface.py::test_generate_node_interface[simple_n
 
 Tests use a fixture-based approach where each test case consists of:
 - `input.yaml` - The interface definition (committed)
-- `expected_output.hpp` - The expected generated code (committed)
-- `{fixture_name}_interface.hpp` - Temporary file created during test run (gitignored)
+- `expected_cpp/` - Expected C++ generated files (committed)
+  - `{fixture_name}_interface.hpp`
+  - `{fixture_name}_interface.params.yaml`
+- `expected_python/` - Expected Python generated files (committed, optional)
+  - `_interface.py`
+  - `_parameters.py`
+  - `__init__.py`
+- `generated_cpp/` - Temporary C++ outputs created during test run (gitignored)
+- `generated_python/` - Temporary Python outputs created during test run (gitignored)
 
-Tests run the actual generator script as a subprocess and compare the generated output file with the expected output file.
+Tests run the actual generator script as a subprocess and compare all files in the generated directories with the expected directories.
 
 ### Test Fixtures
 
@@ -60,8 +67,8 @@ Located in `fixtures/`:
 2. Create `input.yaml`:
    ```yaml
    node:
-       name: my_node
-       package: $THIS_PACKAGE
+       name: ${THIS_NODE}
+       package: ${THIS_PACKAGE}
 
    publishers:
        - topic: my_topic
@@ -69,31 +76,45 @@ Located in `fixtures/`:
          qos: 10
    ```
 
-3. Generate the expected output:
+3. Create the expected output directories:
    ```bash
+   mkdir -p fixtures/my_test_case/expected_cpp
+   # Optional: for Python tests
+   mkdir -p fixtures/my_test_case/expected_python
+   ```
+
+4. Generate outputs:
+   ```bash
+   # For C++
    python3 ../scripts/generate_node_interface.py \
        fixtures/my_test_case/input.yaml \
        --language cpp \
        --package test_package \
        --node-name my_test_case \
-       --output fixtures/my_test_case
-   ```
-   This will generate `my_test_case_interface.hpp` in the fixture directory.
+       --output fixtures/my_test_case/generated_cpp
 
-4. Rename the generated file to `expected_output.hpp`:
+   # For Python (optional)
+   python3 ../scripts/generate_node_interface.py \
+       fixtures/my_test_case/input.yaml \
+       --language python \
+       --package test_package \
+       --node-name my_test_case \
+       --output fixtures/my_test_case/generated_python
+   ```
+
+5. Accept the generated outputs:
    ```bash
-   mv fixtures/my_test_case/my_test_case_interface.hpp \
-      fixtures/my_test_case/expected_output.hpp
+   ./accept_outputs.sh
    ```
 
-5. Review the generated `expected_output.hpp` file and commit it
+6. Review the expected files and commit them
 
-6. Run tests to verify:
+7. Run tests to verify:
    ```bash
    ./run_tests.sh
    ```
 
-Note: Tests will create `{fixture_name}_interface.hpp` files during execution, which are gitignored and can be used for debugging.
+Note: Tests will create `generated_cpp/` and `generated_python/` directories during execution, which are gitignored and can be used for debugging.
 
 ## Accepting Test Outputs
 
@@ -102,11 +123,11 @@ When you make intentional changes to the code generator and need to update all e
 ```bash
 cd cake/tests
 ./run_tests.sh                # Generate new outputs
-./accept_outputs.sh           # Copy generated outputs to expected outputs
+./accept_outputs.sh           # Copy generated_* dirs to expected_* dirs
 ./run_tests.sh                # Verify all tests pass
 ```
 
-The `accept_outputs.sh` script copies all `{fixture_name}_interface.hpp` files to their corresponding `expected_output.hpp` files across all test fixtures. Use this after making generator changes that affect output formatting or functionality.
+The `accept_outputs.sh` script copies all files from `generated_cpp/` and `generated_python/` directories to their corresponding `expected_cpp/` and `expected_python/` directories across all test fixtures. Use this after making generator changes that affect output formatting or functionality.
 
 ## Dependencies
 
@@ -123,7 +144,8 @@ pip install pytest pyyaml
 - These tests are **not** integrated into the colcon build system
 - They are meant to be run manually during development
 - Tests run the generator script as a subprocess (testing actual usage)
-- Generated output files (`{fixture_name}_interface.hpp`) are created during tests and gitignored
+- Generated directories (`generated_cpp/` and `generated_python/`) are created during tests and gitignored
 - Whitespace differences are normalized during comparison
 - Tests verify both valid inputs and error cases
-- For debugging, you can inspect the generated files in each fixture directory after running tests
+- C++ tests now verify both `.hpp` and `.params.yaml` files
+- For debugging, you can inspect the generated files in `generated_cpp/` and `generated_python/` directories after running tests

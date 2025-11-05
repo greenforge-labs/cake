@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.publisher import Publisher
-
 from std_msgs.msg import String
 
 import cake
