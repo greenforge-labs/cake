@@ -5,9 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
-from std_msgs.msg import Int32
-from std_msgs.msg import String
+from rclpy.client import Client
+from rclpy.qos import (
+    QoSProfile,
+)
+from example_interfaces.srv import AddTwoInts
+from std_srvs.srv import Trigger
 
 import cake
 
@@ -18,8 +21,7 @@ from .parameters import Params, ParamListener
 
 @dataclass
 class Publishers:
-    status: Publisher  # msg_type: std_msgs/msg/String
-    counter: Publisher  # msg_type: std_msgs/msg/Int32
+    pass
 
 
 @dataclass
@@ -34,11 +36,12 @@ class Services:
 
 @dataclass
 class ServiceClients:
-    pass
+    add_two_ints: Client  # srv_type: example_interfaces/srv/AddTwoInts
+    trigger_service: Client  # srv_type: std_srvs/srv/Trigger
 
 
 @dataclass
-class PublishersOnlyContext(cake.Context):
+class ServiceClientsOnlyContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
@@ -48,20 +51,17 @@ class PublishersOnlyContext(cake.Context):
     params: Params
 
 
-T = TypeVar("T", bound=PublishersOnlyContext)
+T = TypeVar("T", bound=ServiceClientsOnlyContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("publishers_only")
+    node = rclpy.create_node("service_clients_only")
 
     # initialise publishers
-    publishers = Publishers(
-        status=node.create_publisher(String, "status", 10),
-        counter=node.create_publisher(Int32, "counter", 5),
-    )
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
@@ -70,7 +70,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     services = Services()
 
     # initialise service clients
-    service_clients = ServiceClients()
+    service_clients = ServiceClients(
+        add_two_ints=node.create_client(AddTwoInts, "/add_two_ints"),
+        trigger_service=node.create_client(Trigger, "trigger_service", qos_profile=QoSProfile(depth=10)),
+    )
 
     param_listener = ParamListener(node)
     params = param_listener.get_params()

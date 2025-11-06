@@ -228,6 +228,38 @@ if __name__ == "__main__":
     run(Context, init)
 ```
 
+**Using Services (Python):**
+```python
+def init(ctx: Context):
+    # Set up service request handler
+    ctx.services.reset.set_request_handler(handle_reset)
+
+def handle_reset(ctx: Context, request, response):
+    # Handle the service request
+    ctx.logger.info("Reset service called")
+    response.success = True
+    response.message = "System reset successful"
+    # Access custom context members
+    ctx.my_value = 0.0
+```
+
+**Using Service Clients (Python):**
+```python
+def init(ctx: Context):
+    # Service clients are ready to use immediately
+    # Call service asynchronously
+    request = Trigger.Request()
+    future = ctx.service_clients.trigger_service.call_async(request)
+    future.add_done_callback(lambda f: handle_service_response(ctx, f))
+
+def handle_service_response(ctx: Context, future):
+    try:
+        response = future.result()
+        ctx.logger.info(f"Service response: {response.message}")
+    except Exception as e:
+        ctx.logger.error(f"Service call failed: {e}")
+```
+
 **Generated Python API:**
 - `interface.py` - Contains context class and `run()` function
 - `parameters.py` - Exposes `Params` and `ParamListener`

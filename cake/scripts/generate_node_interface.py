@@ -144,13 +144,14 @@ def validate_topic_name(name: str, field_type: str = "topic") -> None:
         )
 
 
-def validate_qos_spec(qos_spec: Any, context: str = "") -> None:
+def validate_qos_spec(qos_spec: Any, context: str = "", allow_int: bool = True) -> None:
     """
     Validate QoS specification with strict checking.
 
     Args:
         qos_spec: QoS specification (int, str, or dict)
         context: Context string for error messages (e.g., "publisher /cmd_vel")
+        allow_int: Whether to allow integer QoS values (default: True)
 
     Raises:
         QoSValidationError: If QoS spec is invalid
@@ -159,6 +160,12 @@ def validate_qos_spec(qos_spec: Any, context: str = "") -> None:
 
     # Integer (backward compatible) - just check it's non-negative
     if isinstance(qos_spec, int):
+        if not allow_int:
+            raise QoSValidationError(
+                f"Integer QoS not allowed{context_str}. "
+                f"Services and service clients require QoSProfile. "
+                f"Use a predefined profile (e.g., 'ServicesQoS') or custom QoS parameters."
+            )
         if qos_spec < 0:
             raise QoSValidationError(f"Invalid QoS depth{context_str}: must be non-negative, got {qos_spec}")
         return
@@ -287,7 +294,7 @@ def validate_service(srv: Dict[str, Any], index: int) -> None:
     validate_ros_type(srv["type"], "service")
 
     if "qos" in srv:
-        validate_qos_spec(srv["qos"], f"service {srv['name']}")
+        validate_qos_spec(srv["qos"], f"service {srv['name']}", allow_int=False)
 
 
 def validate_service_client(client: Dict[str, Any], index: int) -> None:
@@ -304,7 +311,7 @@ def validate_service_client(client: Dict[str, Any], index: int) -> None:
     validate_ros_type(client["type"], "service")
 
     if "qos" in client:
-        validate_qos_spec(client["qos"], f"service client {client['name']}")
+        validate_qos_spec(client["qos"], f"service client {client['name']}", allow_int=False)
 
 
 def validate_action(action: Dict[str, Any], index: int) -> None:
@@ -869,6 +876,70 @@ def prepare_python_subscribers(subscribers_raw: List[Dict[str, Any]]) -> tuple[L
     return subscribers, all_qos_imports
 
 
+def prepare_python_services(services_raw: List[Dict[str, Any]]) -> tuple[List[Dict[str, str]], Set[str]]:
+    """
+    Prepare service data for Python template rendering.
+    Returns tuple of (services_list, qos_imports_needed)
+    """
+    services = []
+    all_qos_imports = set()
+
+    for srv in services_raw:
+        if not srv.get("manually_created", False):
+            # Services default to None (which means use qos_profile_services_default in Python)
+            qos_value = srv.get("qos", None)
+            if qos_value is not None:
+                # Integer QoS is rejected during validation, so we only handle QoSProfile here
+                qos_code, qos_imports = generate_python_qos_code(qos_value)
+                all_qos_imports.update(qos_imports)
+            else:
+                qos_code = None  # Will use default in template
+
+            services.append(
+                {
+                    "name": srv["name"],
+                    "srv_type": srv["type"],
+                    "srv_class": ros_type_to_python_class(srv["type"]),
+                    "field_name": name_to_field_name(srv["name"]),
+                    "qos_code": qos_code,
+                    "import_stmt": ros_type_to_python_import(srv["type"]),
+                }
+            )
+    return services, all_qos_imports
+
+
+def prepare_python_service_clients(service_clients_raw: List[Dict[str, Any]]) -> tuple[List[Dict[str, str]], Set[str]]:
+    """
+    Prepare service client data for Python template rendering.
+    Returns tuple of (service_clients_list, qos_imports_needed)
+    """
+    service_clients = []
+    all_qos_imports = set()
+
+    for client in service_clients_raw:
+        if not client.get("manually_created", False):
+            # Service clients default to None (which means use qos_profile_services_default in Python)
+            qos_value = client.get("qos", None)
+            if qos_value is not None:
+                # Integer QoS is rejected during validation, so we only handle QoSProfile here
+                qos_code, qos_imports = generate_python_qos_code(qos_value)
+                all_qos_imports.update(qos_imports)
+            else:
+                qos_code = None  # Will use default in template
+
+            service_clients.append(
+                {
+                    "name": client["name"],
+                    "srv_type": client["type"],
+                    "srv_class": ros_type_to_python_class(client["type"]),
+                    "field_name": name_to_field_name(client["name"]),
+                    "qos_code": qos_code,
+                    "import_stmt": ros_type_to_python_import(client["type"]),
+                }
+            )
+    return service_clients, all_qos_imports
+
+
 def collect_includes(
     publishers: List[Dict[str, Any]],
     subscribers: List[Dict[str, Any]],
@@ -1031,13 +1102,17 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
     package_name = interface_data["node"].get("package", "")
     publishers_raw = interface_data.get("publishers", [])
     subscribers_raw = interface_data.get("subscribers", [])
+    services_raw = interface_data.get("services", [])
+    service_clients_raw = interface_data.get("service_clients", [])
 
-    # Prepare template data (Python only supports pub/sub for now)
+    # Prepare template data
     publishers, pub_qos_imports = prepare_python_publishers(publishers_raw)
     subscribers, sub_qos_imports = prepare_python_subscribers(subscribers_raw)
+    services, srv_qos_imports = prepare_python_services(services_raw)
+    service_clients, cli_qos_imports = prepare_python_service_clients(service_clients_raw)
 
     # Collect all QoS imports
-    qos_imports = pub_qos_imports | sub_qos_imports
+    qos_imports = pub_qos_imports | sub_qos_imports | srv_qos_imports | cli_qos_imports
 
     # Collect unique import statements
     message_imports = set()
@@ -1047,6 +1122,12 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
     for sub in subscribers:
         if sub["import_stmt"]:
             message_imports.add(sub["import_stmt"])
+    for srv in services:
+        if srv["import_stmt"]:
+            message_imports.add(srv["import_stmt"])
+    for client in service_clients:
+        if client["import_stmt"]:
+            message_imports.add(client["import_stmt"])
 
     # Convert node_name to context class name
     class_name = "".join(word.capitalize() for word in node_name.split("_"))
@@ -1061,6 +1142,8 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
         qos_imports=qos_imports,
         publishers=publishers,
         subscribers=subscribers,
+        services=services,
+        service_clients=service_clients,
     )
 
 

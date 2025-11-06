@@ -24,9 +24,21 @@ class Subscribers:
 
 
 @dataclass
+class Services:
+    pass
+
+
+@dataclass
+class ServiceClients:
+    pass
+
+
+@dataclass
 class EmptyNodeContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
+    services: Services
+    service_clients: ServiceClients
 
     param_listener: ParamListener
     params: Params
@@ -47,6 +59,12 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # create subscribers - using default constructors
     subscribers = Subscribers()
 
+    # create services - using default constructors
+    services = Services()
+
+    # initialise service clients
+    service_clients = ServiceClients()
+
     param_listener = ParamListener(node)
     params = param_listener.get_params()
 
@@ -54,11 +72,15 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         node=node,
         publishers=publishers,
         subscribers=subscribers,
+        services=services,
+        service_clients=service_clients,
         param_listener=param_listener,
         params=params,
     )
 
     # initialise subscribers
+
+    # initialise services
 
     init_func(ctx)
 

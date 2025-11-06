@@ -1240,6 +1240,80 @@ services:
     assert "missing required field 'name'" in result.stderr
 
 
+def test_service_integer_qos_rejected(tmp_path):
+    """Test that integer QoS is rejected for services."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+services:
+  - name: /my_service
+    type: std_srvs/srv/Trigger
+    qos: 10
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Integer QoS not allowed" in result.stderr
+    assert "Services and service clients require QoSProfile" in result.stderr
+
+
+def test_service_client_integer_qos_rejected(tmp_path):
+    """Test that integer QoS is rejected for service clients."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+service_clients:
+  - name: /my_client
+    type: std_srvs/srv/Trigger
+    qos: 10
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Integer QoS not allowed" in result.stderr
+    assert "Services and service clients require QoSProfile" in result.stderr
+
+
 def test_very_long_topic_name(tmp_path):
     """Test that very long topic name is accepted."""
     long_name = "/" + "a" * 200

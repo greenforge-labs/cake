@@ -6,8 +6,15 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.publisher import Publisher
-from std_msgs.msg import Int32
+from rclpy.qos import (
+    qos_profile_sensor_data,
+    qos_profile_services_default,
+    QoSProfile,
+    ReliabilityPolicy,
+)
+from example_interfaces.srv import AddTwoInts
 from std_msgs.msg import String
+from std_srvs.srv import Trigger
 
 import cake
 
@@ -19,17 +26,17 @@ from .parameters import Params, ParamListener
 @dataclass
 class Publishers:
     status: Publisher  # msg_type: std_msgs/msg/String
-    counter: Publisher  # msg_type: std_msgs/msg/Int32
 
 
 @dataclass
 class Subscribers:
-    pass
+    command: cake.Subscriber[String] = field(default_factory=cake.Subscriber[String])
 
 
 @dataclass
 class Services:
-    pass
+    reset: cake.Service[Trigger] = field(default_factory=cake.Service[Trigger])
+    compute: cake.Service[AddTwoInts] = field(default_factory=cake.Service[AddTwoInts])
 
 
 @dataclass
@@ -38,7 +45,7 @@ class ServiceClients:
 
 
 @dataclass
-class PublishersOnlyContext(cake.Context):
+class ServicesWithPubsubContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
@@ -48,19 +55,18 @@ class PublishersOnlyContext(cake.Context):
     params: Params
 
 
-T = TypeVar("T", bound=PublishersOnlyContext)
+T = TypeVar("T", bound=ServicesWithPubsubContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("publishers_only")
+    node = rclpy.create_node("services_with_pubsub")
 
     # initialise publishers
     publishers = Publishers(
-        status=node.create_publisher(String, "status", 10),
-        counter=node.create_publisher(Int32, "counter", 5),
+        status=node.create_publisher(String, "/status", 10),
     )
 
     # create subscribers - using default constructors
@@ -86,8 +92,11 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise subscribers
+    ctx.subscribers.command._initialise(ctx, String, "/command", qos_profile_sensor_data)
 
     # initialise services
+    ctx.services.reset._initialise(ctx, Trigger, "/reset", qos_profile_services_default)
+    ctx.services.compute._initialise(ctx, AddTwoInts, "compute", QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE))
 
     init_func(ctx)
 

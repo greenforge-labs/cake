@@ -8,4 +8,5 @@ services:
     qos: ServicesQoS
   - name: /math/multiply
     type: example_interfaces/srv/AddTwoInts
-    qos: 10
+    qos:
+      depth: 10

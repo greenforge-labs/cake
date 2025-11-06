@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
-from std_msgs.msg import Int32
-from std_msgs.msg import String
+from rclpy.qos import (
+    qos_profile_services_default,
+    QoSProfile,
+)
+from example_interfaces.srv import AddTwoInts
 
 import cake
 
@@ -18,8 +20,7 @@ from .parameters import Params, ParamListener
 
 @dataclass
 class Publishers:
-    status: Publisher  # msg_type: std_msgs/msg/String
-    counter: Publisher  # msg_type: std_msgs/msg/Int32
+    pass
 
 
 @dataclass
@@ -29,7 +30,8 @@ class Subscribers:
 
 @dataclass
 class Services:
-    pass
+    add_two_ints: cake.Service[AddTwoInts] = field(default_factory=cake.Service[AddTwoInts])
+    math_multiply: cake.Service[AddTwoInts] = field(default_factory=cake.Service[AddTwoInts])
 
 
 @dataclass
@@ -38,7 +40,7 @@ class ServiceClients:
 
 
 @dataclass
-class PublishersOnlyContext(cake.Context):
+class ServicesOnlyContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
@@ -48,20 +50,17 @@ class PublishersOnlyContext(cake.Context):
     params: Params
 
 
-T = TypeVar("T", bound=PublishersOnlyContext)
+T = TypeVar("T", bound=ServicesOnlyContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("publishers_only")
+    node = rclpy.create_node("services_only")
 
     # initialise publishers
-    publishers = Publishers(
-        status=node.create_publisher(String, "status", 10),
-        counter=node.create_publisher(Int32, "counter", 5),
-    )
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
@@ -88,6 +87,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise subscribers
 
     # initialise services
+    ctx.services.add_two_ints._initialise(ctx, AddTwoInts, "add_two_ints", qos_profile_services_default)
+    ctx.services.math_multiply._initialise(ctx, AddTwoInts, "/math/multiply", QoSProfile(depth=10))
 
     init_func(ctx)
 
