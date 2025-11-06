@@ -68,7 +68,7 @@ macro(cake_auto_package)
 
     if(_cake_HAS_CPP)
         # NOTE: CAKE_CPP_PACKAGE_TARGET is part of the cake cmake API
-        set(CAKE_CPP_PACKAGE_TARGET "${PROJECT_NAME}" CACHE INTERNAL "")
+        set(CAKE_CPP_PACKAGE_TARGET "${PROJECT_NAME}")
         _cake_create_package_shared_cpp_library(${CAKE_CPP_PACKAGE_TARGET})
     endif()
 
@@ -178,6 +178,7 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
 
     set(_cake_node_INTERFACE_HEADER_FILE ${_cake_node_LIB_INCLUDE_DIR}/${NODE_NAME}_interface.hpp)
     set(_cake_node_INTERFACE_PARAMS_FILE ${_cake_node_LIB_INCLUDE_DIR}/${NODE_NAME}_interface.params.yaml)
+    set(_cake_node_REGISTRATION_CPP_FILE ${_cake_node_LIB_INCLUDE_DIR}/${NODE_NAME}_registration.cpp)
 
     set(
         _cake_node_CODEGEN_CMD
@@ -195,6 +196,7 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
 
     add_custom_command(
         OUTPUT ${_cake_node_INTERFACE_HEADER_FILE} ${_cake_node_INTERFACE_PARAMS_FILE}
+               ${_cake_node_REGISTRATION_CPP_FILE}
         COMMAND ${_cake_node_CODEGEN_CMD}
         DEPENDS ${YAML_FILE_PATH}
         COMMENT "Generating C++ interface for node '${NODE_NAME}'"
@@ -234,6 +236,15 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
 
     target_link_libraries(${CAKE_CPP_PACKAGE_TARGET} ${_cake_node_PARAMETERS_LIB_NAME})
     message(STATUS "cake: Generated parameters library for node '${NODE_NAME}'")
+
+    # Add the generated registration .cpp file to the package target
+    target_sources(${CAKE_CPP_PACKAGE_TARGET} PRIVATE ${_cake_node_REGISTRATION_CPP_FILE})
+
+    # Add source directory to include path so registration file can find node headers
+    target_include_directories(${CAKE_CPP_PACKAGE_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+    # Ensure the registration file is generated before compiling
+    add_dependencies(${CAKE_CPP_PACKAGE_TARGET} ${_cake_node_INTERFACE_LIB_NAME})
 
     # Register the node as an rclcpp component Convention: ${PROJECT_NAME}::${NODE_NAME}::${NodeNamePascal}
     _cake_snake_to_pascal(_cake_node_CLASS_NAME ${NODE_NAME})

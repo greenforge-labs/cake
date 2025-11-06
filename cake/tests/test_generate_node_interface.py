@@ -1315,6 +1315,55 @@ publishers:
     assert "non-negative" in result.stderr
 
 
+def test_registration_cpp_generation(tmp_path):
+    """Test that registration .cpp file is generated with correct content."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+    name: test_node
+    package: test_package
+
+publishers:
+    - topic: /status
+      type: std_msgs/msg/String
+      qos: 10
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Generator script failed:\n{result.stderr}"
+
+    # Check registration file exists
+    registration_file = tmp_path / "test_node_registration.cpp"
+    assert registration_file.exists(), "Registration file not generated"
+
+    # Verify content
+    with open(registration_file, "r") as f:
+        content = f.read()
+
+    assert "// auto-generated DO NOT EDIT" in content
+    assert '#include "nodes/test_node/test_node.hpp"' in content
+    assert "#include <rclcpp_components/register_node_macro.hpp>" in content
+    assert "RCLCPP_COMPONENTS_REGISTER_NODE(test_package::test_node::TestNode)" in content
+
+
 if __name__ == "__main__":
     # Allow running directly with python
     pytest.main([__file__, "-v"])

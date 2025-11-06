@@ -74,6 +74,3 @@ void init(std::shared_ptr<Context> ctx) {
 }
 
 } // namespace cake_example::my_node
-
-#include <rclcpp_components/register_node_macro.hpp>
-RCLCPP_COMPONENTS_REGISTER_NODE(cake_example::my_node::MyNode);

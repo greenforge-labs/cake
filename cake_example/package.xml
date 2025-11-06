@@ -7,10 +7,7 @@
   <maintainer email="info@greenforgelabs.com.au">Alistair English</maintainer>
   <license>apache2</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-
   <depend>rclcpp</depend>
-  <depend>rclcpp_components</depend>
   <depend>cake</depend>
 
   <depend>std_msgs</depend>

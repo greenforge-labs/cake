@@ -6,6 +6,8 @@ A collection of tools to make ROS2 development easier.
 
 Cake provides code generation tools that reduce boilerplate and make ROS2 node development more maintainable:
 
+- **Automatic Build System**: Single `cake_auto_package()` call handles dependencies, code generation, and component registration
+- **No Boilerplate**: No need to write main() functions or component registration macros for C++ nodes
 - **Node Interface Generator**: Automatically generate C++ and Python node interfaces from YAML definitions
 - **Multi-language Support**: Write nodes in C++, Python, or mix both in the same package
 - **Type-safe Context**: Generated context structures with compile-time (C++) and runtime (Python) type safety
@@ -49,11 +51,8 @@ my_package/
 
 **For C++ nodes:**
 ```xml
-<buildtool_depend>ament_cmake_auto</buildtool_depend>
-
-<depend>rclcpp</depend>
-<depend>rclcpp_components</depend>
 <depend>cake</depend>
+<depend>rclcpp</depend>
 
 <!-- Add your message/service dependencies -->
 <depend>std_msgs</depend>
@@ -61,11 +60,8 @@ my_package/
 
 **For Python nodes:**
 ```xml
-<buildtool_depend>ament_cmake_auto</buildtool_depend>
-<buildtool_depend>ament_cmake_python</buildtool_depend>
-
-<depend>rclpy</depend>
 <depend>cake</depend>
+<depend>rclpy</depend>
 
 <!-- Add your message/service dependencies -->
 <depend>std_msgs</depend>
@@ -73,13 +69,9 @@ my_package/
 
 **For packages with both C++ and Python nodes:**
 ```xml
-<buildtool_depend>ament_cmake_auto</buildtool_depend>
-<buildtool_depend>ament_cmake_python</buildtool_depend>
-
-<depend>rclcpp</depend>
-<depend>rclcpp_components</depend>
-<depend>rclpy</depend>
 <depend>cake</depend>
+<depend>rclcpp</depend>
+<depend>rclpy</depend>
 
 <!-- Add your message/service dependencies -->
 <depend>std_msgs</depend>
@@ -135,19 +127,36 @@ find_package(cake REQUIRED)
 cake_auto_package()
 ```
 
-### 4. Use the Generated Interface
+### 4. Implement Your Node
+
+**C++ Node (`nodes/my_node/my_node.hpp`):**
 
 ```cpp
 #include <my_package/my_node_interface.hpp>
 
 namespace my_package::my_node {
 
-struct MyContext : MyNodeContext<MyContext> {
+struct Context : MyNodeContext<Context> {
     // Add your custom context members here
-    // Parameters are automatically included in MyNodeContext
+    int my_counter = 0;
 };
 
-void init(std::shared_ptr<MyContext> ctx) {
+void init(std::shared_ptr<Context> ctx);
+
+// Define the node type
+using MyNode = MyNodeBase<Context, init>;
+
+} // namespace my_package::my_node
+```
+
+**C++ Implementation (`nodes/my_node/my_node.cpp`):**
+
+```cpp
+#include "my_node.hpp"
+
+namespace my_package::my_node {
+
+void init(std::shared_ptr<Context> ctx) {
     // Parameters are automatically loaded and ready to use
     RCLCPP_INFO(ctx->node->get_logger(), "Update rate: %.2f Hz", ctx->params.update_rate);
 
@@ -159,20 +168,27 @@ void init(std::shared_ptr<MyContext> ctx) {
     ctx->services.reset->set_request_handler(
         [](auto ctx, auto request, auto response) {
             response->success = true;
+            ctx->my_counter++;
         }
     );
 }
 
-using MyNode = MyNodeBase<MyContext, init>;
-
 } // namespace my_package::my_node
+```
 
-int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<MyNode>(rclcpp::NodeOptions()));
-    rclcpp::shutdown();
-    return 0;
-}
+**That's it!** No main() function needed, no component registration macro needed. The node is automatically:
+- Compiled into a shared library
+- Registered as an rclcpp component
+- Given an executable wrapper for `ros2 run`
+
+**Run your node:**
+```bash
+ros2 run my_package my_node
+```
+
+**Or load as a component:**
+```bash
+ros2 component load /ComponentManager my_package my_package::my_node::MyNode
 ```
 
 ### 5. Python Usage
@@ -685,6 +701,7 @@ Completely automates cake package setup - handles dependencies, library creation
 - **For C++ nodes:**
   - Creates the main SHARED library from all `.cpp` files in `nodes/`
   - Sets C++20 as the required C++ standard
+  - Automatically generates component registration code
 - **For Python nodes:**
   - Sets up Python package structure
   - Creates top-level `__init__.py`
@@ -695,9 +712,12 @@ Completely automates cake package setup - handles dependencies, library creation
   - Generates interface code from `interface.yaml`
   - Generates parameters library (always, even if no parameters defined)
   - **For C++ nodes:**
+    - Generates interface header (`${NODE_NAME}_interface.hpp`)
+    - Generates parameters library from interface.yaml
+    - Generates component registration code (`${NODE_NAME}_registration.cpp`)
     - Creates interface library target
     - Creates parameters library target
-    - Links both libraries to `${PROJECT_NAME}`
+    - Links all libraries to `${PROJECT_NAME}`
     - Registers as rclcpp_component with executable wrapper
   - **For Python nodes:**
     - Generates `interface.py`, `_parameters.py`, `parameters.py`, `__init__.py`
@@ -731,9 +751,8 @@ Example `package.xml`:
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
-  <depend>rclcpp</depend>
-  <depend>rclcpp_components</depend>
   <depend>cake</depend>
+  <depend>rclcpp</depend>
 
   <!-- Add your message/service dependencies here -->
   <depend>std_msgs</depend>
@@ -762,7 +781,9 @@ The `ament_auto_find_build_dependencies()` call inside `cake_auto_package()` wil
 - **Plugin class**: `${PROJECT_NAME}::my_node::MyNode`
 - **Interface library**: `my_node_interface`
 - **Parameters library**: `my_node_parameters`
+- **Registration file**: `my_node_registration.cpp` (auto-generated)
 - **Executable**: `my_node`
+- **Component registration**: Automatic via generated registration file
 
 **Python Nodes:**
 - **Package structure**: `${PROJECT_NAME}.${node_name}`
@@ -795,13 +816,20 @@ ament_auto_find_build_dependencies()
 ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 
-# For each node, you had to write:
+# For each node, you had to:
+# 1. Generate the interface
 cake_generate_node_interface(my_node_interface nodes/my_node/interface.yaml)
 target_link_libraries(${PROJECT_NAME} my_node_interface)
 
+# 2. Generate parameters
 generate_parameter_library(my_node_parameters nodes/my_node/parameters.yaml)
 target_link_libraries(${PROJECT_NAME} my_node_parameters)
 
+# 3. Register the component (in your C++ file):
+# #include <rclcpp_components/register_node_macro.hpp>
+# RCLCPP_COMPONENTS_REGISTER_NODE(my_package::my_node::MyNode);
+
+# 4. Create the executable
 rclcpp_components_register_node(${PROJECT_NAME}
     PLUGIN "my_package::my_node::MyNode"
     EXECUTABLE "my_node")

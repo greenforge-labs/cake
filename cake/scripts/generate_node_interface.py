@@ -995,6 +995,28 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     )
 
 
+def generate_registration_cpp(interface_data: Dict[str, Any]) -> str:
+    """Generate the component registration C++ file using Jinja2 template."""
+    # Set up Jinja2 environment
+    template_dir = Path(__file__).parent / "templates"
+    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=False, lstrip_blocks=False)
+    template = env.get_template("node_registration.cpp.jinja2")
+
+    # Extract data
+    node_name = interface_data["node"]["name"]
+    package_name = interface_data["node"].get("package", "")
+    namespace = get_namespace(interface_data)
+    class_name = "".join(word.capitalize() for word in node_name.split("_"))
+
+    # Render template
+    return template.render(
+        node_name=node_name,
+        package_name=package_name,
+        class_name=class_name,
+        namespace=namespace,
+    )
+
+
 def generate_python_interface(interface_data: Dict[str, Any]) -> str:
     """Generate the complete Python interface file using Jinja2 template.
     Assumes template variables have already been substituted in interface_data.
@@ -1178,6 +1200,13 @@ def main():
             f.write(header_content)
 
         print(f"Generated: {header_file}")
+
+        # Generate component registration .cpp file
+        registration_content = generate_registration_cpp(interface_data)
+        registration_file = output_dir / f"{node_name}_registration.cpp"
+        with open(registration_file, "w") as f:
+            f.write(registration_content)
+        print(f"Generated: {registration_file}")
 
         # Always generate parameters.yaml (even if empty)
         if package_name:
