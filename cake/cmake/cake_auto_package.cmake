@@ -63,7 +63,7 @@ function(cake_auto_package)
     if(HAS_CPP)
         # NOTE: CAKE_CPP_PACKAGE_TARGET is part of the cake cmake API
         set(CAKE_CPP_PACKAGE_TARGET "${PROJECT_NAME}" CACHE INTERNAL "")
-        _cake_build_package_shared_cpp_library(${CAKE_CPP_PACKAGE_TARGET})
+        _cake_create_package_shared_cpp_library(${CAKE_CPP_PACKAGE_TARGET})
     endif()
 
     if(HAS_PYTHON)
@@ -82,13 +82,16 @@ function(cake_auto_package)
     ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
 endfunction()
 
-# Build shared C++ library for all C++ nodes Creates a shared library from all .cpp files in nodes/ directory
-function(_cake_build_package_shared_cpp_library)
+# Create shared C++ library for all C++ nodes Creates a shared library from all .cpp files in nodes/ directory
+function(_cake_create_package_shared_cpp_library)
     # NOTE: this uses a slightly implicit path "nodes" because ament_auto_add_library uses a relative path we have
     # already checked the nodes directory exists in cake_auto_package before calling this function
     ament_auto_add_library(${CAKE_CPP_PACKAGE_TARGET} SHARED DIRECTORY nodes)
     target_compile_features(${CAKE_CPP_PACKAGE_TARGET} PUBLIC cxx_std_20)
     message(STATUS "cake: Created C++ library '${CAKE_CPP_PACKAGE_TARGET}'")
+
+    # Propagate ${PROJECT_NAME}_LIBRARIES to parent scope so ament_auto_package() can install it
+    set(${PROJECT_NAME}_LIBRARIES "${${PROJECT_NAME}_LIBRARIES}" PARENT_SCOPE)
 endfunction()
 
 # Create top-level Python package __init__.py Generates and installs __init__.py to make package importable
