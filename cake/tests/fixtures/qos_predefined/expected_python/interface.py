@@ -44,11 +44,23 @@ class ServiceClients:
 
 
 @dataclass
+class Actions:
+    pass
+
+
+@dataclass
+class ActionClients:
+    pass
+
+
+@dataclass
 class QosPredefinedContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
     service_clients: ServiceClients
+    actions: Actions
+    action_clients: ActionClients
 
     param_listener: ParamListener
     params: Params
@@ -78,6 +90,12 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise service clients
     service_clients = ServiceClients()
 
+    # create actions - using default constructors
+    actions = Actions()
+
+    # initialise action clients
+    action_clients = ActionClients()
+
     param_listener = ParamListener(node)
     params = param_listener.get_params()
 
@@ -87,6 +105,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         subscribers=subscribers,
         services=services,
         service_clients=service_clients,
+        actions=actions,
+        action_clients=action_clients,
         param_listener=param_listener,
         params=params,
     )
@@ -96,6 +116,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     ctx.subscribers.services_topic._initialise(ctx, String, "services_topic", qos_profile_services_default)
 
     # initialise services
+
+    # initialise actions
 
     init_func(ctx)
 

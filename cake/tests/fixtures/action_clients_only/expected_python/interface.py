@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from sensor_msgs.msg import Image
-from sensor_msgs.msg import LaserScan
+import rclpy_action
+from example_interfaces.action import Fibonacci
+from nav2_msgs.action import NavigateToPose
 
 import cake
 
@@ -22,8 +23,7 @@ class Publishers:
 
 @dataclass
 class Subscribers:
-    sensor_data: cake.Subscriber[LaserScan] = field(default_factory=cake.Subscriber[LaserScan])
-    camera_image: cake.Subscriber[Image] = field(default_factory=cake.Subscriber[Image])
+    pass
 
 
 @dataclass
@@ -43,11 +43,12 @@ class Actions:
 
 @dataclass
 class ActionClients:
-    pass
+    fibonacci: rclpy_action.ActionClient  # action_type: example_interfaces/action/Fibonacci
+    navigate_to_pose: rclpy_action.ActionClient  # action_type: nav2_msgs/action/NavigateToPose
 
 
 @dataclass
-class SubscribersOnlyContext(cake.Context):
+class ActionClientsOnlyContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
@@ -59,14 +60,14 @@ class SubscribersOnlyContext(cake.Context):
     params: Params
 
 
-T = TypeVar("T", bound=SubscribersOnlyContext)
+T = TypeVar("T", bound=ActionClientsOnlyContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("subscribers_only")
+    node = rclpy.create_node("action_clients_only")
 
     # initialise publishers
     publishers = Publishers()
@@ -84,7 +85,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     actions = Actions()
 
     # initialise action clients
-    action_clients = ActionClients()
+    action_clients = ActionClients(
+        fibonacci=rclpy_action.ActionClient(node, Fibonacci, "/fibonacci"),
+        navigate_to_pose=rclpy_action.ActionClient(node, NavigateToPose, "navigate_to_pose"),
+    )
 
     param_listener = ParamListener(node)
     params = param_listener.get_params()
@@ -102,8 +106,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise subscribers
-    ctx.subscribers.sensor_data._initialise(ctx, LaserScan, "sensor_data", 10)
-    ctx.subscribers.camera_image._initialise(ctx, Image, "camera_image", 1)
 
     # initialise services
 

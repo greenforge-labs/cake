@@ -11,6 +11,9 @@ from rclpy.publisher import Publisher
 {%- if service_clients %}
 from rclpy.client import Client
 {%- endif %}
+{%- if action_clients %}
+import rclpy_action
+{%- endif %}
 {%- if qos_imports %}
 from rclpy.qos import (
 {%- for qos_import in qos_imports|sort %}
@@ -75,11 +78,35 @@ class ServiceClients:
 
 
 @dataclass
+class Actions:
+{%- if actions %}
+{%- for action in actions %}
+    {{ action.field_name }}: cake.SingleGoalActionServer[{{ action.action_class }}] = field(default_factory=cake.SingleGoalActionServer[{{ action.action_class }}])
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class ActionClients:
+{%- if action_clients %}
+{%- for client in action_clients %}
+    {{ client.field_name }}: rclpy_action.ActionClient  # action_type: {{ client.action_type }}
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
 class {{ context_class }}(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
     service_clients: ServiceClients
+    actions: Actions
+    action_clients: ActionClients
 
     param_listener: ParamListener
     params: Params
@@ -122,6 +149,20 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     service_clients = ServiceClients()
 {%- endif %}
 
+    # create actions - using default constructors
+    actions = Actions()
+
+    # initialise action clients
+{%- if action_clients %}
+    action_clients = ActionClients(
+{%- for client in action_clients %}
+        {{ client.field_name }}=rclpy_action.ActionClient(node, {{ client.action_class }}, "{{ client.name }}"),
+{%- endfor %}
+    )
+{%- else %}
+    action_clients = ActionClients()
+{%- endif %}
+
     param_listener = ParamListener(node)
     params = param_listener.get_params()
 
@@ -131,6 +172,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         subscribers=subscribers,
         services=services,
         service_clients=service_clients,
+        actions=actions,
+        action_clients=action_clients,
         param_listener=param_listener,
         params=params,
     )
@@ -143,6 +186,11 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise services
 {%- for srv in services %}
     ctx.services.{{ srv.field_name }}._initialise(ctx, {{ srv.srv_class }}, "{{ srv.name }}"{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
+{%- endfor %}
+
+    # initialise actions
+{%- for action in actions %}
+    ctx.actions.{{ action.field_name }}._initialise(ctx, {{ action.action_class }}, "{{ action.name }}")
 {%- endfor %}
 
     init_func(ctx)

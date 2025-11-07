@@ -85,6 +85,15 @@ template <typename ActionT> class SingleGoalActionServer {
         active_goal_handle_ = nullptr;
     }
 
+    void cancel(std::shared_ptr<typename ActionT::Result> result) {
+        if (!active_goal_handle_) {
+            RCLCPP_WARN(node_->get_logger(), "Action server '%s': Cannot abort, no active goal", server_name_.c_str());
+            return;
+        }
+        active_goal_handle_->canceled(result);
+        active_goal_handle_ = nullptr;
+    }
+
   private:
     rclcpp::Node *node_;
     std::string server_name_;
@@ -132,6 +141,7 @@ template <typename ActionT> class SingleGoalActionServer {
         RCLCPP_INFO(node_->get_logger(), "Action server '%s': Received request to cancel goal", server_name_.c_str());
 
         if (active_goal_handle_ && goal_handle->get_goal_id() == active_goal_handle_->get_goal_id()) {
+            active_goal_handle_->canceled(std::make_shared<typename ActionT::Result>());
             active_goal_handle_ = nullptr;
             RCLCPP_INFO(node_->get_logger(), "Action server '%s': Goal canceled", server_name_.c_str());
         }

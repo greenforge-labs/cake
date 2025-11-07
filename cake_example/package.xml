@@ -8,6 +8,7 @@
   <license>apache2</license>
 
   <depend>rclcpp</depend>
+  <depend>rclpy</depend>
   <depend>cake</depend>
 
   <depend>std_msgs</depend>

@@ -40,11 +40,23 @@ class ServiceClients:
 
 
 @dataclass
+class Actions:
+    pass
+
+
+@dataclass
+class ActionClients:
+    pass
+
+
+@dataclass
 class ServicesOnlyContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
     service_clients: ServiceClients
+    actions: Actions
+    action_clients: ActionClients
 
     param_listener: ParamListener
     params: Params
@@ -71,6 +83,12 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise service clients
     service_clients = ServiceClients()
 
+    # create actions - using default constructors
+    actions = Actions()
+
+    # initialise action clients
+    action_clients = ActionClients()
+
     param_listener = ParamListener(node)
     params = param_listener.get_params()
 
@@ -80,6 +98,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         subscribers=subscribers,
         services=services,
         service_clients=service_clients,
+        actions=actions,
+        action_clients=action_clients,
         param_listener=param_listener,
         params=params,
     )
@@ -89,6 +109,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise services
     ctx.services.add_two_ints._initialise(ctx, AddTwoInts, "add_two_ints", qos_profile_services_default)
     ctx.services.math_multiply._initialise(ctx, AddTwoInts, "/math/multiply", QoSProfile(depth=10))
+
+    # initialise actions
 
     init_func(ctx)
 

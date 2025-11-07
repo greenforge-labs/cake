@@ -51,6 +51,27 @@ void bing_bong_request_handler(
     RCLCPP_INFO(ctx->node->get_logger(), "Bing bong requested!");
 }
 
+void action_callback(std::shared_ptr<Context> ctx) {
+    auto active_goal = ctx->actions.my_action->get_active_goal();
+    if (!active_goal) {
+        ctx->count = 0;
+    }
+
+    if (active_goal) {
+        RCLCPP_INFO(ctx->node->get_logger(), "Got goal! Order: %d", active_goal->order);
+        ctx->count++;
+    }
+
+    if (ctx->count > 10) {
+        auto result = std::make_shared<example_interfaces::action::Fibonacci::Result>();
+        result->sequence.push_back(1);
+        result->sequence.push_back(2);
+        result->sequence.push_back(3);
+        result->sequence.push_back(4);
+        ctx->actions.my_action->succeed(result);
+    }
+}
+
 void init(std::shared_ptr<Context> ctx) {
     RCLCPP_INFO(ctx->node->get_logger(), "Hello from the test range! This is **my_node**.");
     RCLCPP_INFO(ctx->node->get_logger(), "spicy_param value: %s", ctx->params.spicy_param.c_str());
@@ -66,11 +87,10 @@ void init(std::shared_ptr<Context> ctx) {
     cake::create_timer(ctx, 1000ms, [](std::shared_ptr<Context> ctx) {
         ctx->service_clients.bing_bong->async_send_request(std::make_shared<example_interfaces::srv::Trigger::Request>()
         );
-
-        // this is commented out because the action server is not configured. Without configuration, it will just print
-        // a warning message that its not configured and reject all goals.
-        // ctx->action_clients.my_action->async_send_goal(example_interfaces::action::Fibonacci::Goal());
     });
+
+    ctx->actions.my_action->set_options({}); // accept defaults
+    cake::create_timer(ctx, 1000ms, action_callback);
 }
 
 } // namespace cake_example::my_node

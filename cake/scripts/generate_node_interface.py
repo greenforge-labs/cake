@@ -940,6 +940,48 @@ def prepare_python_service_clients(service_clients_raw: List[Dict[str, Any]]) ->
     return service_clients, all_qos_imports
 
 
+def prepare_python_actions(actions_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """
+    Prepare action server data for Python template rendering.
+    Actions don't support QoS configuration.
+    """
+    actions = []
+
+    for action in actions_raw:
+        if not action.get("manually_created", False):
+            actions.append(
+                {
+                    "name": action["name"],
+                    "action_type": action["type"],
+                    "action_class": ros_type_to_python_class(action["type"]),
+                    "field_name": name_to_field_name(action["name"]),
+                    "import_stmt": ros_type_to_python_import(action["type"]),
+                }
+            )
+    return actions
+
+
+def prepare_python_action_clients(action_clients_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """
+    Prepare action client data for Python template rendering.
+    Actions don't support QoS configuration.
+    """
+    action_clients = []
+
+    for client in action_clients_raw:
+        if not client.get("manually_created", False):
+            action_clients.append(
+                {
+                    "name": client["name"],
+                    "action_type": client["type"],
+                    "action_class": ros_type_to_python_class(client["type"]),
+                    "field_name": name_to_field_name(client["name"]),
+                    "import_stmt": ros_type_to_python_import(client["type"]),
+                }
+            )
+    return action_clients
+
+
 def collect_includes(
     publishers: List[Dict[str, Any]],
     subscribers: List[Dict[str, Any]],
@@ -1104,12 +1146,16 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
     subscribers_raw = interface_data.get("subscribers", [])
     services_raw = interface_data.get("services", [])
     service_clients_raw = interface_data.get("service_clients", [])
+    actions_raw = interface_data.get("actions", [])
+    action_clients_raw = interface_data.get("action_clients", [])
 
     # Prepare template data
     publishers, pub_qos_imports = prepare_python_publishers(publishers_raw)
     subscribers, sub_qos_imports = prepare_python_subscribers(subscribers_raw)
     services, srv_qos_imports = prepare_python_services(services_raw)
     service_clients, cli_qos_imports = prepare_python_service_clients(service_clients_raw)
+    actions = prepare_python_actions(actions_raw)
+    action_clients = prepare_python_action_clients(action_clients_raw)
 
     # Collect all QoS imports
     qos_imports = pub_qos_imports | sub_qos_imports | srv_qos_imports | cli_qos_imports
@@ -1128,6 +1174,12 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
     for client in service_clients:
         if client["import_stmt"]:
             message_imports.add(client["import_stmt"])
+    for action in actions:
+        if action["import_stmt"]:
+            message_imports.add(action["import_stmt"])
+    for action_client in action_clients:
+        if action_client["import_stmt"]:
+            message_imports.add(action_client["import_stmt"])
 
     # Convert node_name to context class name
     class_name = "".join(word.capitalize() for word in node_name.split("_"))
@@ -1144,6 +1196,8 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
         subscribers=subscribers,
         services=services,
         service_clients=service_clients,
+        actions=actions,
+        action_clients=action_clients,
     )
 
 
