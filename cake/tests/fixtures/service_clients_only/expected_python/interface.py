@@ -87,7 +87,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         trigger_service=node.create_client(Trigger, "trigger_service", qos_profile=QoSProfile(depth=10)),
     )
 
-    # create actions - using default constructors
+    # initialise actions
     actions = Actions()
 
     # initialise action clients
@@ -111,8 +111,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise subscribers
 
     # initialise services
-
-    # initialise actions
 
     init_func(ctx)
 

@@ -52,7 +52,7 @@ def init(ctx: Context):
     ctx.logger.info("Hello from python cake!")
     ctx.logger.info(f"The parameter is: {ctx.params.special_number}. The context value is: {ctx.important_number}")
     ctx.subscribers.another_topic.set_callback(topic_callback)
-    ctx.actions.my_action_two.set_options(cake.SingleGoalActionServerOptions())
+    ctx.actions.my_action_two.set_options(cake.SingleGoalActionServerOptions(new_goals_replace_current_goal=True))
     cake.create_thread(ctx, thread_func)
     cake.create_timer(ctx, 1, action_func)
 

@@ -12,7 +12,7 @@ from rclpy.publisher import Publisher
 from rclpy.client import Client
 {%- endif %}
 {%- if action_clients %}
-import rclpy_action
+from rclpy.action import ActionClient
 {%- endif %}
 {%- if qos_imports %}
 from rclpy.qos import (
@@ -81,7 +81,7 @@ class ServiceClients:
 class Actions:
 {%- if actions %}
 {%- for action in actions %}
-    {{ action.field_name }}: cake.SingleGoalActionServer[{{ action.action_class }}] = field(default_factory=cake.SingleGoalActionServer[{{ action.action_class }}])
+    {{ action.field_name }}: cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback]
 {%- endfor %}
 {%- else %}
     pass
@@ -92,7 +92,7 @@ class Actions:
 class ActionClients:
 {%- if action_clients %}
 {%- for client in action_clients %}
-    {{ client.field_name }}: rclpy_action.ActionClient  # action_type: {{ client.action_type }}
+    {{ client.field_name }}: ActionClient  # action_type: {{ client.action_type }}
 {%- endfor %}
 {%- else %}
     pass
@@ -149,14 +149,22 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     service_clients = ServiceClients()
 {%- endif %}
 
-    # create actions - using default constructors
+    # initialise actions
+{%- if actions %}
+    actions = Actions(
+{%- for action in actions %}
+        {{ action.field_name }}=cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback](node, {{ action.action_class }}, "{{ action.name }}"),
+{%- endfor %}
+    )
+{%- else %}
     actions = Actions()
+{%- endif %}
 
     # initialise action clients
 {%- if action_clients %}
     action_clients = ActionClients(
 {%- for client in action_clients %}
-        {{ client.field_name }}=rclpy_action.ActionClient(node, {{ client.action_class }}, "{{ client.name }}"),
+        {{ client.field_name }}=ActionClient(node, {{ client.action_class }}, "{{ client.name }}"),
 {%- endfor %}
     )
 {%- else %}
@@ -186,11 +194,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise services
 {%- for srv in services %}
     ctx.services.{{ srv.field_name }}._initialise(ctx, {{ srv.srv_class }}, "{{ srv.name }}"{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
-{%- endfor %}
-
-    # initialise actions
-{%- for action in actions %}
-    ctx.actions.{{ action.field_name }}._initialise(ctx, {{ action.action_class }}, "{{ action.name }}")
 {%- endfor %}
 
     init_func(ctx)

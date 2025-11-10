@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-import rclpy_action
+from rclpy.action import ActionClient
 from example_interfaces.action import Fibonacci
 from nav2_msgs.action import NavigateToPose
 
@@ -43,8 +43,8 @@ class Actions:
 
 @dataclass
 class ActionClients:
-    fibonacci: rclpy_action.ActionClient  # action_type: example_interfaces/action/Fibonacci
-    navigate_to_pose: rclpy_action.ActionClient  # action_type: nav2_msgs/action/NavigateToPose
+    fibonacci: ActionClient  # action_type: example_interfaces/action/Fibonacci
+    navigate_to_pose: ActionClient  # action_type: nav2_msgs/action/NavigateToPose
 
 
 @dataclass
@@ -81,13 +81,13 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise service clients
     service_clients = ServiceClients()
 
-    # create actions - using default constructors
+    # initialise actions
     actions = Actions()
 
     # initialise action clients
     action_clients = ActionClients(
-        fibonacci=rclpy_action.ActionClient(node, Fibonacci, "/fibonacci"),
-        navigate_to_pose=rclpy_action.ActionClient(node, NavigateToPose, "navigate_to_pose"),
+        fibonacci=ActionClient(node, Fibonacci, "/fibonacci"),
+        navigate_to_pose=ActionClient(node, NavigateToPose, "navigate_to_pose"),
     )
 
     param_listener = ParamListener(node)
@@ -108,8 +108,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise subscribers
 
     # initialise services
-
-    # initialise actions
 
     init_func(ctx)
 

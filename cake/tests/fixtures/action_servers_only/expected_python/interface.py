@@ -36,8 +36,8 @@ class ServiceClients:
 
 @dataclass
 class Actions:
-    fibonacci: cake.SingleGoalActionServer[Fibonacci] = field(default_factory=cake.SingleGoalActionServer[Fibonacci])
-    math_compute: cake.SingleGoalActionServer[Fibonacci] = field(default_factory=cake.SingleGoalActionServer[Fibonacci])
+    fibonacci: cake.SingleGoalActionServer[Fibonacci, Fibonacci.Goal, Fibonacci.Result, Fibonacci.Feedback]
+    math_compute: cake.SingleGoalActionServer[Fibonacci, Fibonacci.Goal, Fibonacci.Result, Fibonacci.Feedback]
 
 
 @dataclass
@@ -79,8 +79,11 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise service clients
     service_clients = ServiceClients()
 
-    # create actions - using default constructors
-    actions = Actions()
+    # initialise actions
+    actions = Actions(
+        fibonacci=cake.SingleGoalActionServer[Fibonacci, Fibonacci.Goal, Fibonacci.Result, Fibonacci.Feedback](node, Fibonacci, "fibonacci"),
+        math_compute=cake.SingleGoalActionServer[Fibonacci, Fibonacci.Goal, Fibonacci.Result, Fibonacci.Feedback](node, Fibonacci, "/math/compute"),
+    )
 
     # initialise action clients
     action_clients = ActionClients()
@@ -103,10 +106,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise subscribers
 
     # initialise services
-
-    # initialise actions
-    ctx.actions.fibonacci._initialise(ctx, Fibonacci, "fibonacci")
-    ctx.actions.math_compute._initialise(ctx, Fibonacci, "/math/compute")
 
     init_func(ctx)
 

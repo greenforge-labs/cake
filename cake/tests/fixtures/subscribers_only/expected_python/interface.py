@@ -80,7 +80,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise service clients
     service_clients = ServiceClients()
 
-    # create actions - using default constructors
+    # initialise actions
     actions = Actions()
 
     # initialise action clients
@@ -106,8 +106,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     ctx.subscribers.camera_image._initialise(ctx, Image, "camera_image", 1)
 
     # initialise services
-
-    # initialise actions
 
     init_func(ctx)
 

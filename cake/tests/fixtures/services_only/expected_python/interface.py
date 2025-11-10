@@ -83,7 +83,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise service clients
     service_clients = ServiceClients()
 
-    # create actions - using default constructors
+    # initialise actions
     actions = Actions()
 
     # initialise action clients
@@ -109,8 +109,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise services
     ctx.services.add_two_ints._initialise(ctx, AddTwoInts, "add_two_ints", qos_profile_services_default)
     ctx.services.math_multiply._initialise(ctx, AddTwoInts, "/math/multiply", QoSProfile(depth=10))
-
-    # initialise actions
 
     init_func(ctx)
 
