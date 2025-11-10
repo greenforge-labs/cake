@@ -89,7 +89,7 @@ void init(std::shared_ptr<Context> ctx) {
         );
     });
 
-    ctx->actions.my_action->set_options({}); // accept defaults
+    ctx->actions.my_action->set_options({.new_goals_replace_current_goal = true}); // accept defaults
     cake::create_timer(ctx, 1000ms, action_callback);
 }
 

@@ -85,15 +85,6 @@ template <typename ActionT> class SingleGoalActionServer {
         active_goal_handle_ = nullptr;
     }
 
-    void cancel(std::shared_ptr<typename ActionT::Result> result) {
-        if (!active_goal_handle_) {
-            RCLCPP_WARN(node_->get_logger(), "Action server '%s': Cannot abort, no active goal", server_name_.c_str());
-            return;
-        }
-        active_goal_handle_->canceled(result);
-        active_goal_handle_ = nullptr;
-    }
-
   private:
     rclcpp::Node *node_;
     std::string server_name_;
@@ -121,8 +112,9 @@ template <typename ActionT> class SingleGoalActionServer {
 
         if (active_goal_handle_) {
             if (options_.value().new_goals_replace_current_goal) {
-                RCLCPP_WARN(node_->get_logger(), "Action server '%s': Cancelling current goal", server_name_.c_str());
-                handle_cancel(active_goal_handle_);
+                RCLCPP_WARN(node_->get_logger(), "Action server '%s': Aborting current goal", server_name_.c_str());
+                active_goal_handle_->abort(std::make_shared<typename ActionT::Result>());
+                active_goal_handle_ = nullptr;
             } else {
                 RCLCPP_WARN(
                     node_->get_logger(),
@@ -141,7 +133,9 @@ template <typename ActionT> class SingleGoalActionServer {
         RCLCPP_INFO(node_->get_logger(), "Action server '%s': Received request to cancel goal", server_name_.c_str());
 
         if (active_goal_handle_ && goal_handle->get_goal_id() == active_goal_handle_->get_goal_id()) {
-            active_goal_handle_->canceled(std::make_shared<typename ActionT::Result>());
+            // the reason we can do this without acknowledging the cancellation (active_goal_handle_->canceled()) is
+            // because the rclcpp_action::ServerGoalHandle tries to cancel and then sets its internal state to
+            // "cancelled" in its destructor, so it works out that we end up with an acknowledged cancel anyway
             active_goal_handle_ = nullptr;
             RCLCPP_INFO(node_->get_logger(), "Action server '%s': Goal canceled", server_name_.c_str());
         }
