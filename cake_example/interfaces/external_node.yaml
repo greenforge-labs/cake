@@ -1,0 +1,17 @@
+# An example of documenting the interface of an external node that you reference in a launch file from this package,
+# that isn't documented in your build tree
+node:
+    name: external_node
+    package: external_package
+
+parameters:
+    custom_param:
+        type: string
+        default_value: "custom value"
+        description: "A custom parameter"
+
+publishers:
+    - topic: custom_topic
+      type: std_msgs/msg/String
+      qos:
+        profile: SystemDefaultsQoS

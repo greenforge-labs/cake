@@ -104,6 +104,9 @@ macro(cake_auto_package)
 
     _cake_generate_nodes(${CAKE_NODES_DIR})
 
+    # Process and install interface.yaml files with token replacement
+    _cake_process_and_install_interfaces(${CAKE_NODES_DIR})
+
     # Finalize package with scoped header install directory (best practice). USE_SCOPED_HEADER_INSTALL_DIR is used so
     # that we behave the same way on Jazzy as with Kilted. As far as I can tell, this is a non-breaking change because
     # it also changes which include directory is set with ament_export_include_directories - i.e. it doesn't really
@@ -368,4 +371,85 @@ runpy.run_module('${PROJECT_NAME}.${NODE_NAME}.${NODE_NAME}', run_name='__main__
 
     # Install executable to lib/${PROJECT_NAME}/ for ros2 run
     install(PROGRAMS ${_cake_node_EXECUTABLE_PATH} DESTINATION lib/${PROJECT_NAME})
+endmacro()
+
+# Process and install interface.yaml files from nodes/ and optional top-level interfaces/ directory Performs token
+# replacement for ${THIS_NODE} and ${THIS_PACKAGE}, renames per-node files to node_name.yaml Args: NODES_DIR - Path to
+# nodes/ directory containing node subdirectories
+macro(_cake_process_and_install_interfaces NODES_DIR)
+    set(_cake_interfaces_output_dir "${CMAKE_CURRENT_BINARY_DIR}/interfaces")
+    file(MAKE_DIRECTORY ${_cake_interfaces_output_dir})
+
+    set(_cake_interfaces_files_to_install "")
+    set(_cake_interfaces_installed_names "")
+
+    # Process per-node interface.yaml files
+    file(GLOB _cake_interface_NODE_DIRS RELATIVE ${NODES_DIR} ${NODES_DIR}/*)
+    foreach(_cake_interface_NODE_ENTRY ${_cake_interface_NODE_DIRS})
+        set(_cake_interface_NODE_PATH "${NODES_DIR}/${_cake_interface_NODE_ENTRY}")
+        if(IS_DIRECTORY ${_cake_interface_NODE_PATH})
+            set(_cake_interface_YAML_PATH "${_cake_interface_NODE_PATH}/interface.yaml")
+            if(EXISTS ${_cake_interface_YAML_PATH})
+                # Read the interface.yaml file
+                file(READ ${_cake_interface_YAML_PATH} _cake_interface_content)
+
+                # Replace tokens
+                string(REPLACE "\${THIS_NODE}" "${_cake_interface_NODE_ENTRY}" _cake_interface_content
+                               "${_cake_interface_content}"
+                )
+                string(REPLACE "\${THIS_PACKAGE}" "${PROJECT_NAME}" _cake_interface_content
+                               "${_cake_interface_content}"
+                )
+
+                # Write processed file with node name
+                set(_cake_interface_output_file "${_cake_interfaces_output_dir}/${_cake_interface_NODE_ENTRY}.yaml")
+                file(WRITE ${_cake_interface_output_file} "${_cake_interface_content}")
+
+                list(APPEND _cake_interfaces_files_to_install ${_cake_interface_output_file})
+                list(APPEND _cake_interfaces_installed_names "${_cake_interface_NODE_ENTRY}.yaml")
+
+                message(
+                    STATUS
+                        "cake: Processed interface.yaml for node '${_cake_interface_NODE_ENTRY}' -> ${_cake_interface_NODE_ENTRY}.yaml"
+                )
+            endif()
+        endif()
+    endforeach()
+
+    # Process top-level interfaces/ directory if it exists
+    set(_cake_toplevel_interfaces_dir "${CMAKE_CURRENT_SOURCE_DIR}/interfaces")
+    if(IS_DIRECTORY ${_cake_toplevel_interfaces_dir})
+        file(GLOB _cake_toplevel_interface_files "${_cake_toplevel_interfaces_dir}/*.yaml")
+
+        foreach(_cake_toplevel_interface_file ${_cake_toplevel_interface_files})
+            get_filename_component(_cake_interface_filename ${_cake_toplevel_interface_file} NAME)
+
+            # Check for naming conflicts
+            list(FIND _cake_interfaces_installed_names "${_cake_interface_filename}" _cake_conflict_index)
+            if(NOT _cake_conflict_index EQUAL -1)
+                message(
+                    FATAL_ERROR
+                        "cake: Naming conflict detected! Package-level interfaces/${_cake_interface_filename} conflicts with per-node interface from nodes/. Please rename one of them."
+                )
+            endif()
+
+            # Copy the file to the install folder
+            set(_cake_interface_output_file "${_cake_interfaces_output_dir}/${_cake_interface_filename}")
+            configure_file(${_cake_toplevel_interface_file} ${_cake_interface_output_file} COPYONLY)
+
+            list(APPEND _cake_interfaces_files_to_install ${_cake_interface_output_file})
+            list(APPEND _cake_interfaces_installed_names "${_cake_interface_filename}")
+
+            message(STATUS "cake: Processed package-level interfaces/${_cake_interface_filename}")
+        endforeach()
+    endif()
+
+    # Install all processed interface files
+    if(_cake_interfaces_files_to_install)
+        list(LENGTH _cake_interfaces_files_to_install _cake_interfaces_count)
+        install(FILES ${_cake_interfaces_files_to_install} DESTINATION share/${PROJECT_NAME}/interfaces)
+        message(
+            STATUS "cake: Installing ${_cake_interfaces_count} interface files to share/${PROJECT_NAME}/interfaces/"
+        )
+    endif()
 endmacro()

@@ -740,6 +740,29 @@ Completely automates cake package setup - handles dependencies, library creation
 
 These directories are automatically installed to `share/${PROJECT_NAME}/` without requiring any additional configuration. You can still use `INSTALL_TO_SHARE` to add additional directories beyond these automatically detected ones.
 
+**Automatic Interface Installation:**
+
+`cake_auto_package()` automatically processes and installs all `interface.yaml` files to `share/${PROJECT_NAME}/interfaces/` for documentation and static analysis purposes:
+
+**Per-Node Interfaces:**
+- Each node's `interface.yaml` is automatically renamed and installed as `${NODE_NAME}.yaml`
+- Token replacement is performed:
+  - `${THIS_NODE}` → actual node name
+  - `${THIS_PACKAGE}` → actual package name
+- Example: `nodes/my_node/interface.yaml` → `share/my_package/interfaces/my_node.yaml`
+
+**Package-Level Interfaces (Optional):**
+- You can create an `interfaces/` directory in your package root to document external nodes or nodes implemented without cake
+- Files are installed as-is to `share/${PROJECT_NAME}/interfaces/` **without token replacement**
+- Useful for documenting:
+  - Nodes from other packages referenced in your launch files
+  - Legacy nodes not using cake
+  - Third-party node interfaces
+
+**Conflict Detection:**
+- If a package-level interface file has the same name as a per-node interface (e.g., both `interfaces/my_node.yaml` and `nodes/my_node/interface.yaml` exist), the build will fail with a clear error message
+- This prevents accidental overwrites and ensures explicit naming
+
 **Usage:**
 ```cmake
 # Minimal usage - automatically installs launch/ and config/ if they exist
@@ -783,6 +806,10 @@ cake_auto_package(
     - Installs user Python files
     - Creates executable wrapper using `runpy.run_module()`
 - Automatically detects and installs `launch/` and `config/` directories if present
+- Processes and installs all `interface.yaml` files to `share/${PROJECT_NAME}/interfaces/`:
+  - Per-node interfaces: renamed to `${NODE_NAME}.yaml` with token replacement
+  - Package-level interfaces (from `interfaces/` directory): installed as-is without token replacement
+  - Detects and fails on naming conflicts between sources
 - Installs any additional directories specified via `INSTALL_TO_SHARE` parameter
 - Finalizes the package with `ament_auto_package()`
 
@@ -910,6 +937,9 @@ cake_auto_package()  # Handles everything!
 my_package/
 ├── CMakeLists.txt
 ├── package.xml
+├── interfaces/                # Optional: document external/legacy nodes
+│   ├── external_node.yaml
+│   └── legacy_node.yaml
 └── nodes/
     ├── cpp_node/              # C++ node
     │   ├── cpp_node.hpp
@@ -929,6 +959,9 @@ With this structure, `cake_auto_package()` will automatically:
 - Set up Python nodes with their package structure and executables
 - Generate interfaces and parameters for all nodes
 - Register executables for all nodes (both C++ and Python)
+- Install all interface files to `share/my_package/interfaces/`:
+  - `cpp_node.yaml`, `python_node.yaml`, `another_cpp_node.yaml` (from nodes/, with token replacement)
+  - `external_node.yaml`, `legacy_node.yaml` (from interfaces/, without token replacement)
 
 ---
 

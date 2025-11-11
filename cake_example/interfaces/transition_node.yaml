@@ -1,0 +1,17 @@
+# An example of documenting the interface of a node implemented without cake (this allows static ros graph detection
+# without rewriting the node)
+node:
+    name: transition_node
+    package: cake_example
+
+parameters:
+    custom_param:
+        type: string
+        default_value: "custom value"
+        description: "A custom parameter"
+
+publishers:
+    - topic: custom_topic
+      type: std_msgs/msg/String
+      qos:
+        profile: SystemDefaultsQoS
