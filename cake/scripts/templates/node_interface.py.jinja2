@@ -59,7 +59,7 @@ class Subscribers:
 class Services:
 {%- if services %}
 {%- for srv in services %}
-    {{ srv.field_name }}: cake.Service[{{ srv.srv_class }}] = field(default_factory=cake.Service[{{ srv.srv_class }}])
+    {{ srv.field_name }}: cake.Service[{{ srv.srv_class }}, {{ srv.srv_class }}.Request, {{ srv.srv_class }}.Response] = field(default_factory=cake.Service[{{ srv.srv_class }}, {{ srv.srv_class }}.Request, {{ srv.srv_class }}.Response])
 {%- endfor %}
 {%- else %}
     pass
