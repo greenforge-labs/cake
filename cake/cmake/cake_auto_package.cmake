@@ -50,6 +50,29 @@ endfunction()
 # languages, generates interfaces, builds libraries, and registers components. Requires: nodes/ directory with at least
 # one .cpp or .py file
 macro(cake_auto_package)
+    # Parse optional arguments
+    set(_cake_auto_options "")
+    set(_cake_auto_oneValueArgs "")
+    set(_cake_auto_multiValueArgs "INSTALL_TO_SHARE")
+    cmake_parse_arguments(
+        CAKE_AUTO "${_cake_auto_options}" "${_cake_auto_oneValueArgs}" "${_cake_auto_multiValueArgs}" ${ARGN}
+    )
+
+    # Auto-detect standard directories to install to share
+    set(_cake_auto_detected_dirs "")
+    if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/launch")
+        list(APPEND _cake_auto_detected_dirs "launch")
+    endif()
+    if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/config")
+        list(APPEND _cake_auto_detected_dirs "config")
+    endif()
+
+    # Combine auto-detected directories with user-specified ones
+    set(_cake_install_to_share_combined ${_cake_auto_detected_dirs} ${CAKE_AUTO_INSTALL_TO_SHARE})
+    if(_cake_install_to_share_combined)
+        list(REMOVE_DUPLICATES _cake_install_to_share_combined)
+    endif()
+
     find_package(ament_cmake_auto REQUIRED)
     ament_auto_find_build_dependencies()
 
@@ -85,7 +108,11 @@ macro(cake_auto_package)
     # that we behave the same way on Jazzy as with Kilted. As far as I can tell, this is a non-breaking change because
     # it also changes which include directory is set with ament_export_include_directories - i.e. it doesn't really
     # matter.
-    ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
+    if(_cake_install_to_share_combined)
+        ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR INSTALL_TO_SHARE ${_cake_install_to_share_combined})
+    else()
+        ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
+    endif()
 endmacro()
 
 # Create shared C++ library for all C++ nodes Creates a shared library from all .cpp files in nodes/ directory

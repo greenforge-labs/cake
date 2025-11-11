@@ -127,6 +127,8 @@ find_package(cake REQUIRED)
 cake_auto_package()
 ```
 
+**Note:** If you have `launch/` or `config/` directories in your package root, `cake_auto_package()` will automatically install them to `share/${PROJECT_NAME}/`. See the [CMake API](#cmake-api) section for details on installing additional directories.
+
 ### 4. Implement Your Node
 
 **C++ Node (`nodes/my_node/my_node.hpp`):**
@@ -727,6 +729,31 @@ The code generator includes comprehensive tests. See [tests/README.md](cake/test
 
 Completely automates cake package setup - handles dependencies, library creation, node registration, and package finalization for both C++ and Python nodes.
 
+**Parameters:**
+- `INSTALL_TO_SHARE` - (Optional) List of directories to install to `share/${PROJECT_NAME}/`
+
+**Automatic Directory Detection:**
+
+`cake_auto_package()` automatically detects and installs common ROS2 directories if they exist in your package root:
+- `launch/` - Launch files for ros2 launch
+- `config/` - Configuration files (YAML, JSON, etc.)
+
+These directories are automatically installed to `share/${PROJECT_NAME}/` without requiring any additional configuration. You can still use `INSTALL_TO_SHARE` to add additional directories beyond these automatically detected ones.
+
+**Usage:**
+```cmake
+# Minimal usage - automatically installs launch/ and config/ if they exist
+cake_auto_package()
+
+# Install additional directories beyond auto-detected ones
+cake_auto_package(
+  INSTALL_TO_SHARE
+    rviz
+    meshes
+    urdf
+)
+```
+
 **What it does:**
 - Finds all build dependencies via `ament_auto_find_build_dependencies()`
 - Detects languages used in `nodes/` directory (C++ and/or Python)
@@ -755,6 +782,8 @@ Completely automates cake package setup - handles dependencies, library creation
     - Generates `interface.py`, `_parameters.py`, `parameters.py`, `__init__.py`
     - Installs user Python files
     - Creates executable wrapper using `runpy.run_module()`
+- Automatically detects and installs `launch/` and `config/` directories if present
+- Installs any additional directories specified via `INSTALL_TO_SHARE` parameter
 - Finalizes the package with `ament_auto_package()`
 
 **Requirements:**

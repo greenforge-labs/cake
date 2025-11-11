@@ -15,6 +15,9 @@
   <depend>example_interfaces</depend>
   <depend>example_action</depend>
 
+  <!-- for launch files -->
+  <exec_depend>clingwrap</exec_depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>
