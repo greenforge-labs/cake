@@ -209,6 +209,7 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
     set(_cake_node_INTERFACE_HEADER_FILE ${_cake_node_LIB_INCLUDE_DIR}/${NODE_NAME}_interface.hpp)
     set(_cake_node_INTERFACE_PARAMS_FILE ${_cake_node_LIB_INCLUDE_DIR}/${NODE_NAME}_interface.params.yaml)
     set(_cake_node_REGISTRATION_CPP_FILE ${_cake_node_LIB_INCLUDE_DIR}/${NODE_NAME}_registration.cpp)
+    set(_cake_node_INTERFACE_YAML_FILE ${_cake_node_LIB_INCLUDE_DIR}/${NODE_NAME}.yaml)
 
     set(
         _cake_node_CODEGEN_CMD
@@ -226,7 +227,7 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
 
     add_custom_command(
         OUTPUT ${_cake_node_INTERFACE_HEADER_FILE} ${_cake_node_INTERFACE_PARAMS_FILE}
-               ${_cake_node_REGISTRATION_CPP_FILE}
+               ${_cake_node_REGISTRATION_CPP_FILE} ${_cake_node_INTERFACE_YAML_FILE}
         COMMAND ${_cake_node_CODEGEN_CMD}
         DEPENDS ${YAML_FILE_PATH}
         COMMENT "Generating C++ interface for node '${NODE_NAME}'"
@@ -284,6 +285,9 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
         ${CAKE_CPP_PACKAGE_TARGET} PLUGIN ${_cake_node_PLUGIN_CLASS} EXECUTABLE ${NODE_NAME}
     )
     message(STATUS "cake: Registered component '${_cake_node_PLUGIN_CLASS}' with executable '${NODE_NAME}'")
+
+    # Install the generated interface YAML file
+    install(FILES ${_cake_node_INTERFACE_YAML_FILE} DESTINATION share/${PROJECT_NAME}/interfaces)
 endmacro()
 
 # Generate Python interface and executable wrapper Creates _interface.py, _parameters.py, and executable using
@@ -298,6 +302,7 @@ macro(_cake_generate_python_node NODE_NAME NODE_DIR INTERFACE_YAML)
     set(_cake_node_PARAMETERS_INTERNAL_PY ${_cake_node_PYTHON_GEN_DIR}/_parameters.py)
     set(_cake_node_PARAMETERS_PY ${_cake_node_PYTHON_GEN_DIR}/parameters.py)
     set(_cake_node_INIT_PY ${_cake_node_PYTHON_GEN_DIR}/__init__.py)
+    set(_cake_node_INTERFACE_YAML_FILE ${_cake_node_PYTHON_GEN_DIR}/${NODE_NAME}.yaml)
 
     set(
         _cake_node_CODEGEN_CMD
@@ -315,7 +320,7 @@ macro(_cake_generate_python_node NODE_NAME NODE_DIR INTERFACE_YAML)
 
     add_custom_command(
         OUTPUT ${_cake_node_INTERFACE_PY} ${_cake_node_PARAMETERS_INTERNAL_PY} ${_cake_node_PARAMETERS_PY}
-               ${_cake_node_INIT_PY}
+               ${_cake_node_INIT_PY} ${_cake_node_INTERFACE_YAML_FILE}
         COMMAND ${_cake_node_CODEGEN_CMD}
         DEPENDS ${INTERFACE_YAML}
         DEPENDS ${_cake_codegen_script_BIN}
@@ -324,8 +329,9 @@ macro(_cake_generate_python_node NODE_NAME NODE_DIR INTERFACE_YAML)
     )
 
     add_custom_target(
-        ${NODE_NAME}_interface ALL DEPENDS ${_cake_node_INTERFACE_PY} ${_cake_node_PARAMETERS_INTERNAL_PY}
-                                           ${_cake_node_PARAMETERS_PY} ${_cake_node_INIT_PY}
+        ${NODE_NAME}_interface ALL
+        DEPENDS ${_cake_node_INTERFACE_PY} ${_cake_node_PARAMETERS_INTERNAL_PY} ${_cake_node_PARAMETERS_PY}
+                ${_cake_node_INIT_PY} ${_cake_node_INTERFACE_YAML_FILE}
     )
 
     # Install user Python files to site-packages/${PROJECT_NAME}/${NODE_NAME}/
@@ -371,85 +377,66 @@ runpy.run_module('${PROJECT_NAME}.${NODE_NAME}.${NODE_NAME}', run_name='__main__
 
     # Install executable to lib/${PROJECT_NAME}/ for ros2 run
     install(PROGRAMS ${_cake_node_EXECUTABLE_PATH} DESTINATION lib/${PROJECT_NAME})
+
+    # Install the generated interface YAML file
+    install(FILES ${_cake_node_INTERFACE_YAML_FILE} DESTINATION share/${PROJECT_NAME}/interfaces)
 endmacro()
 
-# Process and install interface.yaml files from nodes/ and optional top-level interfaces/ directory Performs token
-# replacement for ${THIS_NODE} and ${THIS_PACKAGE}, renames per-node files to node_name.yaml Args: NODES_DIR - Path to
-# nodes/ directory containing node subdirectories
+# Process and install top-level interface.yaml files from optional interfaces/ directory. Per-node interface.yaml files
+# are now processed and installed by the code generation script. Args: NODES_DIR - Path to nodes/ directory containing
+# node subdirectories
 macro(_cake_process_and_install_interfaces NODES_DIR)
     set(_cake_interfaces_output_dir "${CMAKE_CURRENT_BINARY_DIR}/interfaces")
     file(MAKE_DIRECTORY ${_cake_interfaces_output_dir})
 
-    set(_cake_interfaces_files_to_install "")
-    set(_cake_interfaces_installed_names "")
-
-    # Process per-node interface.yaml files
+    # Collect expected generated node YAML names (for conflict checking)
+    set(_cake_generated_node_yaml_names "")
     file(GLOB _cake_interface_NODE_DIRS RELATIVE ${NODES_DIR} ${NODES_DIR}/*)
     foreach(_cake_interface_NODE_ENTRY ${_cake_interface_NODE_DIRS})
         set(_cake_interface_NODE_PATH "${NODES_DIR}/${_cake_interface_NODE_ENTRY}")
         if(IS_DIRECTORY ${_cake_interface_NODE_PATH})
             set(_cake_interface_YAML_PATH "${_cake_interface_NODE_PATH}/interface.yaml")
             if(EXISTS ${_cake_interface_YAML_PATH})
-                # Read the interface.yaml file
-                file(READ ${_cake_interface_YAML_PATH} _cake_interface_content)
-
-                # Replace tokens
-                string(REPLACE "\${THIS_NODE}" "${_cake_interface_NODE_ENTRY}" _cake_interface_content
-                               "${_cake_interface_content}"
-                )
-                string(REPLACE "\${THIS_PACKAGE}" "${PROJECT_NAME}" _cake_interface_content
-                               "${_cake_interface_content}"
-                )
-
-                # Write processed file with node name
-                set(_cake_interface_output_file "${_cake_interfaces_output_dir}/${_cake_interface_NODE_ENTRY}.yaml")
-                file(WRITE ${_cake_interface_output_file} "${_cake_interface_content}")
-
-                list(APPEND _cake_interfaces_files_to_install ${_cake_interface_output_file})
-                list(APPEND _cake_interfaces_installed_names "${_cake_interface_NODE_ENTRY}.yaml")
-
-                message(
-                    STATUS
-                        "cake: Processed interface.yaml for node '${_cake_interface_NODE_ENTRY}' -> ${_cake_interface_NODE_ENTRY}.yaml"
-                )
+                list(APPEND _cake_generated_node_yaml_names "${_cake_interface_NODE_ENTRY}.yaml")
             endif()
         endif()
     endforeach()
 
     # Process top-level interfaces/ directory if it exists
     set(_cake_toplevel_interfaces_dir "${CMAKE_CURRENT_SOURCE_DIR}/interfaces")
+    set(_cake_interfaces_files_to_install "")
     if(IS_DIRECTORY ${_cake_toplevel_interfaces_dir})
         file(GLOB _cake_toplevel_interface_files "${_cake_toplevel_interfaces_dir}/*.yaml")
 
         foreach(_cake_toplevel_interface_file ${_cake_toplevel_interface_files})
             get_filename_component(_cake_interface_filename ${_cake_toplevel_interface_file} NAME)
 
-            # Check for naming conflicts
-            list(FIND _cake_interfaces_installed_names "${_cake_interface_filename}" _cake_conflict_index)
+            # Check for naming conflicts with generated node YAML files
+            list(FIND _cake_generated_node_yaml_names "${_cake_interface_filename}" _cake_conflict_index)
             if(NOT _cake_conflict_index EQUAL -1)
                 message(
                     FATAL_ERROR
-                        "cake: Naming conflict detected! Package-level interfaces/${_cake_interface_filename} conflicts with per-node interface from nodes/. Please rename one of them."
+                        "cake: Naming conflict detected! Package-level interfaces/${_cake_interface_filename} conflicts with auto-generated interface YAML for a node. Please rename the package-level file."
                 )
             endif()
 
-            # Copy the file to the install folder
+            # Copy the file to the build directory
             set(_cake_interface_output_file "${_cake_interfaces_output_dir}/${_cake_interface_filename}")
             configure_file(${_cake_toplevel_interface_file} ${_cake_interface_output_file} COPYONLY)
 
             list(APPEND _cake_interfaces_files_to_install ${_cake_interface_output_file})
-            list(APPEND _cake_interfaces_installed_names "${_cake_interface_filename}")
 
             message(STATUS "cake: Processed package-level interfaces/${_cake_interface_filename}")
         endforeach()
     endif()
 
-    # Install all processed interface files
+    # Install top-level interface files
     if(_cake_interfaces_files_to_install)
         list(LENGTH _cake_interfaces_files_to_install _cake_interfaces_count)
         install(FILES ${_cake_interfaces_files_to_install} DESTINATION share/${PROJECT_NAME}/interfaces)
         message(
-            STATUS "cake: Installing ${_cake_interfaces_count} interface files to share/${PROJECT_NAME}/interfaces/"
+            STATUS
+                "cake: Installing ${_cake_interfaces_count} package-level interface files to share/${PROJECT_NAME}/interfaces/"
         )
     endif()
 endmacro()

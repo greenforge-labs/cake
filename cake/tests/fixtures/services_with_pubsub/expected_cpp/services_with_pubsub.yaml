@@ -1,0 +1,21 @@
+node:
+  name: services_with_pubsub
+  package: test_package
+  plugin: test_package::services_with_pubsub::ServicesWithPubsub
+publishers:
+- topic: /status
+  type: std_msgs/msg/String
+  qos: 10
+subscribers:
+- topic: /command
+  type: std_msgs/msg/String
+  qos: SensorDataQoS
+services:
+- name: /reset
+  type: std_srvs/srv/Trigger
+  qos: ServicesQoS
+- name: compute
+  type: example_interfaces/srv/AddTwoInts
+  qos:
+    depth: 5
+    reliability: reliable

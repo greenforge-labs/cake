@@ -1,0 +1,20 @@
+node:
+  name: manually_created
+  package: test_package
+  plugin: test_package::manually_created::ManuallyCreated
+publishers:
+- topic: auto_topic
+  type: std_msgs/msg/String
+  qos: 10
+- topic: manual_topic
+  type: std_msgs/msg/Int32
+  qos: 10
+  manually_created: true
+subscribers:
+- topic: auto_sub
+  type: std_msgs/msg/Bool
+  qos: 10
+- topic: manual_sub
+  type: std_msgs/msg/Float32
+  qos: 10
+  manually_created: true

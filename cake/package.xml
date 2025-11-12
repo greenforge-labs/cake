@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>A collection of things to make ROS2 development easier.</description>
   <maintainer email="info@greenforgelabs.com.au">Alistair English</maintainer>
-  <license>apache2</license>
+  <license>Apache 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_auto</buildtool_depend>

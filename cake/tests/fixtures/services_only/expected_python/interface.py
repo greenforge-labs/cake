@@ -30,8 +30,8 @@ class Subscribers:
 
 @dataclass
 class Services:
-    add_two_ints: cake.Service[AddTwoInts] = field(default_factory=cake.Service[AddTwoInts])
-    math_multiply: cake.Service[AddTwoInts] = field(default_factory=cake.Service[AddTwoInts])
+    add_two_ints: cake.Service[AddTwoInts, AddTwoInts.Request, AddTwoInts.Response] = field(default_factory=cake.Service[AddTwoInts, AddTwoInts.Request, AddTwoInts.Response])
+    math_multiply: cake.Service[AddTwoInts, AddTwoInts.Request, AddTwoInts.Response] = field(default_factory=cake.Service[AddTwoInts, AddTwoInts.Request, AddTwoInts.Response])
 
 
 @dataclass

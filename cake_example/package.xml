@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>An example node using the cake system.</description>
   <maintainer email="info@greenforgelabs.com.au">Alistair English</maintainer>
-  <license>apache2</license>
+  <license>Apache 2.0</license>
 
   <depend>rclcpp</depend>
   <depend>rclpy</depend>

@@ -1,0 +1,11 @@
+node:
+  name: subscribers_only
+  package: test_package
+  plugin: test_package::subscribers_only::SubscribersOnly
+subscribers:
+- topic: sensor_data
+  type: sensor_msgs/msg/LaserScan
+  qos: 10
+- topic: camera_image
+  type: sensor_msgs/msg/Image
+  qos: 1

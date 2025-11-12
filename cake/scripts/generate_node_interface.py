@@ -1060,6 +1060,71 @@ def get_namespace(interface_data: Dict[str, Any]) -> str:
         return node_name
 
 
+def get_class_name(node_name: str) -> str:
+    """
+    Convert snake_case node name to PascalCase class name.
+    Example: "my_node" -> "MyNode"
+    """
+    return "".join(word.capitalize() for word in node_name.split("_"))
+
+
+def get_plugin_name(interface_data: Dict[str, Any]) -> str:
+    """
+    Get the full ROS 2 component plugin name.
+    Format: {package}::{node_name}::{NodeNamePascal}
+    Example: "test_package::test_node::TestNode"
+    Assumes template variables have already been substituted in interface_data.
+    """
+    node_name = interface_data["node"]["name"]
+    namespace = get_namespace(interface_data)
+    class_name = get_class_name(node_name)
+    return f"{namespace}::{class_name}"
+
+
+def generate_interface_yaml(
+    interface_yaml_path: Path,
+    interface_data: Dict[str, Any],
+    package_name: str | None,
+    node_name: str | None,
+    is_cpp: bool,
+) -> str:
+    """
+    Generate processed interface YAML with token replacement and plugin field (for C++).
+
+    Args:
+        interface_yaml_path: Path to the original interface.yaml file
+        interface_data: Parsed interface data (with template variables already substituted)
+        package_name: Package name for token replacement
+        node_name: Node name for token replacement
+        is_cpp: True if generating for C++, False for Python
+
+    Returns:
+        Processed YAML content as string
+    """
+    # Read original interface.yaml file
+    with open(interface_yaml_path, "r") as f:
+        yaml_content = f.read()
+
+    # Perform token replacement on raw text
+    if node_name:
+        yaml_content = yaml_content.replace("${THIS_NODE}", node_name)
+    if package_name:
+        yaml_content = yaml_content.replace("${THIS_PACKAGE}", package_name)
+
+    # Parse the YAML for consistent formatting
+    yaml_data = yaml.safe_load(yaml_content)
+
+    # For C++ nodes, add plugin field under node section
+    if is_cpp:
+        plugin_name = get_plugin_name(interface_data)
+        yaml_data["node"]["plugin"] = plugin_name
+
+    # Serialize back to YAML for consistent formatting
+    yaml_content = yaml.dump(yaml_data, default_flow_style=False, sort_keys=False)
+
+    return yaml_content
+
+
 def generate_header(interface_data: Dict[str, Any]) -> str:
     """Generate the complete C++ header file using Jinja2 template.
     Assumes template variables have already been substituted in interface_data.
@@ -1090,7 +1155,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         publishers_raw, subscribers_raw, services_raw, service_clients_raw, actions_raw, action_clients_raw
     )
     namespace = get_namespace(interface_data)
-    class_name = "".join(word.capitalize() for word in node_name.split("_"))
+    class_name = get_class_name(node_name)
 
     # Render template
     return template.render(
@@ -1119,7 +1184,7 @@ def generate_registration_cpp(interface_data: Dict[str, Any]) -> str:
     node_name = interface_data["node"]["name"]
     package_name = interface_data["node"].get("package", "")
     namespace = get_namespace(interface_data)
-    class_name = "".join(word.capitalize() for word in node_name.split("_"))
+    class_name = get_class_name(node_name)
 
     # Render template
     return template.render(
@@ -1182,7 +1247,7 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
             message_imports.add(action_client["import_stmt"])
 
     # Convert node_name to context class name
-    class_name = "".join(word.capitalize() for word in node_name.split("_"))
+    class_name = get_class_name(node_name)
     context_class = f"{class_name}Context"
 
     # Render template
@@ -1353,6 +1418,15 @@ def main():
                 f.write(params_content)
             print(f"Generated: {params_file}")
 
+        # Generate processed interface YAML with plugin field
+        interface_yaml_content = generate_interface_yaml(
+            interface_path, interface_data, args.package, args.node_name, is_cpp=True
+        )
+        interface_yaml_file = output_dir / f"{node_name}.yaml"
+        with open(interface_yaml_file, "w") as f:
+            f.write(interface_yaml_content)
+        print(f"Generated: {interface_yaml_file}")
+
     elif args.language == "python":
         # Generate Python module files
         output_dir = Path(args.output)
@@ -1385,6 +1459,15 @@ def main():
         with open(init_file, "w") as f:
             f.write(init_content)
         print(f"Generated: {init_file}")
+
+        # Generate processed interface YAML (without plugin field for Python)
+        interface_yaml_content = generate_interface_yaml(
+            interface_path, interface_data, args.package, args.node_name, is_cpp=False
+        )
+        interface_yaml_file = output_dir / f"{node_name}.yaml"
+        with open(interface_yaml_file, "w") as f:
+            f.write(interface_yaml_content)
+        print(f"Generated: {interface_yaml_file}")
 
 
 if __name__ == "__main__":

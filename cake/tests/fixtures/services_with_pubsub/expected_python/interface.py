@@ -35,8 +35,8 @@ class Subscribers:
 
 @dataclass
 class Services:
-    reset: cake.Service[Trigger] = field(default_factory=cake.Service[Trigger])
-    compute: cake.Service[AddTwoInts] = field(default_factory=cake.Service[AddTwoInts])
+    reset: cake.Service[Trigger, Trigger.Request, Trigger.Response] = field(default_factory=cake.Service[Trigger, Trigger.Request, Trigger.Response])
+    compute: cake.Service[AddTwoInts, AddTwoInts.Request, AddTwoInts.Response] = field(default_factory=cake.Service[AddTwoInts, AddTwoInts.Request, AddTwoInts.Response])
 
 
 @dataclass

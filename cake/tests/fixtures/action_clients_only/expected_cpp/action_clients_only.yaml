@@ -1,0 +1,9 @@
+node:
+  name: action_clients_only
+  package: test_package
+  plugin: test_package::action_clients_only::ActionClientsOnly
+action_clients:
+- name: /fibonacci
+  type: example_interfaces/action/Fibonacci
+- name: navigate_to_pose
+  type: nav2_msgs/action/NavigateToPose

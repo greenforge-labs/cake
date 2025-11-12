@@ -492,9 +492,11 @@ def test_generate_python_interface(test_name, input_file, expected_dir, generate
     # Check that script ran successfully
     assert result.returncode == 0, f"Generator script failed for {test_name}:\n{result.stderr}"
 
-    # Compare all files in expected vs generated directories
-    expected_files = sorted(expected_dir.glob("*.py"))
-    generated_files = sorted(generated_dir.glob("*.py"))
+    # Compare all files in expected vs generated directories (including .py and .yaml files)
+    expected_files = sorted(expected_dir.glob("*"))
+    expected_files = [f for f in expected_files if f.is_file()]
+    generated_files = sorted(generated_dir.glob("*"))
+    generated_files = [f for f in generated_files if f.is_file()]
 
     # Check same number of files
     assert len(expected_files) == len(generated_files), (

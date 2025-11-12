@@ -1,0 +1,11 @@
+node:
+  name: services_default_qos
+  package: test_package
+  plugin: test_package::services_default_qos::ServicesDefaultQos
+services:
+- name: /trigger_service
+  type: std_srvs/srv/Trigger
+- name: compute
+  type: example_interfaces/srv/AddTwoInts
+  qos:
+    depth: 10
