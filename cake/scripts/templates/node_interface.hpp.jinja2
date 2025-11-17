@@ -20,7 +20,7 @@
 {%- endif %}
 #include <{{ package_name }}/{{ node_name }}_parameters.hpp>
 
-namespace {{ namespace }} {
+namespace {{ implementation_namespace }} {
 {%- if publishers %}
 
 template <typename ContextType> struct {{ class_name }}Publishers {
@@ -165,4 +165,4 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
     }
 };
 
-} // namespace {{ namespace }}
+} // namespace {{ implementation_namespace }}

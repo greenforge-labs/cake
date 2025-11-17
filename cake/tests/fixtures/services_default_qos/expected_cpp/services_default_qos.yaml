@@ -1,7 +1,7 @@
 node:
   name: services_default_qos
   package: test_package
-  plugin: test_package::services_default_qos::ServicesDefaultQos
+  plugin: test_package::ServicesDefaultQos
 services:
 - name: /trigger_service
   type: std_srvs/srv/Trigger

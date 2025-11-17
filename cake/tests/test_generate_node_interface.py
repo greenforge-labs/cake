@@ -1437,7 +1437,9 @@ publishers:
     assert "// auto-generated DO NOT EDIT" in content
     assert '#include "nodes/test_node/test_node.hpp"' in content
     assert "#include <rclcpp_components/register_node_macro.hpp>" in content
-    assert "RCLCPP_COMPONENTS_REGISTER_NODE(test_package::test_node::TestNode)" in content
+    assert "// Type alias to export the component at the package level" in content
+    assert "using TestNode = test_package::test_node::TestNode" in content
+    assert "RCLCPP_COMPONENTS_REGISTER_NODE(test_package::TestNode)" in content
 
 
 if __name__ == "__main__":

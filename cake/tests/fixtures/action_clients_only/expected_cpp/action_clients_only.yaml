@@ -1,7 +1,7 @@
 node:
   name: action_clients_only
   package: test_package
-  plugin: test_package::action_clients_only::ActionClientsOnly
+  plugin: test_package::ActionClientsOnly
 action_clients:
 - name: /fibonacci
   type: example_interfaces/action/Fibonacci

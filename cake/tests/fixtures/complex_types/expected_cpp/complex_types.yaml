@@ -1,7 +1,7 @@
 node:
   name: complex_types
   package: test_package
-  plugin: test_package::complex_types::ComplexTypes
+  plugin: test_package::ComplexTypes
 publishers:
 - topic: pose
   type: geometry_msgs/msg/PoseStamped

@@ -190,7 +190,7 @@ ros2 run my_package my_node
 
 **Or load as a component:**
 ```bash
-ros2 component load /ComponentManager my_package my_package::my_node::MyNode
+ros2 component load /ComponentManager my_package my_package::MyNode
 ```
 
 ### 5. Python Usage
@@ -276,6 +276,71 @@ from my_package.my_node.parameters import Params, ParamListener
 # Or via submodule
 from my_package.my_node import interface, parameters
 interface.run(Context, init)
+```
+
+## C++ Namespace Structure
+
+Cake uses a two-level namespace structure that separates implementation from component registration:
+
+### Implementation Namespace
+
+Your node implementation lives in a nested namespace to avoid collisions between different nodes:
+
+```cpp
+namespace my_package::my_node {
+    struct Context : MyNodeContext<Context> { /* ... */ };
+    void init(std::shared_ptr<Context> ctx);
+    using MyNode = MyNodeBase<Context, init>;
+}
+```
+
+**Format:** `package_name::node_name`
+
+This keeps all implementation details scoped and prevents naming conflicts when multiple nodes define similar types (e.g., multiple nodes with a `Context` struct).
+
+### Component Registration Namespace
+
+Components are registered and exported with a simplified namespace:
+
+```cpp
+// Automatically generated in *_registration.cpp
+namespace my_package {
+    using MyNode = my_package::my_node::MyNode;
+}
+RCLCPP_COMPONENTS_REGISTER_NODE(my_package::MyNode);
+```
+
+**Format:** `package_name::NodeName`
+
+### How It Works
+
+Cake uses C++ type aliases to expose your nested implementation class at the package level for component registration. This gives you:
+
+✅ **Clean component names**: `my_package::MyNode` instead of `my_package::my_node::MyNode`
+✅ **No name collisions**: Implementation stays safely scoped in `my_package::my_node`
+✅ **Zero user changes**: Your code continues to use the nested namespace as before
+
+### Discovering Components
+
+List available components in a package:
+
+```bash
+$ ros2 component types | grep my_package
+my_package
+  my_package::MyNode
+  my_package::AnotherNode
+```
+
+Load a component:
+
+```bash
+ros2 component load /ComponentManager my_package my_package::MyNode
+```
+
+Or use `ros2 component standalone`:
+
+```bash
+ros2 component standalone my_package my_package::MyNode
 ```
 
 ## Interface YAML Reference
@@ -864,12 +929,13 @@ The `ament_auto_find_build_dependencies()` call inside `cake_auto_package()` wil
 - **C++ standard**: C++20
 - **Source location**: `nodes/` directory
 - **Node directory**: snake_case (e.g., `my_node`)
-- **C++ namespace**: `${PROJECT_NAME}::my_node`
+- **Implementation namespace**: `${PROJECT_NAME}::node_name` (e.g., `my_package::my_node`)
+- **Export namespace**: `${PROJECT_NAME}` (e.g., `my_package`)
 - **C++ class name**: PascalCase (e.g., `MyNode`, auto-converted from snake_case)
-- **Plugin class**: `${PROJECT_NAME}::my_node::MyNode`
+- **Plugin class**: `${PROJECT_NAME}::MyNode` (registered via type alias from implementation namespace)
 - **Interface library**: `my_node_interface`
 - **Parameters library**: `my_node_parameters`
-- **Registration file**: `my_node_registration.cpp` (auto-generated)
+- **Registration file**: `my_node_registration.cpp` (auto-generated, includes type alias)
 - **Executable**: `my_node`
 - **Component registration**: Automatic via generated registration file
 
@@ -915,11 +981,14 @@ target_link_libraries(${PROJECT_NAME} my_node_parameters)
 
 # 3. Register the component (in your C++ file):
 # #include <rclcpp_components/register_node_macro.hpp>
-# RCLCPP_COMPONENTS_REGISTER_NODE(my_package::my_node::MyNode);
+# namespace my_package {
+#     using MyNode = my_package::my_node::MyNode;
+# }
+# RCLCPP_COMPONENTS_REGISTER_NODE(my_package::MyNode);
 
 # 4. Create the executable
 rclcpp_components_register_node(${PROJECT_NAME}
-    PLUGIN "my_package::my_node::MyNode"
+    PLUGIN "my_package::MyNode"
     EXECUTABLE "my_node")
 
 ament_auto_package()

@@ -1,7 +1,7 @@
 node:
   name: qos_predefined
   package: test_package
-  plugin: test_package::qos_predefined::QosPredefined
+  plugin: test_package::QosPredefined
 publishers:
 - topic: sensor_data_topic
   type: std_msgs/msg/String

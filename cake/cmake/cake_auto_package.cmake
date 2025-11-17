@@ -277,9 +277,9 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
     # Ensure the registration file is generated before compiling
     add_dependencies(${CAKE_CPP_PACKAGE_TARGET} ${_cake_node_INTERFACE_LIB_NAME})
 
-    # Register the node as an rclcpp component Convention: ${PROJECT_NAME}::${NODE_NAME}::${NodeNamePascal}
+    # Register the node as an rclcpp component Convention: ${PROJECT_NAME}::${NodeNamePascal}
     _cake_snake_to_pascal(_cake_node_CLASS_NAME ${NODE_NAME})
-    set(_cake_node_PLUGIN_CLASS "${PROJECT_NAME}::${NODE_NAME}::${_cake_node_CLASS_NAME}")
+    set(_cake_node_PLUGIN_CLASS "${PROJECT_NAME}::${_cake_node_CLASS_NAME}")
 
     rclcpp_components_register_node(
         ${CAKE_CPP_PACKAGE_TARGET} PLUGIN ${_cake_node_PLUGIN_CLASS} EXECUTABLE ${NODE_NAME}

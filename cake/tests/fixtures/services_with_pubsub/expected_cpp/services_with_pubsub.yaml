@@ -1,7 +1,7 @@
 node:
   name: services_with_pubsub
   package: test_package
-  plugin: test_package::services_with_pubsub::ServicesWithPubsub
+  plugin: test_package::ServicesWithPubsub
 publishers:
 - topic: /status
   type: std_msgs/msg/String

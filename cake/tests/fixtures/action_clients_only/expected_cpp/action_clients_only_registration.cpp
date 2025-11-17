@@ -3,4 +3,10 @@
 #include "nodes/action_clients_only/action_clients_only.hpp"
 #include <rclcpp_components/register_node_macro.hpp>
 
-RCLCPP_COMPONENTS_REGISTER_NODE(test_package::action_clients_only::ActionClientsOnly);
+// Type alias to export the component at the package level
+// while keeping implementation in package::node_name namespace
+namespace test_package {
+    using ActionClientsOnly = test_package::action_clients_only::ActionClientsOnly;
+}
+
+RCLCPP_COMPONENTS_REGISTER_NODE(test_package::ActionClientsOnly);

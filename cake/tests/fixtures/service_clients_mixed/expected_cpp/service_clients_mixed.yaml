@@ -1,7 +1,7 @@
 node:
   name: service_clients_mixed
   package: test_package
-  plugin: test_package::service_clients_mixed::ServiceClientsMixed
+  plugin: test_package::ServiceClientsMixed
 publishers:
 - topic: /status
   type: std_msgs/msg/String

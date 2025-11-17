@@ -1,7 +1,7 @@
 node:
   name: qos_backward_compat
   package: test_package
-  plugin: test_package::qos_backward_compat::QosBackwardCompat
+  plugin: test_package::QosBackwardCompat
 publishers:
 - topic: int_qos_pub
   type: std_msgs/msg/String

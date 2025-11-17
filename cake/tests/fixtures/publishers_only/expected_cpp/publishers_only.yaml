@@ -1,7 +1,7 @@
 node:
   name: publishers_only
   package: test_package
-  plugin: test_package::publishers_only::PublishersOnly
+  plugin: test_package::PublishersOnly
 publishers:
 - topic: status
   type: std_msgs/msg/String

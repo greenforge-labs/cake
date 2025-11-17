@@ -1,7 +1,7 @@
 node:
   name: qos_custom
   package: test_package
-  plugin: test_package::qos_custom::QosCustom
+  plugin: test_package::QosCustom
 publishers:
 - topic: reliable_topic
   type: std_msgs/msg/String

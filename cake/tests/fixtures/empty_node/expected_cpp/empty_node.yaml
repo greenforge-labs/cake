@@ -1,4 +1,4 @@
 node:
   name: empty_node
   package: test_package
-  plugin: test_package::empty_node::EmptyNode
+  plugin: test_package::EmptyNode

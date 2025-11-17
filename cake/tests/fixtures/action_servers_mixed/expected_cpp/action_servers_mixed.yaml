@@ -1,7 +1,7 @@
 node:
   name: action_servers_mixed
   package: test_package
-  plugin: test_package::action_servers_mixed::ActionServersMixed
+  plugin: test_package::ActionServersMixed
 publishers:
 - topic: /status
   type: std_msgs/msg/String

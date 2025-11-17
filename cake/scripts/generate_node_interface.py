@@ -1046,9 +1046,10 @@ def substitute_template_variables(
             sys.exit(1)
 
 
-def get_namespace(interface_data: Dict[str, Any]) -> str:
+def get_implementation_namespace(interface_data: Dict[str, Any]) -> str:
     """
-    Determine the C++ namespace based on package and node name.
+    Determine the C++ implementation namespace (package::node_name).
+    This is where the actual node implementation lives to avoid name collisions.
     Assumes template variables have already been substituted.
     """
     node_name = interface_data["node"]["name"]
@@ -1058,6 +1059,16 @@ def get_namespace(interface_data: Dict[str, Any]) -> str:
         return f"{package}::{node_name}"
     else:
         return node_name
+
+
+def get_namespace(interface_data: Dict[str, Any]) -> str:
+    """
+    Determine the C++ export namespace (just the package name).
+    This is the namespace used for component registration.
+    Assumes template variables have already been substituted.
+    """
+    package = interface_data["node"].get("package", "")
+    return package if package else ""
 
 
 def get_class_name(node_name: str) -> str:
@@ -1071,14 +1082,18 @@ def get_class_name(node_name: str) -> str:
 def get_plugin_name(interface_data: Dict[str, Any]) -> str:
     """
     Get the full ROS 2 component plugin name.
-    Format: {package}::{node_name}::{NodeNamePascal}
-    Example: "test_package::test_node::TestNode"
+    Format: {package}::{NodeNamePascal}
+    Example: "test_package::TestNode"
     Assumes template variables have already been substituted in interface_data.
     """
     node_name = interface_data["node"]["name"]
-    namespace = get_namespace(interface_data)
+    package = interface_data["node"].get("package", "")
     class_name = get_class_name(node_name)
-    return f"{namespace}::{class_name}"
+
+    if package:
+        return f"{package}::{class_name}"
+    else:
+        return class_name
 
 
 def generate_interface_yaml(
@@ -1154,7 +1169,8 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     message_includes = collect_includes(
         publishers_raw, subscribers_raw, services_raw, service_clients_raw, actions_raw, action_clients_raw
     )
-    namespace = get_namespace(interface_data)
+    implementation_namespace = get_implementation_namespace(interface_data)
+    export_namespace = get_namespace(interface_data)
     class_name = get_class_name(node_name)
 
     # Render template
@@ -1162,7 +1178,8 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         node_name=node_name,
         package_name=package_name,
         class_name=class_name,
-        namespace=namespace,
+        implementation_namespace=implementation_namespace,
+        export_namespace=export_namespace,
         message_includes=message_includes,
         publishers=publishers,
         subscribers=subscribers,
@@ -1183,7 +1200,7 @@ def generate_registration_cpp(interface_data: Dict[str, Any]) -> str:
     # Extract data
     node_name = interface_data["node"]["name"]
     package_name = interface_data["node"].get("package", "")
-    namespace = get_namespace(interface_data)
+    export_namespace = get_namespace(interface_data)
     class_name = get_class_name(node_name)
 
     # Render template
@@ -1191,7 +1208,7 @@ def generate_registration_cpp(interface_data: Dict[str, Any]) -> str:
         node_name=node_name,
         package_name=package_name,
         class_name=class_name,
-        namespace=namespace,
+        export_namespace=export_namespace,
     )
 
 

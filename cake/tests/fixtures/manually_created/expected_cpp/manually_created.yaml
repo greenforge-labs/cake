@@ -1,7 +1,7 @@
 node:
   name: manually_created
   package: test_package
-  plugin: test_package::manually_created::ManuallyCreated
+  plugin: test_package::ManuallyCreated
 publishers:
 - topic: auto_topic
   type: std_msgs/msg/String

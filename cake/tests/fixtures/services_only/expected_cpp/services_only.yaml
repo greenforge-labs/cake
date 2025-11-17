@@ -1,7 +1,7 @@
 node:
   name: services_only
   package: test_package
-  plugin: test_package::services_only::ServicesOnly
+  plugin: test_package::ServicesOnly
 services:
 - name: add_two_ints
   type: example_interfaces/srv/AddTwoInts

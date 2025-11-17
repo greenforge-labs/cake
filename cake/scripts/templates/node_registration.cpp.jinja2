@@ -3,4 +3,10 @@
 #include "nodes/{{ node_name }}/{{ node_name }}.hpp"
 #include <rclcpp_components/register_node_macro.hpp>
 
-RCLCPP_COMPONENTS_REGISTER_NODE({{ namespace }}::{{ class_name }});
+// Type alias to export the component at the package level
+// while keeping implementation in package::node_name namespace
+namespace {{ export_namespace }} {
+    using {{ class_name }} = {{ package_name }}::{{ node_name }}::{{ class_name }};
+}
+
+RCLCPP_COMPONENTS_REGISTER_NODE({{ export_namespace }}::{{ class_name }});
