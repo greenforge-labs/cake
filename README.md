@@ -1,85 +1,27 @@
-# cake
+# Cake
 
-A collection of tools to make ROS2 development easier.
+**Declarative code generation for ROS 2 nodes**
 
-## Overview
+Cake transforms simple YAML interface definitions into strongly-typed C++ and Python ROS 2 node scaffolding. Define your publishers, subscribers, services, and actions in one simple file and Cake will handle the rest.
 
-Cake provides code generation tools that reduce boilerplate and make ROS2 node development more maintainable:
-
-- **Automatic Build System**: Single `cake_auto_package()` call handles dependencies, code generation, and component registration
-- **No Boilerplate**: No need to write main() functions or component registration macros for C++ nodes
-- **Node Interface Generator**: Automatically generate C++ and Python node interfaces from YAML definitions
-- **Multi-language Support**: Write nodes in C++, Python, or mix both in the same package
-- **Type-safe Context**: Generated context structures with compile-time (C++) and runtime (Python) type safety
-- **Declarative ROS2 Interfaces**: Define publishers, subscribers, services, service clients, and actions in YAML
-- **Flexible QoS Configuration**: Support for predefined profiles and custom parameters
-- **Polling-based Actions**: Simple action server implementation designed for main-loop processing
-- **Automatic Parameter Generation**: Parameters defined in YAML are automatically integrated into your node
+Using cake, writing ROS2 nodes becomes a...  <sub>piece of cake (hehe)</sub>
 
 ## Quick Start
 
-### 1. Set Up Your Package Structure
+Cake uses a convention-over-configuration approach with automatic build system integration. Here's how to create a complete ROS 2 package in minutes:
 
-Organize your nodes in a `nodes/` directory:
-
-**C++ Node:**
+### 1. Create Package Structure
+Your package should follow this structure:
 ```
 my_package/
+├── nodes/
+│   └── my_node/
+│       ├── interface.yaml    # Interface definition
+│       ├── my_node.hpp       # Header (C++ only)
+│       └── my_node.cpp       # Implementation (.cpp for C++, .py for Python)
 ├── CMakeLists.txt
-├── package.xml
-└── nodes/
-    └── my_node/
-        ├── my_node.hpp
-        ├── my_node.cpp
-        └── interface.yaml
+└── package.xml
 ```
-
-**Python Node:**
-```
-my_package/
-├── CMakeLists.txt
-├── package.xml
-└── nodes/
-    └── my_python_node/
-        ├── my_python_node.py
-        └── interface.yaml
-```
-
-**Note:** Parameters are defined directly in `interface.yaml` - there's no separate parameters file needed.
-
-**Important:** Make sure your `package.xml` includes all required dependencies:
-
-**For C++ nodes:**
-```xml
-<depend>cake</depend>
-<depend>rclcpp</depend>
-
-<!-- Add your message/service dependencies -->
-<depend>std_msgs</depend>
-```
-
-**For Python nodes:**
-```xml
-<depend>cake</depend>
-<depend>rclpy</depend>
-
-<!-- Add your message/service dependencies -->
-<depend>std_msgs</depend>
-```
-
-**For packages with both C++ and Python nodes:**
-```xml
-<depend>cake</depend>
-<depend>rclcpp</depend>
-<depend>rclpy</depend>
-
-<!-- Add your message/service dependencies -->
-<depend>std_msgs</depend>
-```
-
-Dependencies listed in `package.xml` are automatically found and linked by `cake_auto_package()`.
-
-**Note:** You don't need to add `generate_parameter_library` - it's automatically found by cake.
 
 ### 2. Define Your Node Interface
 
@@ -87,830 +29,176 @@ Create `nodes/my_node/interface.yaml`:
 
 ```yaml
 node:
-    name: my_node
+    name: ${THIS_NODE}
     package: ${THIS_PACKAGE}
 
 parameters:
-    update_rate:
-        type: double
-        default_value: 10.0
-        description: "Update rate in Hz"
+    important_parameter:
+        type: string
+        default_value: "oh hi mark"
+        description: "A very important string."
 
 publishers:
-    - topic: /cmd_vel
-      type: geometry_msgs/msg/Twist
-      qos: 10
+    - topic: some_topic
+      type: std_msgs/msg/String
+      qos:
+        profile: SystemDefaultsQoS
 
 subscribers:
-    - topic: /odom
-      type: nav_msgs/msg/Odometry
-      qos: SensorDataQoS
+    - topic: other_topic
+      type: std_msgs/msg/Bool
+      qos:
+        profile: SensorDataQoS
 
 services:
-    - name: /reset
-      type: std_srvs/srv/Trigger
+    - name: my_service
+      type: example_interfaces/srv/AddTwoInts
 ```
 
-### 3. Configure CMakeLists.txt
+### 3. Implement Your Node
 
-```cmake
-cmake_minimum_required(VERSION 3.22)
-project(my_package)
+Create `nodes/my_node/my_node.cpp` (or `my_node.py` for Python):
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
-endif()
+#### C++ Example
 
-find_package(cake REQUIRED)
+First, create the header (`nodes/my_node/my_node.hpp`):
 
-# Automatically handle all package setup
-cake_auto_package()
-```
-
-**Note:** If you have `launch/` or `config/` directories in your package root, `cake_auto_package()` will automatically install them to `share/${PROJECT_NAME}/`. See the [CMake API](#cmake-api) section for details on installing additional directories.
-
-### 4. Implement Your Node
-
-**C++ Node (`nodes/my_node/my_node.hpp`):**
+> **Design Pattern:** Cake stores the mutable state of a node in a `Context` class rather than subclassing `rclcpp::Node`. This separation makes testing easier (you can test logic without spinning up ROS), keeps state explicit, and allows callbacks to be simple free functions. To define the `Context` of your node, you subclass the auto-generated `<NodeName>Context` struct and add your own variables to it. The auto-generated `Context` class will contain a pointer to your ROS2 node instance, as well as all publishers, subscribers, services, actions and parameters.
 
 ```cpp
+#pragma once
+
+#include <memory>
 #include <my_package/my_node_interface.hpp>
 
 namespace my_package::my_node {
 
+// Extend the generated context with custom state
 struct Context : MyNodeContext<Context> {
-    // Add your custom context members here
+    // Add any custom state here
     int my_counter = 0;
 };
 
+// Forward declare init function
 void init(std::shared_ptr<Context> ctx);
 
-// Define the node type
+// Define the node class using the generated base
+// This must match the pattern: package::node_name::NodeName
 using MyNode = MyNodeBase<Context, init>;
 
 } // namespace my_package::my_node
 ```
 
-**C++ Implementation (`nodes/my_node/my_node.cpp`):**
+Then implement it (`nodes/my_node/my_node.cpp`):
+
+> **Design Pattern:** Cake uses a functional `init()` approach instead of subclassing `rclcpp::Node` with constructors. The `init()` function receives a fully-constructed context with all publishers, subscribers, and parameters ready to use. This functional approach, coupled with the context object, makes nodes easier to reason about, simpler to write and more testable. By putting a pointer to the ROS node in the context, we create a "has-a" relationship with the Node rather than "is-a", cleanly separating ROS communication from your implementation logic.
 
 ```cpp
 #include "my_node.hpp"
 
 namespace my_package::my_node {
 
+void msg_callback(std::shared_ptr<Context> ctx, std_msgs::msg::Bool::ConstSharedPtr msg) {
+    ctx->my_counter++;
+    RCLCPP_INFO(ctx->node->get_logger(), "Got a bool: %d (count: %d)", msg->data, ctx->my_counter);
+}
+
+void addition_request_handler(
+    std::shared_ptr<Context> ctx,
+    example_interfaces::srv::AddTwoInts::Request::SharedPtr request,
+    example_interfaces::srv::AddTwoInts::Response::SharedPtr response
+) {
+    response->sum = request->a + request->b;
+}
+
 void init(std::shared_ptr<Context> ctx) {
-    // Parameters are automatically loaded and ready to use
-    RCLCPP_INFO(ctx->node->get_logger(), "Update rate: %.2f Hz", ctx->params.update_rate);
+    // Access parameters
+    RCLCPP_INFO(ctx->node->get_logger(), "important_parameter: %s", ctx->params.important_parameter.c_str());
 
-    // Publishers and subscribers are ready to use
-    // ctx->publishers.cmd_vel
-    // ctx->subscribers.odom
+    // Publish messages
+    auto msg = std_msgs::msg::String();
+    msg.data = ctx->params.important_parameter;
+    ctx->publishers.some_topic->publish(msg);
 
-    // Set up service handler
-    ctx->services.reset->set_request_handler(
-        [](auto ctx, auto request, auto response) {
-            response->success = true;
-            ctx->my_counter++;
-        }
-    );
+    // Set callbacks
+    ctx->subscribers.other_topic->set_callback(msg_callback);
+    ctx->services.my_service->set_request_handler(addition_request_handler);
 }
 
 } // namespace my_package::my_node
 ```
 
-**That's it!** No main() function needed, no component registration macro needed. The node is automatically:
-- Compiled into a shared library
-- Registered as an rclcpp component
-- Given an executable wrapper for `ros2 run`
-
-**Run your node:**
-```bash
-ros2 run my_package my_node
-```
-
-**Or load as a component:**
-```bash
-ros2 component load /ComponentManager my_package my_package::MyNode
-```
-
-### 5. Python Usage
-
-For Python nodes, cake generates a clean interface structure:
+#### Python Example (`nodes/my_node/my_node.py`)
 
 ```python
-from my_package.my_python_node.interface import PythonNodeContext, run
-from my_package.my_python_node.parameters import Params, ParamListener
-import cake
+from dataclasses import dataclass
 
-class Context(PythonNodeContext):
-    # Add your custom context members here
-    my_value: float = 0.0
+from my_package.my_node import MyNodeContext, run
+from std_msgs.msg import String
+
+# Extend the generated context with custom state
+@dataclass
+class Context(MyNodeContext):
+    my_counter: int = 0
+
+def msg_callback(ctx: Context, msg):
+    ctx.my_counter += 1
+    ctx.logger.info(f"Got a bool: {msg.data} (count: {ctx.my_counter})")
 
 def init(ctx: Context):
-    # Parameters are automatically loaded
-    ctx.logger.info(f"Update rate: {ctx.params.update_rate}")
+    # Access parameters
+    ctx.logger.info(f"important_parameter: {ctx.params.important_parameter}")
 
-    # Set up subscriber callback
-    ctx.subscribers.odom.set_callback(handle_odom)
+    # Publish messages
+    msg = String()
+    msg.data = ctx.params.important_parameter
+    ctx.publishers.some_topic.publish(msg)
 
-    # Create a thread for background work
-    cake.create_thread(ctx, background_thread)
-
-def handle_odom(ctx: Context, msg):
-    ctx.logger.info(f"Received odometry: {msg.pose}")
-    # Publish using the generated publisher
-    ctx.publishers.cmd_vel.publish(twist_msg)
-
-def background_thread(ctx: Context):
-    while rclpy.ok():
-        ctx.my_value += 1
-        time.sleep(0.1)
+    # Set callbacks
+    ctx.subscribers.other_topic.set_callback(msg_callback)
 
 if __name__ == "__main__":
     run(Context, init)
 ```
 
-**Using Services (Python):**
-```python
-def init(ctx: Context):
-    # Set up service request handler
-    ctx.services.reset.set_request_handler(handle_reset)
+### 4. Create CMakeLists.txt
 
-def handle_reset(ctx: Context, request, response):
-    # Handle the service request
-    ctx.logger.info("Reset service called")
-    response.success = True
-    response.message = "System reset successful"
-    # Access custom context members
-    ctx.my_value = 0.0
-```
+This is all you need in your `CMakeLists.txt`:
 
-**Using Service Clients (Python):**
-```python
-def init(ctx: Context):
-    # Service clients are ready to use immediately
-    # Call service asynchronously
-    request = Trigger.Request()
-    future = ctx.service_clients.trigger_service.call_async(request)
-    future.add_done_callback(lambda f: handle_service_response(ctx, f))
-
-def handle_service_response(ctx: Context, future):
-    try:
-        response = future.result()
-        ctx.logger.info(f"Service response: {response.message}")
-    except Exception as e:
-        ctx.logger.error(f"Service call failed: {e}")
-```
-
-**Generated Python API:**
-- `interface.py` - Contains context class and `run()` function
-- `parameters.py` - Exposes `Params` and `ParamListener`
-- `__init__.py` - Makes the module importable
-
-**Import patterns:**
-```python
-# Direct imports (recommended)
-from my_package.my_node.interface import PythonNodeContext, run
-from my_package.my_node.parameters import Params, ParamListener
-
-# Or via submodule
-from my_package.my_node import interface, parameters
-interface.run(Context, init)
-```
-
-## C++ Namespace Structure
-
-Cake uses a two-level namespace structure that separates implementation from component registration:
-
-### Implementation Namespace
-
-Your node implementation lives in a nested namespace to avoid collisions between different nodes:
-
-```cpp
-namespace my_package::my_node {
-    struct Context : MyNodeContext<Context> { /* ... */ };
-    void init(std::shared_ptr<Context> ctx);
-    using MyNode = MyNodeBase<Context, init>;
-}
-```
-
-**Format:** `package_name::node_name`
-
-This keeps all implementation details scoped and prevents naming conflicts when multiple nodes define similar types (e.g., multiple nodes with a `Context` struct).
-
-### Component Registration Namespace
-
-Components are registered and exported with a simplified namespace:
-
-```cpp
-// Automatically generated in *_registration.cpp
-namespace my_package {
-    using MyNode = my_package::my_node::MyNode;
-}
-RCLCPP_COMPONENTS_REGISTER_NODE(my_package::MyNode);
-```
-
-**Format:** `package_name::NodeName`
-
-### How It Works
-
-Cake uses C++ type aliases to expose your nested implementation class at the package level for component registration. This gives you:
-
-✅ **Clean component names**: `my_package::MyNode` instead of `my_package::my_node::MyNode`
-✅ **No name collisions**: Implementation stays safely scoped in `my_package::my_node`
-✅ **Zero user changes**: Your code continues to use the nested namespace as before
-
-### Discovering Components
-
-List available components in a package:
-
-```bash
-$ ros2 component types | grep my_package
-my_package
-  my_package::MyNode
-  my_package::AnotherNode
-```
-
-Load a component:
-
-```bash
-ros2 component load /ComponentManager my_package my_package::MyNode
-```
-
-Or use `ros2 component standalone`:
-
-```bash
-ros2 component standalone my_package my_package::MyNode
-```
-
-## Interface YAML Reference
-
-### Node Configuration
-
-```yaml
-node:
-    name: my_node              # Node name (required) or ${THIS_NODE} for auto-detection
-    package: ${THIS_PACKAGE}   # Package name or ${THIS_PACKAGE} for auto-detection
-```
-
-**Template Variables:**
-
-- `${THIS_PACKAGE}` - Automatically replaced with the package name from CMake's `PROJECT_NAME`
-- `${THIS_NODE}` - Automatically replaced with the node name (useful when using `cake_auto_package()` which auto-discovers nodes)
-
-These placeholders are particularly useful when using `cake_auto_package()`, which automatically discovers and registers nodes from the `nodes/` directory.
-
-### Parameters (Optional)
-
-You can define ROS2 parameters directly in the `interface.yaml` file. These will be automatically processed by `generate_parameter_library`:
-
-```yaml
-parameters:
-  update_rate:
-    type: double
-    default_value: 10.0
-    description: "Update rate in Hz"
-    validation:
-      gt<>: [0.0]  # Must be greater than 0
-  robot_name:
-    type: string
-    default_value: "robot1"
-    description: "Name of the robot"
-  joint_names:
-    type: string_array
-    default_value: ["joint1", "joint2", "joint3"]
-    description: "List of joint names"
-  read_only_param:
-    type: bool
-    default_value: true
-    description: "A read-only parameter"
-    read_only: true
-```
-
-**Supported Parameter Types:**
-- `bool`, `int`, `double`, `string`
-- Array types: `bool_array`, `int_array`, `double_array`, `string_array`
-- Fixed-size types: `string_fixed_N`, `double_array_fixed_N` (where N is the size)
-
-**Optional Fields:**
-- `validation` - Constraints for the parameter value (e.g., `gt<>`, `lt<>`, `one_of<>`, etc.)
-- `read_only` - If true, the parameter cannot be changed after initialization
-- `additional_constraints` - Custom validation constraints
-
-**Automatic Integration:**
-
-Parameters are automatically integrated into your node's context:
-- `ctx->params` - Contains all parameter values, automatically loaded before `init()` is called
-- `ctx->param_listener` - The parameter listener instance (useful for runtime parameter updates)
-
-You don't need to manually initialize parameters - they're ready to use immediately in your `init()` function.
-
-**Note:** A parameters library is always generated for each node, even if no parameters are defined in `interface.yaml`. If no parameters are specified, a dummy parameter is automatically created to satisfy `generate_parameter_library` requirements.
-
-For more details on parameter validation and advanced features, see the [generate_parameter_library documentation](https://github.com/PickNikRobotics/generate_parameter_library).
-
-### Publishers
-
-```yaml
-publishers:
-    - topic: /my_topic              # Topic name (required)
-      type: std_msgs/msg/String     # Message type (required)
-      qos: 10                       # QoS configuration (optional, default: 10)
-      manually_created: false       # Skip auto-generation (optional, default: false)
-```
-
-### Subscribers
-
-```yaml
-subscribers:
-    - topic: /other_topic           # Topic name (required)
-      type: std_msgs/msg/String     # Message type (required)
-      qos: 10                       # QoS configuration (optional, default: 10)
-      manually_created: false       # Skip auto-generation (optional, default: false)
-```
-
-### Services
-
-```yaml
-services:
-    - name: /my_service             # Service name (required)
-      type: std_srvs/srv/Trigger    # Service type (required)
-      qos: ServicesQoS              # QoS configuration (optional, omit to use C++ default)
-      manually_created: false       # Skip auto-generation (optional, default: false)
-```
-
-When `qos` is omitted, the generated code will use the default QoS from rclcpp (`ServicesQoS`).
-
-Services create service providers (servers) that respond to requests. To set the request handler:
-
-```cpp
-void init(std::shared_ptr<MyContext> ctx) {
-    ctx->services.my_service->set_request_handler(
-        [](auto ctx, auto request, auto response) {
-            // Handle the service request
-            response->success = true;
-        }
-    );
-}
-```
-
-### Service Clients
-
-```yaml
-service_clients:
-    - name: /my_service             # Service name (required)
-      type: std_srvs/srv/Trigger    # Service type (required)
-      qos: ServicesQoS              # QoS configuration (optional, omit to use C++ default)
-      manually_created: false       # Skip auto-generation (optional, default: false)
-```
-
-When `qos` is omitted, the generated code will use the default QoS from rclcpp (`ServicesQoS`).
-
-Service clients are exposed as raw `rclcpp::Client<ServiceT>::SharedPtr` for maximum flexibility:
-
-```cpp
-void init(std::shared_ptr<MyContext> ctx) {
-    // Create request
-    auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
-
-    // Async call with callback
-    auto future = ctx->service_clients.my_service->async_send_request(request);
-
-    // Or with callback
-    ctx->service_clients.my_service->async_send_request(
-        request,
-        [](rclcpp::Client<std_srvs::srv::Trigger>::SharedFuture future) {
-            auto response = future.get();
-            // Handle response
-        }
-    );
-}
-```
-
-### Actions (Servers)
-
-```yaml
-actions:
-    - name: fibonacci                           # Action name (required)
-      type: example_interfaces/action/Fibonacci # Action type (required)
-      manually_created: false                   # Skip auto-generation (optional, default: false)
-```
-
-Actions use the `SingleGoalActionServer` which manages goal lifecycle and ensures only one goal is active at a time. The design is polling-based - you check for active goals in your main loop rather than using callbacks.
-
-#### Setting Options
-
-Configure action server behavior in your `init()` function:
-
-```cpp
-void init(std::shared_ptr<Context> ctx) {
-    // Configure action server options
-    cake::SingleGoalActionServerOptions<example_interfaces::action::Fibonacci> options;
-    options.new_goals_replace_current_goal = false;  // Reject new goals if one is active
-    options.goal_validator = [](const auto& goal) {
-        return goal.order > 0;  // Custom validation logic
-    };
-
-    ctx->actions.fibonacci->set_options(options);
-}
-```
-
-**Note:** Actions will reject all goals until options are set via `set_options()`.
-
-#### Processing Goals (Polling Pattern)
-
-Check for active goals in your node's main loop or timer callbacks:
-
-```cpp
-cake::create_timer(ctx, 100ms, [](auto ctx) {
-    auto goal = ctx->actions.fibonacci->get_active_goal();
-    if (!goal) {
-        return;  // No active goal (or it was cancelled)
-    }
-
-    // Process goal incrementally
-    auto feedback = std::make_shared<example_interfaces::action::Fibonacci::Feedback>();
-    feedback->sequence.push_back(current_value);
-    ctx->actions.fibonacci->publish_feedback(feedback);
-
-    // Complete when done
-    if (is_complete) {
-        auto result = std::make_shared<example_interfaces::action::Fibonacci::Result>();
-        result->sequence = final_sequence;
-        ctx->actions.fibonacci->succeed(result);
-    }
-});
-```
-
-If the client cancels the goal, `get_active_goal()` will return nullptr on the next poll - no explicit cancellation handling needed.
-
-#### Lifecycle Methods
-
-- `get_active_goal()` - Returns current goal or nullptr if no active goal
-- `publish_feedback(feedback)` - Send progress updates to client
-- `succeed(result)` - Mark goal as succeeded and clear active goal
-- `abort(result)` - Mark goal as aborted and clear active goal
-
-### Action Clients
-
-```yaml
-action_clients:
-    - name: /navigate                           # Action name (required)
-      type: nav2_msgs/action/NavigateToPose     # Action type (required)
-      manually_created: false                   # Skip auto-generation (optional, default: false)
-```
-
-Action clients are exposed as raw `rclcpp_action::Client<ActionT>::SharedPtr` for maximum flexibility, giving you full access to the rclcpp_action API.
-
-```cpp
-void init(std::shared_ptr<MyContext> ctx) {
-    // Create goal message
-    auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
-    goal_msg.pose.header.frame_id = "map";
-    goal_msg.pose.pose.position.x = 1.0;
-    goal_msg.pose.pose.position.y = 2.0;
-
-    // Send goal asynchronously
-    auto send_goal_options = rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions();
-
-    // Optional: Set goal response callback
-    send_goal_options.goal_response_callback =
-        [](auto goal_handle) {
-            if (!goal_handle) {
-                RCLCPP_ERROR(rclcpp::get_logger("my_node"), "Goal was rejected");
-            } else {
-                RCLCPP_INFO(rclcpp::get_logger("my_node"), "Goal accepted");
-            }
-        };
-
-    // Optional: Set feedback callback
-    send_goal_options.feedback_callback =
-        [](auto, const auto& feedback) {
-            RCLCPP_INFO(rclcpp::get_logger("my_node"),
-                       "Distance remaining: %.2f",
-                       feedback->distance_remaining);
-        };
-
-    // Optional: Set result callback
-    send_goal_options.result_callback =
-        [](const auto& result) {
-            if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
-                RCLCPP_INFO(rclcpp::get_logger("my_node"), "Navigation succeeded!");
-            }
-        };
-
-    // Send the goal
-    ctx->action_clients.navigate->async_send_goal(goal_msg, send_goal_options);
-}
-```
-
-For full details on the action client API, see the [rclcpp_action documentation](https://docs.ros2.org/latest/api/rclcpp_action/).
-
-## QoS Configuration
-
-Cake supports three ways to configure QoS:
-
-### 1. Simple Integer (Queue Depth)
-
-Backward compatible with basic queue depth:
-
-```yaml
-publishers:
-    - topic: /status
-      type: std_msgs/msg/String
-      qos: 10  # Queue depth
-```
-
-Generates: `create_publisher<T>("topic", 10)`
-
-### 2. Predefined Profiles
-
-Use ROS2's predefined QoS profiles:
-
-```yaml
-subscribers:
-    - topic: /laser_scan
-      type: sensor_msgs/msg/LaserScan
-      qos: SensorDataQoS
-```
-
-Generates: `create_subscriber<T>("topic", rclcpp::SensorDataQoS())`
-
-**Available Profiles:**
-- `SensorDataQoS` - Best effort, volatile, depth 5 (for sensor data)
-- `SystemDefaultsQoS` - System default settings
-- `ParametersQoS` - Reliable, volatile, depth 1000 (for parameters)
-- `ServicesQoS` - Reliable, volatile, depth 10 (for services)
-- `ClockQoS` - Best effort, volatile, depth 1 (for clock)
-- `RosoutQoS` - Reliable, transient local, depth 1000 (for logging)
-
-### 3. Custom Parameters
-
-Define custom QoS settings:
-
-```yaml
-publishers:
-    - topic: /critical_data
-      type: std_msgs/msg/String
-      qos:
-        reliability: reliable
-        durability: transient_local
-        depth: 100
-```
-
-Generates: `create_publisher<T>("topic", rclcpp::QoS(100).reliable().transient_local())`
-
-**Supported Parameters:**
-
-| Parameter | Options | Description |
-|-----------|---------|-------------|
-| `reliability` | `reliable`, `best_effort` | Delivery guarantee |
-| `durability` | `volatile`, `transient_local` | Message persistence |
-| `history` | `keep_last`, `keep_all` | History policy |
-| `depth` | Integer | Queue size (for `keep_last`) |
-| `deadline` | `{sec: X, nsec: Y}` | Max time between messages |
-| `lifespan` | `{sec: X, nsec: Y}` | Max age of messages |
-| `liveliness` | `automatic`, `manual_by_topic` | Liveness policy |
-
-### 4. Profile with Overrides
-
-Start with a profile and override specific parameters:
-
-```yaml
-subscribers:
-    - topic: /reliable_sensor
-      type: sensor_msgs/msg/LaserScan
-      qos:
-        profile: SensorDataQoS
-        reliability: reliable  # Override default best_effort
-        depth: 20             # Override default depth 5
-```
-
-Generates: `create_subscriber<T>("topic", rclcpp::SensorDataQoS().reliable().keep_last(20))`
-
-## Advanced Features
-
-### Manually Created Publishers/Subscribers
-
-Skip auto-generation for specific topics when you need custom initialization:
-
-```yaml
-publishers:
-    - topic: /custom_topic
-      type: std_msgs/msg/String
-      manually_created: true  # Completely excluded from code generation
-```
-
-Items marked with `manually_created: true` are completely excluded from the generated code, allowing you to create and initialize them entirely manually in your `init()` function or elsewhere in your code.
-
-### Topic Name to Field Name Conversion
-
-Topic names are automatically converted to valid C++ identifiers:
-
-- `/cmd_vel` → `cmd_vel`
-- `/robot/status` → `robot_status`
-- Leading slashes are stripped
-- Internal slashes become underscores
-
-## Generated Code Structure
-
-The generator creates:
-
-### Publishers Struct
-```cpp
-template <typename ContextType> struct MyNodePublishers {
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr my_topic;
-};
-```
-
-### Subscribers Struct
-```cpp
-template <typename ContextType> struct MyNodeSubscribers {
-    std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> my_topic;
-};
-```
-
-### Services Struct
-```cpp
-template <typename ContextType> struct MyNodeServices {
-    std::shared_ptr<cake::Service<std_srvs::srv::Trigger, ContextType>> my_service;
-};
-```
-
-### Service Clients Struct
-```cpp
-template <typename ContextType> struct MyNodeServiceClients {
-    rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr my_service;
-};
-```
-
-### Actions Struct
-```cpp
-template <typename ContextType> struct MyNodeActions {
-    std::shared_ptr<cake::SingleGoalActionServer<example_interfaces::action::Fibonacci>> fibonacci;
-};
-```
-
-### Action Clients Struct
-```cpp
-template <typename ContextType> struct MyNodeActionClients {
-    rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigate;
-};
-```
-
-### Context Struct
-```cpp
-template <typename DerivedContextType> struct MyNodeContext : cake::Context {
-    MyNodePublishers<DerivedContextType> publishers;
-    MyNodeSubscribers<DerivedContextType> subscribers;
-    MyNodeServices<DerivedContextType> services;
-    MyNodeServiceClients<DerivedContextType> service_clients;
-    MyNodeActions<DerivedContextType> actions;
-    MyNodeActionClients<DerivedContextType> action_clients;
-    std::shared_ptr<ParamListener> param_listener;  // Automatically initialized
-    Params params;                                   // Automatically loaded
-};
-```
-
-### Base Node Class
-```cpp
-template <typename ContextType, auto init_func, auto extend_options = ...>
-class MyNodeBase : public cake::BaseNode<"my_node", extend_options> {
-    // Initialization code that creates publishers/subscribers
-};
-```
-
-## Examples
-
-See the `cake_example` package for a complete working example.
-
-## Testing
-
-The code generator includes comprehensive tests. See [tests/README.md](cake/tests/README.md) for details on running and adding tests.
-
-## CMake API
-
-### `cake_auto_package()`
-
-Completely automates cake package setup - handles dependencies, library creation, node registration, and package finalization for both C++ and Python nodes.
-
-**Parameters:**
-- `INSTALL_TO_SHARE` - (Optional) List of directories to install to `share/${PROJECT_NAME}/`
-
-**Automatic Directory Detection:**
-
-`cake_auto_package()` automatically detects and installs common ROS2 directories if they exist in your package root:
-- `launch/` - Launch files for ros2 launch
-- `config/` - Configuration files (YAML, JSON, etc.)
-
-These directories are automatically installed to `share/${PROJECT_NAME}/` without requiring any additional configuration. You can still use `INSTALL_TO_SHARE` to add additional directories beyond these automatically detected ones.
-
-**Automatic Interface Installation:**
-
-`cake_auto_package()` automatically processes and installs all `interface.yaml` files to `share/${PROJECT_NAME}/interfaces/` for documentation and static analysis purposes:
-
-**Per-Node Interfaces:**
-- Each node's `interface.yaml` is automatically renamed and installed as `${NODE_NAME}.yaml`
-- Token replacement is performed:
-  - `${THIS_NODE}` → actual node name
-  - `${THIS_PACKAGE}` → actual package name
-- Example: `nodes/my_node/interface.yaml` → `share/my_package/interfaces/my_node.yaml`
-
-**Package-Level Interfaces (Optional):**
-- You can create an `interfaces/` directory in your package root to document external nodes or nodes implemented without cake
-- Files are installed as-is to `share/${PROJECT_NAME}/interfaces/` **without token replacement**
-- Useful for documenting:
-  - Nodes from other packages referenced in your launch files
-  - Legacy nodes not using cake
-  - Third-party node interfaces
-
-**Conflict Detection:**
-- If a package-level interface file has the same name as a per-node interface (e.g., both `interfaces/my_node.yaml` and `nodes/my_node/interface.yaml` exist), the build will fail with a clear error message
-- This prevents accidental overwrites and ensures explicit naming
-
-**Usage:**
 ```cmake
-# Minimal usage - automatically installs launch/ and config/ if they exist
-cake_auto_package()
+cmake_minimum_required(VERSION 3.22)
+project(my_package)
 
-# Install additional directories beyond auto-detected ones
-cake_auto_package(
-  INSTALL_TO_SHARE
-    rviz
-    meshes
-    urdf
-)
+find_package(cake REQUIRED)
+cake_auto_package()
 ```
 
-**What it does:**
-- Finds all build dependencies via `ament_auto_find_build_dependencies()`
-- Detects languages used in `nodes/` directory (C++ and/or Python)
-- **For C++ nodes:**
-  - Creates the main SHARED library from all `.cpp` files in `nodes/`
-  - Sets C++20 as the required C++ standard
-  - Automatically generates component registration code
-- **For Python nodes:**
-  - Sets up Python package structure
-  - Creates top-level `__init__.py`
-- Scans the `nodes/` directory for node subdirectories
-- **For each node found:**
-  - Validates that `interface.yaml` exists (REQUIRED)
-  - Detects node language (C++ or Python)
-  - Generates interface code from `interface.yaml`
-  - Generates parameters library (always, even if no parameters defined)
-  - **For C++ nodes:**
-    - Generates interface header (`${NODE_NAME}_interface.hpp`)
-    - Generates parameters library from interface.yaml
-    - Generates component registration code (`${NODE_NAME}_registration.cpp`)
-    - Creates interface library target
-    - Creates parameters library target
-    - Links all libraries to `${PROJECT_NAME}`
-    - Registers as rclcpp_component with executable wrapper
-  - **For Python nodes:**
-    - Generates `interface.py`, `_parameters.py`, `parameters.py`, `__init__.py`
-    - Installs user Python files
-    - Creates executable wrapper using `runpy.run_module()`
-- Automatically detects and installs `launch/` and `config/` directories if present
-- Processes and installs all `interface.yaml` files to `share/${PROJECT_NAME}/interfaces/`:
-  - Per-node interfaces: renamed to `${NODE_NAME}.yaml` with token replacement
-  - Package-level interfaces (from `interfaces/` directory): installed as-is without token replacement
-  - Detects and fails on naming conflicts between sources
-- Installs any additional directories specified via `INSTALL_TO_SHARE` parameter
-- Finalizes the package with `ament_auto_package()`
+That's it! `cake_auto_package()` automatically:
+- Detects C++ and Python nodes in the `nodes/` folder
+- Generates interfaces and parameter libraries
+- Builds libraries and executables
+- Registers components for C++ nodes
+- Installs everything correctly
 
-**Requirements:**
-- Must call `find_package(cake REQUIRED)` first
-- Nodes must be organized in a `nodes/` directory at the project root
-- Each node has its own subdirectory (e.g., `nodes/my_node/`)
-- Node directory names must be in snake_case (e.g., `my_node`)
-- Each node directory must contain `interface.yaml`
-- **C++ nodes:** Must contain at least one `.cpp` file
-- **Python nodes:** Must contain at least one `.py` file (typically `<node_name>.py`)
-- Mixed language nodes (both C++ and Python) are not supported
+### 5. Create package.xml
 
-**Dependencies:**
-
-`cake_auto_package()` uses `ament_cmake_auto` to automatically find and link dependencies, but **you must declare them in your `package.xml`** for this to work.
-
-Example `package.xml`:
 ```xml
 <?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>my_package</name>
   <version>0.0.0</version>
-  <description>My cake-based package</description>
+  <description>My cake package</description>
   <maintainer email="you@example.com">Your Name</maintainer>
-  <license>Apache-2.0</license>
-
-  <buildtool_depend>ament_cmake_auto</buildtool_depend>
+  <license>Apache 2.0</license>
 
   <depend>cake</depend>
-  <depend>rclcpp</depend>
+  <depend>rclcpp</depend>  <!-- For C++ nodes -->
+  <depend>rclpy</depend>   <!-- For Python nodes -->
 
-  <!-- Add your message/service dependencies here -->
+  <!-- Add your message dependencies -->
   <depend>std_msgs</depend>
-  <depend>sensor_msgs</depend>
-  <depend>geometry_msgs</depend>
+  <depend>example_interfaces</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
@@ -918,135 +206,312 @@ Example `package.xml`:
 </package>
 ```
 
-The `ament_auto_find_build_dependencies()` call inside `cake_auto_package()` will automatically find and link all packages listed as `<depend>`, `<build_depend>`, `<build_export_depend>`, or `<exec_depend>` in your `package.xml`. You don't need to manually call `find_package()` or `target_link_libraries()` for these dependencies.
+### 6. Build and Run
 
-**Note:** You don't need to add `generate_parameter_library` to your `package.xml` - it's automatically found by `cake_auto_package()` since it's an internal implementation detail of cake.
+```bash
+cd ~/ros2_ws
+colcon build --packages-select my_package
+source install/setup.bash
 
-**Conventions Enforced:**
+# Run as executable
+ros2 run my_package my_node
 
-**C++ Nodes:**
-- **Main library**: Named `${PROJECT_NAME}`, type SHARED
-- **C++ standard**: C++20
-- **Source location**: `nodes/` directory
-- **Node directory**: snake_case (e.g., `my_node`)
-- **Implementation namespace**: `${PROJECT_NAME}::node_name` (e.g., `my_package::my_node`)
-- **Export namespace**: `${PROJECT_NAME}` (e.g., `my_package`)
-- **C++ class name**: PascalCase (e.g., `MyNode`, auto-converted from snake_case)
-- **Plugin class**: `${PROJECT_NAME}::MyNode` (registered via type alias from implementation namespace)
-- **Interface library**: `my_node_interface`
-- **Parameters library**: `my_node_parameters`
-- **Registration file**: `my_node_registration.cpp` (auto-generated, includes type alias)
-- **Executable**: `my_node`
-- **Component registration**: Automatic via generated registration file
-
-**Python Nodes:**
-- **Package structure**: `${PROJECT_NAME}.${node_name}`
-- **Node directory**: snake_case (e.g., `my_node`)
-- **Context class name**: PascalCase with `Context` suffix (e.g., `MyNodeContext`)
-- **Generated files**: `interface.py`, `_parameters.py`, `parameters.py`, `__init__.py`
-- **Executable**: `my_node` (wrapper script using `runpy.run_module()`)
-- **Installation**: `lib/${PROJECT_NAME}/${node_name}` for executable, `lib/python3.X/site-packages/${PROJECT_NAME}/${node_name}/` for Python files
-
-**Example CMakeLists.txt:**
-```cmake
-cmake_minimum_required(VERSION 3.22)
-project(my_package)
-
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
-endif()
-
-find_package(cake REQUIRED)
-
-# Automatically handle all package setup
-cake_auto_package()
+# Or load as component (if written in C++)
+ros2 component standalone my_package my_package::MyNode
 ```
 
-**Before (Manual):**
-```cmake
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
+## Automated Build System
 
-ament_auto_add_library(${PROJECT_NAME} SHARED DIRECTORY nodes)
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+### `cake_auto_package()`
 
-# For each node, you had to:
-# 1. Generate the interface
-cake_generate_node_interface(my_node_interface nodes/my_node/interface.yaml)
-target_link_libraries(${PROJECT_NAME} my_node_interface)
+The `cake_auto_package()` macro eliminates the need for manual CMake configuration by following a simple convention-over-configuration approach.
 
-# 2. Generate parameters
-generate_parameter_library(my_node_parameters nodes/my_node/parameters.yaml)
-target_link_libraries(${PROJECT_NAME} my_node_parameters)
+#### What It Does
 
-# 3. Register the component (in your C++ file):
-# #include <rclcpp_components/register_node_macro.hpp>
-# namespace my_package {
-#     using MyNode = my_package::my_node::MyNode;
-# }
-# RCLCPP_COMPONENTS_REGISTER_NODE(my_package::MyNode);
+When you call `cake_auto_package()`, it:
 
-# 4. Create the executable
-rclcpp_components_register_node(${PROJECT_NAME}
-    PLUGIN "my_package::MyNode"
-    EXECUTABLE "my_node")
+1. **Scans the `nodes/` directory** for subdirectories containing `interface.yaml` files
+2. **Auto-detects languages** by looking for `.cpp` or `.py` files in each node directory
+3. **Generates code** for each node:
+   - C++: Interface headers, parameter libraries, and component registration code
+   - Python: Interface modules, parameter classes, and executable wrappers
+4. **Builds C++ libraries** from all `.cpp` files in the `nodes/` directory
+5. **Registers components** with naming convention `${PROJECT_NAME}::${NodeName}`
+6. **Creates executables** for both C++ (via component registration) and Python (via runpy wrappers)
+7. **Installs everything** to proper locations (headers, libraries, executables, Python packages)
+8. **Auto-installs common directories** like `launch/` and `config/` if they exist
 
-ament_auto_package()
-```
+#### Directory Convention
 
-**After (Automatic):**
-```cmake
-find_package(cake REQUIRED)
-
-cake_auto_package()  # Handles everything!
-```
-
-**File Structure Example:**
 ```
 my_package/
+├── nodes/                    # Required: All nodes go here
+│   ├── my_cpp_node/
+│   │   ├── interface.yaml   # Required
+│   │   └── my_cpp_node.hpp  # Implementation
+│   │   └── my_cpp_node.cpp  # Implementation
+│   └── my_py_node/
+│       ├── interface.yaml   # Required
+│       └── my_py_node.py    # Implementation
+├── launch/                   # Optional: Auto-installed if exists
+├── config/                   # Optional: Auto-installed if exists
+├── interfaces/               # Optional: Package-level interface definitions
 ├── CMakeLists.txt
-├── package.xml
-├── interfaces/                # Optional: document external/legacy nodes
-│   ├── external_node.yaml
-│   └── legacy_node.yaml
-└── nodes/
-    ├── cpp_node/              # C++ node
-    │   ├── cpp_node.hpp
-    │   ├── cpp_node.cpp
-    │   └── interface.yaml
-    ├── python_node/           # Python node
-    │   ├── python_node.py
-    │   └── interface.yaml
-    └── another_cpp_node/      # Another C++ node
-        ├── another_cpp_node.hpp
-        ├── another_cpp_node.cpp
-        └── interface.yaml
+└── package.xml
 ```
 
-With this structure, `cake_auto_package()` will automatically:
-- Detect and build C++ nodes as components in the shared library
-- Set up Python nodes with their package structure and executables
-- Generate interfaces and parameters for all nodes
-- Register executables for all nodes (both C++ and Python)
-- Install all interface files to `share/my_package/interfaces/`:
-  - `cpp_node.yaml`, `python_node.yaml`, `another_cpp_node.yaml` (from nodes/, with token replacement)
-  - `external_node.yaml`, `legacy_node.yaml` (from interfaces/, without token replacement)
+#### Multiple Nodes in One Package
 
----
+You can have multiple nodes (both C++ and Python) in a single package:
 
-### `cake_generate_node_interface(LIB_NAME YAML_FILE)`
+```
+my_package/
+├── nodes/
+│   ├── driver_node/
+│   │   ├── interface.yaml
+│   │   └── driver_node.hpp
+│   │   └── driver_node.cpp
+│   ├── controller_node/
+│   │   ├── interface.yaml
+│   │   └── controller_node.hpp
+│   │   └── controller_node.cpp
+│   └── monitor_node/
+│       ├── interface.yaml
+│       └── monitor_node.py
+└── ...
+```
 
-Generates a C++ header from a YAML interface definition.
+All nodes will be built and registered automatically.
 
-**Parameters:**
-- `LIB_NAME`: Name of the interface library target
-- `YAML_FILE`: Path to interface.yaml file (relative to current source dir)
+#### Install Additional Directories
+
+```cmake
+# Install additional directories to share/
+cake_auto_package(INSTALL_TO_SHARE
+    maps
+    rviz
+)
+```
+
+#### Component Plugin Naming
+
+C++ nodes are registered as rclcpp components with this naming pattern:
+- Plugin class: `${PROJECT_NAME}::${NodeName}`
+- Executable: `${NODE_NAME}` (snake_case)
+
+Example: A node `my_node` in package `my_package` becomes:
+- Plugin: `my_package::MyNode`
+- Executable: `my_node`
+
+
+## Interface YAML Specification
+
+The interface YAML file defines your node's ROS 2 interfaces. All fields support the following interface types:
+
+### Node Metadata
+
+```yaml
+node:
+    name: ${THIS_NODE}       # Replaced by the node name detected from the folder structure
+    package: ${THIS_PACKAGE} # Replaced by the package name detected from cmake project name
+```
+
+### Parameters
+
+Uses `generate_parameter_library` (https://github.com/PickNikRobotics/generate_parameter_library) syntax:
+
+```yaml
+parameters:
+    my_param:
+        type: double
+        default_value: 1.0
+        description: "Parameter description"
+        validation:
+            gt<>: [0.0]
+```
+
+### Publishers
+
+```yaml
+publishers:
+    - topic: /cmd_vel
+      type: geometry_msgs/msg/Twist
+      qos: 10  # Simple depth
+      # OR
+      qos:
+        profile: SystemDefaultsQoS
+      # OR
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+```
+
+### Subscribers
+
+```yaml
+subscribers:
+    - topic: /odom
+      type: nav_msgs/msg/Odometry
+      qos:
+        profile: SensorDataQoS
+```
+
+### Services
+
+```yaml
+services:
+    - name: my_service
+      type: example_interfaces/srv/AddTwoInts
+```
+
+### Service Clients
+
+```yaml
+service_clients:
+    - name: external_service
+      type: std_srvs/srv/Trigger
+```
+
+### Action Servers
+
+```yaml
+actions:
+    - name: navigate
+      type: nav2_msgs/action/NavigateToPose
+```
+
+### Action Clients
+
+```yaml
+action_clients:
+    - name: navigate
+      type: nav2_msgs/action/NavigateToPose
+```
+
+### Common Optional Fields
+
+All interface types (publishers, subscribers, services, service_clients, actions, action_clients) support the following optional field:
+
+```yaml
+manually_created: false  # Set to true to completely exclude from code generation
+```
+
+When `manually_created: true`, Cake will completely skip this interface during code generation - it won't appear in the generated context struct at all. This is useful when you want to document an interface in the YAML without having Cake generate code for it.
 
 **Example:**
-```cmake
-cake_generate_node_interface(my_node_interface nodes/my_node/interface.yaml)
+```yaml
+subscribers:
+    - topic: /camera/image
+      type: sensor_msgs/msg/Image
+      qos:
+        profile: SensorDataQoS
+      manually_created: true  # Won't be generated - handle this yourself
 ```
 
-This creates an interface library target and installs the generated header to `include/${PROJECT_NAME}/${LIB_NAME}.hpp`.
+## QoS Configuration
 
-**Note:** If you're using `cake_auto_package()`, you don't need to call this manually - it's handled automatically.
+Cake supports three QoS specification methods:
+
+### 1. Simple Depth (Backward Compatible)
+
+```yaml
+qos: 10
+```
+
+### 2. Predefined Profiles
+
+```yaml
+qos:
+  profile: SensorDataQoS  # or SystemDefaultsQoS, ServicesDefaultQoS, ParametersQoS, etc.
+```
+
+### 3. Custom Parameters
+
+```yaml
+qos:
+  reliability: reliable  # or best_effort
+  durability: volatile   # or transient_local
+  history: keep_last     # or keep_all
+  depth: 10
+  deadline:
+    sec: 1
+    nsec: 0
+  lifespan:
+    sec: 10
+    nsec: 0
+  liveliness: automatic  # or manual_by_topic, manual_by_node
+  liveliness_lease_duration:
+    sec: 1
+    nsec: 0
+```
+
+## Development
+
+### Running Tests
+
+```bash
+cd cake/tests
+./run_tests.sh
+```
+
+### Accepting Test Outputs
+
+After making changes to the code generator:
+
+```bash
+cd cake/tests
+./run_tests.sh         # Generate new outputs
+./accept_outputs.sh    # Accept as expected outputs
+./run_tests.sh         # Verify tests pass
+```
+
+## Examples
+
+The `cake_example` package demonstrates usage with:
+- **Multiple nodes**: C++ node (`my_node`) and Python node (`python_node`)
+- **Interface examples**: Publishers, subscribers, services, actions, and parameters
+- **Minimal CMakeLists.txt**: Just 3 lines using `cake_auto_package()`
+- **Component registration**: Automatic component plugin setup
+- **Package-level interfaces**: Optional `interfaces/` directory for shared definitions
+
+Structure:
+```
+cake_example/
+├── nodes/
+│   ├── my_node/
+│   │   ├── interface.yaml
+│   │   ├── my_node.cpp
+│   │   └── my_node.hpp
+│   └── python_node/
+│       ├── interface.yaml
+│       └── python_node.py
+├── interfaces/
+│   ├── external_node.yaml
+│   └── transition_node.yaml
+├── launch/
+│   └── test.launch.py
+├── CMakeLists.txt          # Just cake_auto_package()!
+└── package.xml
+```
+
+Build and run the example:
+
+```bash
+colcon build --packages-select cake_example
+source install/setup.bash
+
+# Run C++ node
+ros2 run cake_example my_node
+
+# Run Python node
+ros2 run cake_example python_node
+
+# Load as component
+ros2 component standalone cake_example cake_example::MyNode
+```
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.

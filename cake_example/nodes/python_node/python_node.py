@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from time import sleep
 
 from cake_example.python_node.interface import PythonNodeContext, run
@@ -12,6 +13,7 @@ import cake
 from typing import cast
 
 
+@dataclass
 class Context(PythonNodeContext):
     important_number: float = 6.7
     count: int = 0
