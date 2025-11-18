@@ -57,8 +57,6 @@ services:
 
 ### 3. Implement Your Node
 
-Create `nodes/my_node/my_node.cpp` (or `my_node.py` for Python):
-
 #### C++ Example
 
 First, create the header (`nodes/my_node/my_node.hpp`):
@@ -306,7 +304,7 @@ Example: A node `my_node` in package `my_package` becomes:
 
 ## Interface YAML Specification
 
-The interface YAML file defines your node's ROS 2 interfaces. All fields support the following interface types:
+The interface YAML file defines your node's ROS 2 interfaces.
 
 ### Node Metadata
 
