@@ -229,7 +229,8 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
         OUTPUT ${_cake_node_INTERFACE_HEADER_FILE} ${_cake_node_INTERFACE_PARAMS_FILE}
                ${_cake_node_REGISTRATION_CPP_FILE} ${_cake_node_INTERFACE_YAML_FILE}
         COMMAND ${_cake_node_CODEGEN_CMD}
-        DEPENDS ${YAML_FILE_PATH}
+        DEPENDS ${INTERFACE_YAML}
+        DEPENDS ${_cake_codegen_script_BIN}
         COMMENT "Generating C++ interface for node '${NODE_NAME}'"
         VERBATIM
     )
