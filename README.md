@@ -2,7 +2,7 @@
 
 **Declarative code generation for ROS 2 nodes**
 
-Cake transforms simple YAML interface definitions into strongly-typed C++ and Python ROS 2 node scaffolding. Define your publishers, subscribers, services, and actions in one simple file and Cake will handle the rest.
+Cake transforms simple YAML interface definitions into strongly-typed C++ and Python ROS 2 node scaffolding. Define your publishers, subscribers, services, actions and parameters in one simple file and Cake will handle the rest.
 
 Using cake, writing ROS2 nodes becomes a...  <sub>piece of cake (hehe)</sub>
 
