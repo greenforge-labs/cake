@@ -14,6 +14,10 @@
   <!-- Dependencies used by the auto build scripts -->
   <buildtool_depend>generate_parameter_library</buildtool_depend>
 
+  <!-- Used by cake_auto_interface_package -->
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
   <depend>rclcpp_components</depend>

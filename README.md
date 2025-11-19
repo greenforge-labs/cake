@@ -301,6 +301,106 @@ Example: A node `my_node` in package `my_package` becomes:
 - Plugin: `my_package::MyNode`
 - Executable: `my_node`
 
+### `cake_auto_interface_package()`
+
+The `cake_auto_interface_package()` macro simplifies the creation of ROS 2 interface packages by automatically discovering and generating all message, service, and action definitions.
+
+#### What It Does
+
+When you call `cake_auto_interface_package()`, it:
+
+1. **Finds ament_cmake_auto** and discovers all dependencies from `package.xml`
+2. **Auto-discovers interface files** in standard ROS 2 directories:
+   - `msg/*.msg` for message definitions
+   - `srv/*.srv` for service definitions
+   - `action/*.action` for action definitions
+3. **Generates interfaces** using `rosidl_generate_interfaces()` with auto-detected dependencies
+4. **Finalizes the package** with `ament_auto_package()`
+
+#### How to Use
+
+**CMakeLists.txt:**
+```cmake
+cmake_minimum_required(VERSION 3.22)
+project(my_interfaces)
+
+find_package(cake REQUIRED)
+cake_auto_interface_package()
+```
+
+That's it! Just 2 lines of actual code. The macro handles everything else.
+
+**package.xml:**
+```xml
+<?xml version="1.0"?>
+<package format="3">
+  <name>my_interfaces</name>
+  <version>0.0.0</version>
+  <description>My interface definitions</description>
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>Apache 2.0</license>
+
+  <buildtool_depend>cake</buildtool_depend>
+
+  <!-- msg/service/action dependencies go here (if required) -->
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_srvs</depend>
+
+  <!-- important! this must be included in all interface package xmls -->
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+```
+
+**Directory structure:**
+```
+my_interfaces/
+├── msg/
+│   ├── MyMessage.msg
+│   └── AnotherMessage.msg
+├── srv/
+│   └── MyService.srv
+├── action/
+│   └── MyAction.action
+├── CMakeLists.txt
+└── package.xml
+```
+
+#### What It Replaces
+
+Traditional interface package CMakeLists.txt files require manual file listing and explicit dependency management:
+
+```cmake
+# Old way (8+ lines)
+cmake_minimum_required(VERSION 3.22)
+project(my_interfaces)
+
+find_package(ament_cmake REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+
+set(msg_files "msg/MyMessage.msg" "msg/AnotherMessage.msg")
+set(srv_files "srv/MyService.srv")
+set(action_files "action/MyAction.action")
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+    ${msg_files}
+    ${srv_files}
+    ${action_files}
+    DEPENDENCIES std_msgs geometry_msgs action_msgs
+)
+
+ament_export_dependencies(rosidl_default_runtime)
+ament_package()
+```
+
+With `cake_auto_interface_package()`, this becomes just 2 lines. All dependencies are automatically discovered from `package.xml`, and all interface files are automatically found.
+
 
 ## Interface YAML Specification
 
