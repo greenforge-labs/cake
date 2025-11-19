@@ -1,4 +1,4 @@
-# Cake
+# cake
 
 **Declarative code generation for ROS 2 nodes**
 
