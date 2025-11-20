@@ -1,0 +1,3 @@
+# Ignore generated test outputs
+*/generated_cpp/
+*/generated_python/

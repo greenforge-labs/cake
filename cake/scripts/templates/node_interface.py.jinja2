@@ -1,0 +1,213 @@
+# auto-generated DO NOT EDIT
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import rclpy
+{%- if publishers %}
+from rclpy.publisher import Publisher
+{%- endif %}
+{%- if service_clients %}
+from rclpy.client import Client
+{%- endif %}
+{%- if action_clients %}
+from rclpy.action import ActionClient
+{%- endif %}
+{%- if qos_imports %}
+from rclpy.qos import (
+{%- for qos_import in qos_imports|sort %}
+    {{ qos_import }},
+{%- endfor %}
+)
+{%- endif %}
+
+{%- for import_stmt in message_imports|sort %}
+{{ import_stmt }}
+{%- endfor %}
+
+import cake
+
+from typing import Callable, TypeVar
+
+from .parameters import Params, ParamListener
+
+
+@dataclass
+class Publishers:
+{%- if publishers %}
+{%- for pub in publishers %}
+    {{ pub.field_name }}: Publisher  # msg_type: {{ pub.msg_type }}
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class Subscribers:
+{%- if subscribers %}
+{%- for sub in subscribers %}
+    {{ sub.field_name }}: cake.Subscriber[{{ sub.msg_class }}] = field(default_factory=cake.Subscriber[{{ sub.msg_class }}])
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class Services:
+{%- if services %}
+{%- for srv in services %}
+    {{ srv.field_name }}: cake.Service[{{ srv.srv_class }}, {{ srv.srv_class }}.Request, {{ srv.srv_class }}.Response] = field(default_factory=cake.Service[{{ srv.srv_class }}, {{ srv.srv_class }}.Request, {{ srv.srv_class }}.Response])
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class ServiceClients:
+{%- if service_clients %}
+{%- for client in service_clients %}
+    {{ client.field_name }}: Client  # srv_type: {{ client.srv_type }}
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class Actions:
+{%- if actions %}
+{%- for action in actions %}
+    {{ action.field_name }}: cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback]
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class ActionClients:
+{%- if action_clients %}
+{%- for client in action_clients %}
+    {{ client.field_name }}: ActionClient  # action_type: {{ client.action_type }}
+{%- endfor %}
+{%- else %}
+    pass
+{%- endif %}
+
+
+@dataclass
+class {{ context_class }}(cake.Context):
+    publishers: Publishers
+    subscribers: Subscribers
+    services: Services
+    service_clients: ServiceClients
+    actions: Actions
+    action_clients: ActionClients
+
+    param_listener: ParamListener
+    params: Params
+
+
+T = TypeVar("T", bound={{ context_class }})
+
+
+def run(context_type: type[T], init_func: Callable[[T], None]):
+
+    rclpy.init()
+
+    node = rclpy.create_node("{{ node_name }}")
+
+    # initialise publishers
+{%- if publishers %}
+    publishers = Publishers(
+{%- for pub in publishers %}
+        {{ pub.field_name }}=node.create_publisher({{ pub.msg_class }}, "{{ pub.topic }}", {{ pub.qos_code }}),
+{%- endfor %}
+    )
+{%- else %}
+    publishers = Publishers()
+{%- endif %}
+
+    # create subscribers - using default constructors
+    subscribers = Subscribers()
+
+    # create services - using default constructors
+    services = Services()
+
+    # initialise service clients
+{%- if service_clients %}
+    service_clients = ServiceClients(
+{%- for client in service_clients %}
+        {{ client.field_name }}=node.create_client({{ client.srv_class }}, "{{ client.name }}"{% if client.qos_code %}, qos_profile={{ client.qos_code }}{% endif %}),
+{%- endfor %}
+    )
+{%- else %}
+    service_clients = ServiceClients()
+{%- endif %}
+
+    # initialise actions
+{%- if actions %}
+    actions = Actions(
+{%- for action in actions %}
+        {{ action.field_name }}=cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback](node, {{ action.action_class }}, "{{ action.name }}"),
+{%- endfor %}
+    )
+{%- else %}
+    actions = Actions()
+{%- endif %}
+
+    # initialise action clients
+{%- if action_clients %}
+    action_clients = ActionClients(
+{%- for client in action_clients %}
+        {{ client.field_name }}=ActionClient(node, {{ client.action_class }}, "{{ client.name }}"),
+{%- endfor %}
+    )
+{%- else %}
+    action_clients = ActionClients()
+{%- endif %}
+
+    param_listener = ParamListener(node)
+    params = param_listener.get_params()
+
+    ctx = context_type(
+        node=node,
+        publishers=publishers,
+        subscribers=subscribers,
+        services=services,
+        service_clients=service_clients,
+        actions=actions,
+        action_clients=action_clients,
+        param_listener=param_listener,
+        params=params,
+    )
+
+    # initialise subscribers
+{%- for sub in subscribers %}
+    ctx.subscribers.{{ sub.field_name }}._initialise(ctx, {{ sub.msg_class }}, "{{ sub.topic }}", {{ sub.qos_code }})
+{%- endfor %}
+
+    # initialise services
+{%- for srv in services %}
+    ctx.services.{{ srv.field_name }}._initialise(ctx, {{ srv.srv_class }}, "{{ srv.name }}"{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
+{%- endfor %}
+
+    init_func(ctx)
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        # note rclpy installs signal handlers during rclpy.init() that respond to SIGINT (Ctrl+C) and shutdown the
+        # context so no logging or anything should be done here.
+        pass
+    finally:
+        for thread in ctx.threads:
+            thread.join(timeout=2.0)  # give each thread 2 seconds to finish gracefully
+        node.destroy_node()
+        if rclpy.ok():
+            # since the context is _probably_ shutdown already here, we are doing this just to be certain
+            rclpy.shutdown()

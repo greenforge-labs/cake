@@ -1,0 +1,11 @@
+node:
+  name: service_clients_only
+  package: test_package
+  plugin: test_package::ServiceClientsOnly
+service_clients:
+- name: /add_two_ints
+  type: example_interfaces/srv/AddTwoInts
+- name: trigger_service
+  type: std_srvs/srv/Trigger
+  qos:
+    depth: 10

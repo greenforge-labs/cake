@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>cake_example</name>
+  <version>0.0.0</version>
+  <description>An example node using the cake system.</description>
+  <maintainer email="info@greenforgelabs.com.au">Alistair English</maintainer>
+  <license>Apache 2.0</license>
+
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>cake</depend>
+
+  <depend>std_msgs</depend>
+  <depend>example_interfaces</depend>
+  <depend>example_action</depend>
+
+  <!-- for launch files -->
+  <exec_depend>clingwrap</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -1,0 +1,4 @@
+node:
+  name: empty_node
+  package: test_package
+  plugin: test_package::EmptyNode

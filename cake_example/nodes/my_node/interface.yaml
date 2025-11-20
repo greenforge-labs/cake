@@ -1,0 +1,39 @@
+node:
+    name: ${THIS_NODE}
+    package: ${THIS_PACKAGE}
+
+parameters:
+    spicy_param:
+        type: string
+        default_value: "oh hi mark"
+        description: "A real spicy one"
+
+publishers:
+    - topic: some_topic
+      type: std_msgs/msg/String
+      qos:
+        profile: SystemDefaultsQoS
+
+subscribers:
+    - topic: other_topic
+      type: std_msgs/msg/Bool
+      qos:
+        profile: SensorDataQoS
+
+services:
+    - name: my_service
+      type: example_interfaces/srv/AddTwoInts
+    - name: bing_bong
+      type: example_interfaces/srv/Trigger
+
+service_clients:
+    - name: bing_bong
+      type: example_interfaces/srv/Trigger
+
+actions:
+    - name: my_action
+      type: example_interfaces/action/Fibonacci
+
+action_clients:
+    - name: my_action
+      type: example_interfaces/action/Fibonacci

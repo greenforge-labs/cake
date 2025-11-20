@@ -1,0 +1,9 @@
+node:
+  name: action_servers_only
+  package: test_package
+  plugin: test_package::ActionServersOnly
+actions:
+- name: fibonacci
+  type: example_interfaces/action/Fibonacci
+- name: /math/compute
+  type: example_interfaces/action/Fibonacci

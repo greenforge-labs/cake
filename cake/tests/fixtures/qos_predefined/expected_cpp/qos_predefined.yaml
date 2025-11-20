@@ -1,0 +1,18 @@
+node:
+  name: qos_predefined
+  package: test_package
+  plugin: test_package::QosPredefined
+publishers:
+- topic: sensor_data_topic
+  type: std_msgs/msg/String
+  qos: SensorDataQoS
+- topic: system_defaults_topic
+  type: std_msgs/msg/String
+  qos: SystemDefaultsQoS
+subscribers:
+- topic: parameters_topic
+  type: std_msgs/msg/String
+  qos: ParametersQoS
+- topic: services_topic
+  type: std_msgs/msg/String
+  qos: ServicesQoS

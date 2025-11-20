@@ -1,0 +1,21 @@
+node:
+  name: service_clients_mixed
+  package: test_package
+  plugin: test_package::ServiceClientsMixed
+publishers:
+- topic: /status
+  type: std_msgs/msg/String
+  qos: 10
+subscribers:
+- topic: /command
+  type: std_msgs/msg/Bool
+  qos: SensorDataQoS
+services:
+- name: /reset
+  type: std_srvs/srv/Trigger
+service_clients:
+- name: /add_two_ints
+  type: example_interfaces/srv/AddTwoInts
+  qos: ServicesQoS
+- name: compute
+  type: example_interfaces/srv/AddTwoInts

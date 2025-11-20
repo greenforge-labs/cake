@@ -1,0 +1,12 @@
+node:
+  name: simple_node
+  package: test_package
+  plugin: test_package::SimpleNode
+publishers:
+- topic: /cmd_vel
+  type: geometry_msgs/msg/Twist
+  qos: 10
+subscribers:
+- topic: /odom
+  type: nav_msgs/msg/Odometry
+  qos: 10

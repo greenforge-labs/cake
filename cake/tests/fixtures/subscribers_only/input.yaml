@@ -1,0 +1,11 @@
+node:
+    name: ${THIS_NODE}
+    package: ${THIS_PACKAGE}
+
+subscribers:
+    - topic: sensor_data
+      type: sensor_msgs/msg/LaserScan
+      qos: 10
+    - topic: camera_image
+      type: sensor_msgs/msg/Image
+      qos: 1

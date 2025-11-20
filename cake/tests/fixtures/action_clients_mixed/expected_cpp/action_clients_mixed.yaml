@@ -1,0 +1,26 @@
+node:
+  name: action_clients_mixed
+  package: test_package
+  plugin: test_package::ActionClientsMixed
+publishers:
+- topic: /status
+  type: std_msgs/msg/String
+  qos: 10
+subscribers:
+- topic: /command
+  type: std_msgs/msg/Bool
+  qos: SensorDataQoS
+services:
+- name: /reset
+  type: std_srvs/srv/Trigger
+service_clients:
+- name: /compute
+  type: example_interfaces/srv/AddTwoInts
+actions:
+- name: fibonacci_server
+  type: example_interfaces/action/Fibonacci
+action_clients:
+- name: /navigate
+  type: nav2_msgs/action/NavigateToPose
+- name: compute_path
+  type: nav2_msgs/action/ComputePathToPose

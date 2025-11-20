@@ -1,0 +1,16 @@
+node:
+  name: qos_backward_compat
+  package: test_package
+  plugin: test_package::QosBackwardCompat
+publishers:
+- topic: int_qos_pub
+  type: std_msgs/msg/String
+  qos: 10
+- topic: default_qos_pub
+  type: std_msgs/msg/String
+subscribers:
+- topic: int_qos_sub
+  type: std_msgs/msg/String
+  qos: 5
+- topic: default_qos_sub
+  type: std_msgs/msg/String

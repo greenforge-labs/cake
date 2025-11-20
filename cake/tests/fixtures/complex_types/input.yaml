@@ -1,0 +1,19 @@
+node:
+    name: ${THIS_NODE}
+    package: ${THIS_PACKAGE}
+
+publishers:
+    - topic: pose
+      type: geometry_msgs/msg/PoseStamped
+      qos: 10
+    - topic: path
+      type: nav_msgs/msg/Path
+      qos: 5
+
+subscribers:
+    - topic: joint_states
+      type: sensor_msgs/msg/JointState
+      qos: 10
+    - topic: point_cloud
+      type: sensor_msgs/msg/PointCloud2
+      qos: 1

@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>cake</name>
+  <version>0.0.0</version>
+  <description>A collection of things to make ROS2 development easier.</description>
+  <maintainer email="info@greenforgelabs.com.au">Alistair English</maintainer>
+  <license>Apache 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_auto</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <!-- Dependencies used by the auto build scripts -->
+  <buildtool_depend>generate_parameter_library</buildtool_depend>
+
+  <!-- Used by cake_auto_interface_package -->
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>rclcpp_components</depend>
+
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-jinja2</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

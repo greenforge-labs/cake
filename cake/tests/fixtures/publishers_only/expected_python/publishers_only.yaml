@@ -1,0 +1,10 @@
+node:
+  name: publishers_only
+  package: test_package
+publishers:
+- topic: status
+  type: std_msgs/msg/String
+  qos: 10
+- topic: counter
+  type: std_msgs/msg/Int32
+  qos: 5

@@ -1,0 +1,9 @@
+node:
+    name: ${THIS_NODE}
+    package: ${THIS_PACKAGE}
+
+actions:
+    - name: fibonacci
+      type: example_interfaces/action/Fibonacci
+    - name: /math/compute
+      type: example_interfaces/action/Fibonacci

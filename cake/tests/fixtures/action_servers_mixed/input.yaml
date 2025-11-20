@@ -1,0 +1,21 @@
+node:
+    name: ${THIS_NODE}
+    package: ${THIS_PACKAGE}
+
+publishers:
+    - topic: /status
+      type: std_msgs/msg/String
+      qos: 10
+
+subscribers:
+    - topic: /cmd
+      type: std_msgs/msg/Bool
+      qos: 10
+
+services:
+    - name: /reset
+      type: std_srvs/srv/Trigger
+
+actions:
+    - name: navigate
+      type: example_interfaces/action/Fibonacci
