@@ -545,6 +545,91 @@ qos:
     nsec: 0
 ```
 
+## QoS Event Callbacks
+
+Cake subscribers support QoS event callbacks to react when deadlines are missed or publisher liveliness changes.
+
+### Deadline Callback
+
+The deadline callback fires when no message is received within the deadline period specified in QoS:
+
+**C++ Example:**
+```cpp
+void init(std::shared_ptr<Context> ctx) {
+    // Set the message callback
+    ctx->subscribers.ok->set_callback(
+        [](std::shared_ptr<Context> ctx, std_msgs::msg::Bool::ConstSharedPtr msg) {
+            ctx->ok_received = true;
+            ctx->ok_status = msg->data;
+        }
+    );
+
+    // Set deadline callback - fires when no message received in time
+    ctx->subscribers.ok->set_deadline_callback(
+        [](std::shared_ptr<Context> ctx, rclcpp::QOSDeadlineRequestedInfo& event) {
+            RCLCPP_WARN(ctx->node->get_logger(), "Deadline missed!");
+            ctx->ok_received = false;
+        }
+    );
+}
+```
+
+**Python Example:**
+```python
+def init(ctx: Context):
+    def on_msg(ctx, msg):
+        ctx.ok_received = True
+        ctx.ok_status = msg.data
+
+    def on_deadline_missed(ctx, event):
+        ctx.node.get_logger().warning("Deadline missed!")
+        ctx.ok_received = False
+
+    ctx.subscribers.ok.set_callback(on_msg)
+    ctx.subscribers.ok.set_deadline_callback(on_deadline_missed)
+```
+
+### Liveliness Callback
+
+The liveliness callback fires when a publisher's liveliness state changes:
+
+```cpp
+ctx->subscribers.sensor->set_liveliness_callback(
+    [](std::shared_ptr<Context> ctx, rclcpp::QOSLivelinessChangedInfo& event) {
+        RCLCPP_INFO(ctx->node->get_logger(),
+            "Liveliness changed: %d alive, %d not alive",
+            event.alive_count, event.not_alive_count);
+    }
+);
+```
+
+### Configuring QoS for Event Callbacks
+
+For deadline callbacks to work, you must set a deadline in your QoS configuration:
+
+```yaml
+subscribers:
+    - topic: ok
+      type: std_msgs/msg/Bool
+      qos:
+        deadline:
+          sec: 1
+          nsec: 0
+```
+
+For liveliness callbacks, configure liveliness and lease duration:
+
+```yaml
+subscribers:
+    - topic: sensor
+      type: sensor_msgs/msg/Imu
+      qos:
+        liveliness: automatic
+        liveliness_lease_duration:
+          sec: 2
+          nsec: 0
+```
+
 ## Development
 
 ### Running Tests
