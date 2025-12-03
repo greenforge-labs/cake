@@ -7,14 +7,15 @@
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <test_package/qos_predefined_parameters.hpp>
 
 namespace test_package::qos_predefined {
 
 template <typename ContextType> struct QosPredefinedPublishers {
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr sensor_data_topic;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr system_defaults_topic;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> sensor_data_topic;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> system_defaults_topic;
 };
 
 template <typename ContextType> struct QosPredefinedSubscribers {
@@ -58,8 +59,8 @@ class QosPredefinedBase : public cake::BaseNode<"qos_predefined", extend_options
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.sensor_data_topic = ctx->node->template create_publisher<std_msgs::msg::String>("sensor_data_topic", rclcpp::SensorDataQoS());
-        ctx->publishers.system_defaults_topic = ctx->node->template create_publisher<std_msgs::msg::String>("system_defaults_topic", rclcpp::SystemDefaultsQoS());
+        ctx->publishers.sensor_data_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "sensor_data_topic", rclcpp::SensorDataQoS());
+        ctx->publishers.system_defaults_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "system_defaults_topic", rclcpp::SystemDefaultsQoS());
         // init subscribers
         ctx->subscribers.parameters_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "parameters_topic", rclcpp::ParametersQoS());
         ctx->subscribers.services_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "services_topic", rclcpp::ServicesQoS());

@@ -8,13 +8,14 @@
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <cake/publisher.hpp>
 #include <test_package/publishers_only_parameters.hpp>
 
 namespace test_package::publishers_only {
 
 template <typename ContextType> struct PublishersOnlyPublishers {
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status;
-    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr counter;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> status;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::Int32, ContextType>> counter;
 };
 
 template <typename ContextType> struct PublishersOnlySubscribers {};
@@ -55,8 +56,8 @@ class PublishersOnlyBase : public cake::BaseNode<"publishers_only", extend_optio
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.status = ctx->node->template create_publisher<std_msgs::msg::String>("status", 10);
-        ctx->publishers.counter = ctx->node->template create_publisher<std_msgs::msg::Int32>("counter", 5);
+        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "status", 10);
+        ctx->publishers.counter = cake::create_publisher<std_msgs::msg::Int32>(ctx, "counter", 5);
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

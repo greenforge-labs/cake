@@ -10,14 +10,15 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <test_package/complex_types_parameters.hpp>
 
 namespace test_package::complex_types {
 
 template <typename ContextType> struct ComplexTypesPublishers {
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose;
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path;
+    std::shared_ptr<cake::Publisher<geometry_msgs::msg::PoseStamped, ContextType>> pose;
+    std::shared_ptr<cake::Publisher<nav_msgs::msg::Path, ContextType>> path;
 };
 
 template <typename ContextType> struct ComplexTypesSubscribers {
@@ -61,8 +62,8 @@ class ComplexTypesBase : public cake::BaseNode<"complex_types", extend_options> 
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.pose = ctx->node->template create_publisher<geometry_msgs::msg::PoseStamped>("pose", 10);
-        ctx->publishers.path = ctx->node->template create_publisher<nav_msgs::msg::Path>("path", 5);
+        ctx->publishers.pose = cake::create_publisher<geometry_msgs::msg::PoseStamped>(ctx, "pose", 10);
+        ctx->publishers.path = cake::create_publisher<nav_msgs::msg::Path>(ctx, "path", 5);
         // init subscribers
         ctx->subscribers.joint_states = cake::create_subscriber<sensor_msgs::msg::JointState>(ctx, "joint_states", 10);
         ctx->subscribers.point_cloud = cake::create_subscriber<sensor_msgs::msg::PointCloud2>(ctx, "point_cloud", 1);

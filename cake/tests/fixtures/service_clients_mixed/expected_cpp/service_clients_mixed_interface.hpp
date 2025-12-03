@@ -10,6 +10,7 @@
 #include <std_srvs/srv/trigger.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <cake/service.hpp>
 #include <test_package/service_clients_mixed_parameters.hpp>
@@ -17,7 +18,7 @@
 namespace test_package::service_clients_mixed {
 
 template <typename ContextType> struct ServiceClientsMixedPublishers {
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> status;
 };
 
 template <typename ContextType> struct ServiceClientsMixedSubscribers {
@@ -65,7 +66,7 @@ class ServiceClientsMixedBase : public cake::BaseNode<"service_clients_mixed", e
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.status = ctx->node->template create_publisher<std_msgs::msg::String>("/status", 10);
+        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", 10);
         // init subscribers
         ctx->subscribers.command = cake::create_subscriber<std_msgs::msg::Bool>(ctx, "/command", rclcpp::SensorDataQoS());
         // init services

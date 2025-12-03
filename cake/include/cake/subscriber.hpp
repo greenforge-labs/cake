@@ -53,6 +53,9 @@ template <typename MessageT, typename ContextType> class Subscriber {
         liveliness_callback_ = callback;
     }
 
+    // Access underlying subscription for advanced use
+    typename rclcpp::Subscription<MessageT>::SharedPtr subscription() { return subscription_; }
+
   private:
     std::shared_ptr<ContextType> context_;
     typename rclcpp::Subscription<MessageT>::SharedPtr subscription_;

@@ -10,13 +10,14 @@
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <test_package/manually_created_parameters.hpp>
 
 namespace test_package::manually_created {
 
 template <typename ContextType> struct ManuallyCreatedPublishers {
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr auto_topic;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> auto_topic;
 };
 
 template <typename ContextType> struct ManuallyCreatedSubscribers {
@@ -59,7 +60,7 @@ class ManuallyCreatedBase : public cake::BaseNode<"manually_created", extend_opt
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.auto_topic = ctx->node->template create_publisher<std_msgs::msg::String>("auto_topic", 10);
+        ctx->publishers.auto_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "auto_topic", 10);
         // init subscribers
         ctx->subscribers.auto_sub = cake::create_subscriber<std_msgs::msg::Bool>(ctx, "auto_sub", 10);
         // init parameters

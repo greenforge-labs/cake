@@ -66,5 +66,11 @@ class Subscriber(Generic[MessageT]):
             )
         self._liveliness_callback = callback
 
+    def subscription(self) -> Subscription:
+        """Access underlying rclpy Subscription for advanced use."""
+        if self._subscription is None:
+            raise RuntimeError("Subscriber has not been initialised! This is an error in cake.")
+        return self._subscription
+
 
 __all__ = ["Subscriber"]

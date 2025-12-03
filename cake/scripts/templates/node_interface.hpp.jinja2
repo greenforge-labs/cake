@@ -9,6 +9,9 @@
 {% endfor -%}
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+{%- if publishers %}
+#include <cake/publisher.hpp>
+{%- endif %}
 {%- if subscribers %}
 #include <cake/subscriber.hpp>
 {%- endif %}
@@ -25,7 +28,7 @@ namespace {{ implementation_namespace }} {
 
 template <typename ContextType> struct {{ class_name }}Publishers {
 {%- for pub in publishers %}
-    rclcpp::Publisher<{{ pub.msg_type }}>::SharedPtr {{ pub.field_name }};
+    std::shared_ptr<cake::Publisher<{{ pub.msg_type }}, ContextType>> {{ pub.field_name }};
 {%- endfor %}
 };
 {%- else %}
@@ -118,7 +121,7 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
 
         // init publishers
 {%- for pub in publishers %}
-        ctx->publishers.{{ pub.field_name }} = ctx->node->template create_publisher<{{ pub.msg_type }}>("{{ pub.topic }}", {{ pub.qos_code }});
+        ctx->publishers.{{ pub.field_name }} = cake::create_publisher<{{ pub.msg_type }}>(ctx, "{{ pub.topic }}", {{ pub.qos_code }});
 {%- endfor %}
 
 {%- endif %}

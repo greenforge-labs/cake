@@ -547,7 +547,7 @@ qos:
 
 ## QoS Event Callbacks
 
-Cake subscribers support QoS event callbacks to react when deadlines are missed or publisher liveliness changes.
+Cake subscribers and publishers support QoS event callbacks to react when deadlines are missed or liveliness changes.
 
 ### Deadline Callback
 
@@ -589,7 +589,7 @@ def init(ctx: Context):
     ctx.subscribers.ok.set_deadline_callback(on_deadline_missed)
 ```
 
-### Liveliness Callback
+### Subscriber Liveliness Callback
 
 The liveliness callback fires when a publisher's liveliness state changes:
 
@@ -603,6 +603,51 @@ ctx->subscribers.sensor->set_liveliness_callback(
 );
 ```
 
+Subscribers also expose the underlying `rclcpp::Subscription` / `rclpy.subscription.Subscription` via the `subscription()` method for advanced use cases.
+
+### Publisher QoS Callbacks
+
+Publishers also support QoS event callbacks. Note the different event types compared to subscribers:
+
+- **Subscriber deadline**: `QOSDeadlineRequestedInfo` - didn't receive message in time
+- **Publisher deadline**: `QOSDeadlineOfferedInfo` - didn't publish in time
+- **Subscriber liveliness**: `QOSLivelinessChangedInfo` - publisher liveliness changed
+- **Publisher liveliness**: `QOSLivelinessLostInfo` - our liveliness was lost
+
+**C++ Example:**
+```cpp
+void init(std::shared_ptr<Context> ctx) {
+    // Deadline callback - fires when we don't publish in time
+    ctx->publishers.status->set_deadline_callback(
+        [](std::shared_ptr<Context> ctx, rclcpp::QOSDeadlineOfferedInfo& event) {
+            RCLCPP_WARN(ctx->node->get_logger(), "Missed publish deadline!");
+        }
+    );
+
+    // Liveliness callback - fires when our liveliness is lost
+    ctx->publishers.status->set_liveliness_callback(
+        [](std::shared_ptr<Context> ctx, rclcpp::QOSLivelinessLostInfo& event) {
+            RCLCPP_WARN(ctx->node->get_logger(), "Liveliness lost!");
+        }
+    );
+}
+```
+
+**Python Example:**
+```python
+def init(ctx: Context):
+    def on_deadline_missed(ctx, event):
+        ctx.node.get_logger().warning("Missed publish deadline!")
+
+    def on_liveliness_lost(ctx, event):
+        ctx.node.get_logger().warning("Liveliness lost!")
+
+    ctx.publishers.status.set_deadline_callback(on_deadline_missed)
+    ctx.publishers.status.set_liveliness_callback(on_liveliness_lost)
+```
+
+Publishers also expose the underlying `rclcpp::Publisher` / `rclpy.publisher.Publisher` via the `publisher()` method for advanced use cases like `wait_for_all_acked()` or `get_subscription_count()`.
+
 ### Configuring QoS for Event Callbacks
 
 For deadline callbacks to work, you must set a deadline in your QoS configuration:
@@ -615,6 +660,14 @@ subscribers:
         deadline:
           sec: 1
           nsec: 0
+
+publishers:
+    - topic: status
+      type: std_msgs/msg/String
+      qos:
+        deadline:
+          sec: 0
+          nsec: 500000000  # 500ms
 ```
 
 For liveliness callbacks, configure liveliness and lease duration:
@@ -627,6 +680,15 @@ subscribers:
         liveliness: automatic
         liveliness_lease_duration:
           sec: 2
+          nsec: 0
+
+publishers:
+    - topic: heartbeat
+      type: std_msgs/msg/Empty
+      qos:
+        liveliness: automatic
+        liveliness_lease_duration:
+          sec: 1
           nsec: 0
 ```
 

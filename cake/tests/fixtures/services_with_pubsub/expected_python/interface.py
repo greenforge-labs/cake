@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
 from rclpy.qos import (
     qos_profile_sensor_data,
     qos_profile_services_default,
@@ -25,7 +24,7 @@ from .parameters import Params, ParamListener
 
 @dataclass
 class Publishers:
-    status: Publisher  # msg_type: std_msgs/msg/String
+    status: cake.Publisher[String] = field(default_factory=cake.Publisher[String])
 
 
 @dataclass
@@ -76,10 +75,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("services_with_pubsub")
 
-    # initialise publishers
-    publishers = Publishers(
-        status=node.create_publisher(String, "/status", 10),
-    )
+    # create publishers - using default constructors
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
@@ -110,6 +107,9 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         param_listener=param_listener,
         params=params,
     )
+
+    # initialise publishers
+    ctx.publishers.status._initialise(ctx, String, "/status", 10)
 
     # initialise subscribers
     ctx.subscribers.command._initialise(ctx, String, "/command", qos_profile_sensor_data)

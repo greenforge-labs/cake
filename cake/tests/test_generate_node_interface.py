@@ -679,8 +679,8 @@ publishers: []
     ), "Should use relative import from parameters wrapper"
 
 
-def test_python_publisher_import_conditional(tmp_path):
-    """Test that Publisher import is only included when there are publishers."""
+def test_python_publisher_usage_conditional(tmp_path):
+    """Test that cake.Publisher is only used when there are publishers."""
     # Test 1: With publishers
     yaml_with_pubs = tmp_path / "with_pubs.yaml"
     yaml_with_pubs.write_text(
@@ -717,7 +717,7 @@ publishers:
     assert result.returncode == 0
     with open(output_with_pubs / "interface.py", "r") as f:
         content = f.read()
-    assert "from rclpy.publisher import Publisher" in content, "Should import Publisher when publishers exist"
+    assert "cake.Publisher[" in content, "Should use cake.Publisher when publishers exist"
 
     # Test 2: Without publishers
     yaml_no_pubs = tmp_path / "no_pubs.yaml"
@@ -755,7 +755,7 @@ subscribers:
     assert result.returncode == 0
     with open(output_no_pubs / "interface.py", "r") as f:
         content = f.read()
-    assert "from rclpy.publisher import Publisher" not in content, "Should NOT import Publisher when no publishers"
+    assert "cake.Publisher[" not in content, "Should NOT use cake.Publisher when no publishers"
 
 
 def test_python_qos_imports(tmp_path):

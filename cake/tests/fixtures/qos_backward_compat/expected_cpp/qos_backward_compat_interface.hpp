@@ -7,14 +7,15 @@
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <test_package/qos_backward_compat_parameters.hpp>
 
 namespace test_package::qos_backward_compat {
 
 template <typename ContextType> struct QosBackwardCompatPublishers {
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr int_qos_pub;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr default_qos_pub;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> int_qos_pub;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> default_qos_pub;
 };
 
 template <typename ContextType> struct QosBackwardCompatSubscribers {
@@ -58,8 +59,8 @@ class QosBackwardCompatBase : public cake::BaseNode<"qos_backward_compat", exten
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.int_qos_pub = ctx->node->template create_publisher<std_msgs::msg::String>("int_qos_pub", 10);
-        ctx->publishers.default_qos_pub = ctx->node->template create_publisher<std_msgs::msg::String>("default_qos_pub", 10);
+        ctx->publishers.int_qos_pub = cake::create_publisher<std_msgs::msg::String>(ctx, "int_qos_pub", 10);
+        ctx->publishers.default_qos_pub = cake::create_publisher<std_msgs::msg::String>(ctx, "default_qos_pub", 10);
         // init subscribers
         ctx->subscribers.int_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "int_qos_sub", 5);
         ctx->subscribers.default_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "default_qos_sub", 10);

@@ -71,7 +71,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("services_only")
 
-    # initialise publishers
+    # create publishers - using default constructors
     publishers = Publishers()
 
     # create subscribers - using default constructors
@@ -103,6 +103,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         param_listener=param_listener,
         params=params,
     )
+
+    # initialise publishers
 
     # initialise subscribers
 

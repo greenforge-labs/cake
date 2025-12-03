@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
 from std_msgs.msg import String
 
 import cake
@@ -17,7 +16,7 @@ from .parameters import Params, ParamListener
 
 @dataclass
 class Publishers:
-    status: Publisher  # msg_type: std_msgs/msg/String
+    status: cake.Publisher[String] = field(default_factory=cake.Publisher[String])
 
 
 @dataclass
@@ -67,10 +66,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("with_parameters")
 
-    # initialise publishers
-    publishers = Publishers(
-        status=node.create_publisher(String, "/status", 10),
-    )
+    # create publishers - using default constructors
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
@@ -101,6 +98,9 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         param_listener=param_listener,
         params=params,
     )
+
+    # initialise publishers
+    ctx.publishers.status._initialise(ctx, String, "/status", 10)
 
     # initialise subscribers
 

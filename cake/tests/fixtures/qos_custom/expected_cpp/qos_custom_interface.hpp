@@ -7,14 +7,15 @@
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <test_package/qos_custom_parameters.hpp>
 
 namespace test_package::qos_custom {
 
 template <typename ContextType> struct QosCustomPublishers {
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr reliable_topic;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr best_effort_topic;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> reliable_topic;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> best_effort_topic;
 };
 
 template <typename ContextType> struct QosCustomSubscribers {
@@ -58,8 +59,8 @@ class QosCustomBase : public cake::BaseNode<"qos_custom", extend_options> {
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.reliable_topic = ctx->node->template create_publisher<std_msgs::msg::String>("reliable_topic", rclcpp::QoS(10).reliable().durability_volatile());
-        ctx->publishers.best_effort_topic = ctx->node->template create_publisher<std_msgs::msg::String>("best_effort_topic", rclcpp::QoS(5).best_effort().transient_local());
+        ctx->publishers.reliable_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "reliable_topic", rclcpp::QoS(10).reliable().durability_volatile());
+        ctx->publishers.best_effort_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "best_effort_topic", rclcpp::QoS(5).best_effort().transient_local());
         // init subscribers
         ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(10).reliable().keep_all());
         ctx->subscribers.profile_override_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "profile_override_topic", rclcpp::SensorDataQoS().reliable().keep_last(20));

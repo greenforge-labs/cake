@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
 from rclpy.qos import (
     qos_profile_parameters,
     qos_profile_sensor_data,
@@ -23,8 +22,8 @@ from .parameters import Params, ParamListener
 
 @dataclass
 class Publishers:
-    sensor_data_topic: Publisher  # msg_type: std_msgs/msg/String
-    system_defaults_topic: Publisher  # msg_type: std_msgs/msg/String
+    sensor_data_topic: cake.Publisher[String] = field(default_factory=cake.Publisher[String])
+    system_defaults_topic: cake.Publisher[String] = field(default_factory=cake.Publisher[String])
 
 
 @dataclass
@@ -75,11 +74,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("qos_predefined")
 
-    # initialise publishers
-    publishers = Publishers(
-        sensor_data_topic=node.create_publisher(String, "sensor_data_topic", qos_profile_sensor_data),
-        system_defaults_topic=node.create_publisher(String, "system_defaults_topic", qos_profile_system_default),
-    )
+    # create publishers - using default constructors
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
@@ -110,6 +106,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         param_listener=param_listener,
         params=params,
     )
+
+    # initialise publishers
+    ctx.publishers.sensor_data_topic._initialise(ctx, String, "sensor_data_topic", qos_profile_sensor_data)
+    ctx.publishers.system_defaults_topic._initialise(ctx, String, "system_defaults_topic", qos_profile_system_default)
 
     # initialise subscribers
     ctx.subscribers.parameters_topic._initialise(ctx, String, "parameters_topic", qos_profile_parameters)

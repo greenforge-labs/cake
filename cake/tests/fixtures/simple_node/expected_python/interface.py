@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 
@@ -18,7 +17,7 @@ from .parameters import Params, ParamListener
 
 @dataclass
 class Publishers:
-    cmd_vel: Publisher  # msg_type: geometry_msgs/msg/Twist
+    cmd_vel: cake.Publisher[Twist] = field(default_factory=cake.Publisher[Twist])
 
 
 @dataclass
@@ -68,10 +67,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("simple_node")
 
-    # initialise publishers
-    publishers = Publishers(
-        cmd_vel=node.create_publisher(Twist, "/cmd_vel", 10),
-    )
+    # create publishers - using default constructors
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
@@ -102,6 +99,9 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         param_listener=param_listener,
         params=params,
     )
+
+    # initialise publishers
+    ctx.publishers.cmd_vel._initialise(ctx, Twist, "/cmd_vel", 10)
 
     # initialise subscribers
     ctx.subscribers.odom._initialise(ctx, Odometry, "/odom", 10)

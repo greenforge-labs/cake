@@ -8,13 +8,14 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
+#include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <test_package/simple_node_parameters.hpp>
 
 namespace test_package::simple_node {
 
 template <typename ContextType> struct SimpleNodePublishers {
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel;
+    std::shared_ptr<cake::Publisher<geometry_msgs::msg::Twist, ContextType>> cmd_vel;
 };
 
 template <typename ContextType> struct SimpleNodeSubscribers {
@@ -57,7 +58,7 @@ class SimpleNodeBase : public cake::BaseNode<"simple_node", extend_options> {
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.cmd_vel = ctx->node->template create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+        ctx->publishers.cmd_vel = cake::create_publisher<geometry_msgs::msg::Twist>(ctx, "/cmd_vel", 10);
         // init subscribers
         ctx->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(ctx, "/odom", 10);
         // init parameters

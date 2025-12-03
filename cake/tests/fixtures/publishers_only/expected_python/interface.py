@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.publisher import Publisher
 from std_msgs.msg import Int32
 from std_msgs.msg import String
 
@@ -18,8 +17,8 @@ from .parameters import Params, ParamListener
 
 @dataclass
 class Publishers:
-    status: Publisher  # msg_type: std_msgs/msg/String
-    counter: Publisher  # msg_type: std_msgs/msg/Int32
+    status: cake.Publisher[String] = field(default_factory=cake.Publisher[String])
+    counter: cake.Publisher[Int32] = field(default_factory=cake.Publisher[Int32])
 
 
 @dataclass
@@ -69,11 +68,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("publishers_only")
 
-    # initialise publishers
-    publishers = Publishers(
-        status=node.create_publisher(String, "status", 10),
-        counter=node.create_publisher(Int32, "counter", 5),
-    )
+    # create publishers - using default constructors
+    publishers = Publishers()
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
@@ -104,6 +100,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         param_listener=param_listener,
         params=params,
     )
+
+    # initialise publishers
+    ctx.publishers.status._initialise(ctx, String, "status", 10)
+    ctx.publishers.counter._initialise(ctx, Int32, "counter", 5)
 
     # initialise subscribers
 

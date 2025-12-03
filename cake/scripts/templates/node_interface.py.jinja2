@@ -5,9 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-{%- if publishers %}
-from rclpy.publisher import Publisher
-{%- endif %}
 {%- if service_clients %}
 from rclpy.client import Client
 {%- endif %}
@@ -37,7 +34,7 @@ from .parameters import Params, ParamListener
 class Publishers:
 {%- if publishers %}
 {%- for pub in publishers %}
-    {{ pub.field_name }}: Publisher  # msg_type: {{ pub.msg_type }}
+    {{ pub.field_name }}: cake.Publisher[{{ pub.msg_class }}] = field(default_factory=cake.Publisher[{{ pub.msg_class }}])
 {%- endfor %}
 {%- else %}
     pass
@@ -121,16 +118,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("{{ node_name }}")
 
-    # initialise publishers
-{%- if publishers %}
-    publishers = Publishers(
-{%- for pub in publishers %}
-        {{ pub.field_name }}=node.create_publisher({{ pub.msg_class }}, "{{ pub.topic }}", {{ pub.qos_code }}),
-{%- endfor %}
-    )
-{%- else %}
+    # create publishers - using default constructors
     publishers = Publishers()
-{%- endif %}
 
     # create subscribers - using default constructors
     subscribers = Subscribers()
@@ -185,6 +174,11 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         param_listener=param_listener,
         params=params,
     )
+
+    # initialise publishers
+{%- for pub in publishers %}
+    ctx.publishers.{{ pub.field_name }}._initialise(ctx, {{ pub.msg_class }}, "{{ pub.topic }}", {{ pub.qos_code }})
+{%- endfor %}
 
     # initialise subscribers
 {%- for sub in subscribers %}
