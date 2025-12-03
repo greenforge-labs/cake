@@ -13,7 +13,6 @@
 
   <depend>std_msgs</depend>
   <depend>example_interfaces</depend>
-  <depend>example_action</depend>
 
   <!-- for launch files -->
   <exec_depend>clingwrap</exec_depend>
