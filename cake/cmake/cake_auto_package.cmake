@@ -176,6 +176,16 @@ macro(_cake_generate_node NODE_NAME NODE_DIR)
         message(FATAL_ERROR "cake: Node '${NODE_NAME}' is missing interface.yaml.")
     endif()
 
+    # Check for package == node name collision
+    if("${NODE_NAME}" STREQUAL "${PROJECT_NAME}")
+        message(
+            FATAL_ERROR
+                "cake: Node '${NODE_NAME}' has the same name as the package '${PROJECT_NAME}'. "
+                "This is not allowed because:\n" "  1. It causes CMake target name conflicts (library vs executable)\n"
+                "  2. It creates ambiguous C++ namespace references"
+        )
+    endif()
+
     _cake_detect_languages(${NODE_DIR} _cake_node_HAS_CPP _cake_node_HAS_PYTHON)
     if(_cake_node_HAS_CPP AND _cake_node_HAS_PYTHON)
         message(
