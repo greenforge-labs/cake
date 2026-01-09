@@ -57,14 +57,14 @@ class SimpleNodeBase : public cake::BaseNode<"simple_node", extend_options> {
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
 
+        // init parameters (before entities to support ${params.X} substitutions)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         // init publishers
         ctx->publishers.cmd_vel = cake::create_publisher<geometry_msgs::msg::Twist>(ctx, "/cmd_vel", 10);
         // init subscribers
         ctx->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(ctx, "/odom", 10);
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };

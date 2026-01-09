@@ -62,6 +62,10 @@ class ServicesWithPubsubBase : public cake::BaseNode<"services_with_pubsub", ext
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
 
+        // init parameters (before entities to support ${params.X} substitutions)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         // init publishers
         ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", 10);
         // init subscribers
@@ -69,10 +73,6 @@ class ServicesWithPubsubBase : public cake::BaseNode<"services_with_pubsub", ext
         // init services
         ctx->services.reset = cake::create_service<std_srvs::srv::Trigger>(ctx, "/reset", rclcpp::ServicesQoS());
         ctx->services.compute = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "compute", rclcpp::QoS(5).reliable());
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };

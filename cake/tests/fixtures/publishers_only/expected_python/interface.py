@@ -68,6 +68,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("publishers_only")
 
+    # initialise parameters (before entities to support ${params.X} substitutions)
+    param_listener = ParamListener(node)
+    params = param_listener.get_params()
+
     # create publishers - using default constructors
     publishers = Publishers()
 
@@ -85,9 +89,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     # initialise action clients
     action_clients = ActionClients()
-
-    param_listener = ParamListener(node)
-    params = param_listener.get_params()
 
     ctx = context_type(
         node=node,

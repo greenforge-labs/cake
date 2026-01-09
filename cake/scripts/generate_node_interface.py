@@ -18,7 +18,115 @@ from jinja2 import Environment, FileSystemLoader
 from jsonschema import Draft202012Validator, RefResolver
 import yaml
 
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+# Pattern to match ${params.parameter_name} substitutions
+PARAM_SUBSTITUTION_PATTERN = re.compile(r"\$\{params\.([a-zA-Z_][a-zA-Z0-9_]*)\}")
+
+
+@dataclass
+class SubstitutionInfo:
+    """Information about parameter substitutions in a value."""
+
+    has_substitutions: bool
+    is_pure_substitution: bool  # The entire value is just ${params.X}
+    param_names: List[str]  # List of parameter names referenced
+    original_value: Any  # The original YAML value
+
+
+def detect_substitutions(value: Any) -> SubstitutionInfo:
+    """
+    Detect ${params.X} patterns in a value.
+
+    Returns SubstitutionInfo with details about any substitutions found.
+    """
+    if not isinstance(value, str):
+        return SubstitutionInfo(
+            has_substitutions=False,
+            is_pure_substitution=False,
+            param_names=[],
+            original_value=value,
+        )
+
+    matches = PARAM_SUBSTITUTION_PATTERN.findall(value)
+    if not matches:
+        return SubstitutionInfo(
+            has_substitutions=False,
+            is_pure_substitution=False,
+            param_names=[],
+            original_value=value,
+        )
+
+    # Check if it's a pure substitution (entire value is just ${params.X})
+    is_pure = PARAM_SUBSTITUTION_PATTERN.fullmatch(value) is not None
+
+    return SubstitutionInfo(
+        has_substitutions=True,
+        is_pure_substitution=is_pure,
+        param_names=list(matches),
+        original_value=value,
+    )
+
+
+def collect_param_references(interface_data: Dict[str, Any]) -> List[Tuple[str, str]]:
+    """
+    Collect all ${params.X} references from the interface data.
+
+    Returns list of (param_name, location) tuples.
+    """
+    references: List[Tuple[str, str]] = []
+
+    def check_value(value: Any, location: str) -> None:
+        """Check a value for parameter references."""
+        if isinstance(value, str):
+            info = detect_substitutions(value)
+            for param_name in info.param_names:
+                references.append((param_name, location))
+        elif isinstance(value, dict):
+            for key, val in value.items():
+                check_value(val, f"{location}.{key}")
+        elif isinstance(value, list):
+            for i, item in enumerate(value):
+                check_value(item, f"{location}[{i}]")
+
+    # Check all entity types
+    entity_keys = ["publishers", "subscribers", "services", "service_clients", "actions", "action_clients"]
+    for key in entity_keys:
+        for i, entity in enumerate(interface_data.get(key, [])):
+            location = f"{key}[{i}]"
+            # Check topic/name field
+            if "topic" in entity:
+                check_value(entity["topic"], f"{location}.topic")
+            if "name" in entity:
+                check_value(entity["name"], f"{location}.name")
+            # Check QoS configuration
+            if "qos" in entity:
+                check_value(entity["qos"], f"{location}.qos")
+
+    return references
+
+
+def validate_param_substitutions(interface_data: Dict[str, Any]) -> None:
+    """
+    Validate all ${params.X} references in the interface data.
+
+    Raises InterfaceValidationError if:
+    - A referenced parameter does not exist
+    - A referenced parameter does not have read_only: true
+    """
+    parameters = interface_data.get("parameters", {})
+    references = collect_param_references(interface_data)
+
+    for param_name, location in references:
+        if param_name not in parameters:
+            raise InterfaceValidationError(
+                f"Parameter '{param_name}' referenced at {location} does not exist in parameters section"
+            )
+        if not parameters[param_name].get("read_only", False):
+            raise InterfaceValidationError(
+                f"Parameter '{param_name}' referenced at {location} must have read_only: true. "
+                "Only read-only parameters can be used in substitutions."
+            )
 
 
 class EntityKind(Enum):
@@ -221,8 +329,12 @@ def name_to_field_name(name: str) -> str:
     """
     Convert topic/service/action name to valid C++ identifier.
     Example: /cmd_vel -> cmd_vel, /robot/status -> robot_status
+    Handles ${params.X} substitutions by using the parameter name.
+    Example: ${params.topic_prefix}/${params.robot_name}/status -> topic_prefix_robot_name_status
     """
-    return name.replace("/", "_").lstrip("_")
+    # Replace ${params.X} with just X (the parameter name)
+    result = PARAM_SUBSTITUTION_PATTERN.sub(r"\1", name)
+    return result.replace("/", "_").lstrip("_")
 
 
 def generate_qos_code(qos_spec: Any) -> str:
@@ -311,36 +423,497 @@ def generate_qos_code(qos_spec: Any) -> str:
     return str(DEFAULT_QOS_DEPTH)
 
 
+def generate_cpp_string_code(value: str) -> str:
+    """
+    Generate C++ code for a string value that may contain ${params.X} substitutions.
+
+    Examples:
+    - "topic" -> '"topic"'
+    - "${params.name}" -> 'ctx->params.name'
+    - "/prefix/${params.name}/suffix" -> 'std::string("/prefix/") + ctx->params.name + std::string("/suffix")'
+    """
+    info = detect_substitutions(value)
+
+    if not info.has_substitutions:
+        return f'"{value}"'
+
+    if info.is_pure_substitution:
+        param_name = info.param_names[0]
+        return f"ctx->params.{param_name}"
+
+    # Mixed case - need to build concatenation
+    parts = []
+    last_end = 0
+
+    for match in PARAM_SUBSTITUTION_PATTERN.finditer(value):
+        # Add literal part before this match
+        if match.start() > last_end:
+            literal = value[last_end : match.start()]
+            parts.append(f'std::string("{literal}")')
+
+        # Add the parameter reference
+        param_name = match.group(1)
+        parts.append(f"ctx->params.{param_name}")
+
+        last_end = match.end()
+
+    # Add any remaining literal part after last match
+    if last_end < len(value):
+        literal = value[last_end:]
+        parts.append(f'std::string("{literal}")')
+
+    return " + ".join(parts)
+
+
+def generate_python_string_code(value: str) -> str:
+    """
+    Generate Python code for a string value that may contain ${params.X} substitutions.
+
+    Examples:
+    - "topic" -> '"topic"'
+    - "${params.name}" -> 'params.name'
+    - "/prefix/${params.name}/suffix" -> 'f"/prefix/{params.name}/suffix"'
+    """
+    info = detect_substitutions(value)
+
+    if not info.has_substitutions:
+        return f'"{value}"'
+
+    if info.is_pure_substitution:
+        param_name = info.param_names[0]
+        return f"params.{param_name}"
+
+    # Mixed case - use f-string
+    # Replace ${params.X} with {params.X}
+    fstring_content = PARAM_SUBSTITUTION_PATTERN.sub(r"{params.\1}", value)
+    return f'f"{fstring_content}"'
+
+
+def generate_cpp_int_code(value: Any) -> str:
+    """
+    Generate C++ code for an integer value that may be a ${params.X} substitution.
+
+    Examples:
+    - 10 -> '10'
+    - "${params.depth}" -> 'ctx->params.depth'
+    """
+    if isinstance(value, int):
+        return str(value)
+
+    if isinstance(value, str):
+        info = detect_substitutions(value)
+        if info.has_substitutions and info.is_pure_substitution:
+            param_name = info.param_names[0]
+            return f"ctx->params.{param_name}"
+
+    return str(value)
+
+
+def generate_python_int_code(value: Any) -> str:
+    """
+    Generate Python code for an integer value that may be a ${params.X} substitution.
+
+    Examples:
+    - 10 -> '10'
+    - "${params.depth}" -> 'params.depth'
+    """
+    if isinstance(value, int):
+        return str(value)
+
+    if isinstance(value, str):
+        info = detect_substitutions(value)
+        if info.has_substitutions and info.is_pure_substitution:
+            param_name = info.param_names[0]
+            return f"params.{param_name}"
+
+    return str(value)
+
+
+@dataclass
+class QosCodeResult:
+    """Result of QoS code generation."""
+
+    code: str
+    has_substitutions: bool
+    has_enum_substitutions: bool  # True if any enum field uses substitution
+
+
+def generate_qos_code_with_substitutions(qos_spec: Any) -> QosCodeResult:
+    """
+    Generate C++ QoS code from YAML QoS specification, handling ${params.X} substitutions.
+
+    For simple cases without substitutions, generates chainable code like:
+        rclcpp::QoS(10).reliable()
+
+    For cases with enum substitutions, generates a lambda that builds QoS:
+        [&]() { rclcpp::QoS qos(10); detail::apply_reliability(qos, ctx->params.mode); return qos; }()
+    """
+    # Check for any substitutions in the qos_spec
+    def has_any_substitutions(val: Any) -> bool:
+        if isinstance(val, str):
+            return detect_substitutions(val).has_substitutions
+        elif isinstance(val, dict):
+            return any(has_any_substitutions(v) for v in val.values())
+        return False
+
+    def has_enum_subs(val: Dict[str, Any]) -> bool:
+        """Check if any enum field has substitutions."""
+        enum_fields = ["reliability", "durability", "history", "liveliness"]
+        for field in enum_fields:
+            if field in val:
+                info = detect_substitutions(val[field])
+                if info.has_substitutions:
+                    return True
+        return False
+
+    # Handle simple cases (no substitutions at all)
+    if not has_any_substitutions(qos_spec):
+        return QosCodeResult(
+            code=generate_qos_code(qos_spec),
+            has_substitutions=False,
+            has_enum_substitutions=False,
+        )
+
+    # Integer with substitution
+    if isinstance(qos_spec, str):
+        info = detect_substitutions(qos_spec)
+        if info.is_pure_substitution:
+            return QosCodeResult(
+                code=generate_cpp_int_code(qos_spec),
+                has_substitutions=True,
+                has_enum_substitutions=False,
+            )
+
+    # Dict with substitutions
+    if isinstance(qos_spec, dict):
+        has_enum = has_enum_subs(qos_spec)
+
+        if not has_enum:
+            # Only non-enum substitutions (depth, duration fields)
+            # Can still use chainable form with substituted values
+            if "profile" in qos_spec:
+                base_qos = f"rclcpp::{qos_spec['profile']}()"
+                params = {k: v for k, v in qos_spec.items() if k != "profile"}
+            else:
+                depth = qos_spec.get("depth", DEFAULT_QOS_DEPTH)
+                depth_code = generate_cpp_int_code(depth)
+                base_qos = f"rclcpp::QoS({depth_code})"
+                params = {k: v for k, v in qos_spec.items() if k != "depth"}
+
+            methods = []
+
+            if "reliability" in params:
+                if params["reliability"] == "reliable":
+                    methods.append(".reliable()")
+                elif params["reliability"] == "best_effort":
+                    methods.append(".best_effort()")
+
+            if "durability" in params:
+                if params["durability"] == "volatile":
+                    methods.append(".durability_volatile()")
+                elif params["durability"] == "transient_local":
+                    methods.append(".transient_local()")
+
+            if "history" in params:
+                if params["history"] == "keep_last":
+                    depth_val = params.get("depth", DEFAULT_QOS_DEPTH)
+                    depth_code = generate_cpp_int_code(depth_val)
+                    methods.append(f".keep_last({depth_code})")
+                elif params["history"] == "keep_all":
+                    methods.append(".keep_all()")
+            elif "depth" in params:
+                depth_code = generate_cpp_int_code(params["depth"])
+                methods.append(f".keep_last({depth_code})")
+
+            if "deadline" in params:
+                deadline = params["deadline"]
+                if isinstance(deadline, dict):
+                    sec = generate_cpp_int_code(deadline.get("sec", 0))
+                    nsec = generate_cpp_int_code(deadline.get("nsec", 0))
+                    methods.append(f".deadline(rclcpp::Duration({sec}, {nsec}))")
+
+            if "lifespan" in params:
+                lifespan = params["lifespan"]
+                if isinstance(lifespan, dict):
+                    sec = generate_cpp_int_code(lifespan.get("sec", 0))
+                    nsec = generate_cpp_int_code(lifespan.get("nsec", 0))
+                    methods.append(f".lifespan(rclcpp::Duration({sec}, {nsec}))")
+
+            if "liveliness" in params:
+                if params["liveliness"] == "automatic":
+                    methods.append(".liveliness(rclcpp::LivelinessPolicy::Automatic)")
+                elif params["liveliness"] == "manual_by_topic":
+                    methods.append(".liveliness(rclcpp::LivelinessPolicy::ManualByTopic)")
+
+            return QosCodeResult(
+                code=base_qos + "".join(methods),
+                has_substitutions=True,
+                has_enum_substitutions=False,
+            )
+        else:
+            # Has enum substitutions - need to generate lambda with runtime mapping
+            depth = qos_spec.get("depth", DEFAULT_QOS_DEPTH)
+            depth_code = generate_cpp_int_code(depth)
+
+            # Build statements for the lambda
+            statements = [f"rclcpp::QoS qos({depth_code});"]
+
+            if "reliability" in qos_spec:
+                info = detect_substitutions(qos_spec["reliability"])
+                if info.has_substitutions:
+                    param_code = generate_cpp_int_code(qos_spec["reliability"])
+                    statements.append(f"detail::apply_reliability(qos, {param_code});")
+                else:
+                    val = qos_spec["reliability"]
+                    if val == "reliable":
+                        statements.append("qos.reliable();")
+                    elif val == "best_effort":
+                        statements.append("qos.best_effort();")
+
+            if "durability" in qos_spec:
+                info = detect_substitutions(qos_spec["durability"])
+                if info.has_substitutions:
+                    param_code = generate_cpp_int_code(qos_spec["durability"])
+                    statements.append(f"detail::apply_durability(qos, {param_code});")
+                else:
+                    val = qos_spec["durability"]
+                    if val == "volatile":
+                        statements.append("qos.durability_volatile();")
+                    elif val == "transient_local":
+                        statements.append("qos.transient_local();")
+
+            if "history" in qos_spec:
+                info = detect_substitutions(qos_spec["history"])
+                if info.has_substitutions:
+                    param_code = generate_cpp_int_code(qos_spec["history"])
+                    statements.append(f"detail::apply_history(qos, {param_code}, {depth_code});")
+                else:
+                    val = qos_spec["history"]
+                    if val == "keep_last":
+                        statements.append(f"qos.keep_last({depth_code});")
+                    elif val == "keep_all":
+                        statements.append("qos.keep_all();")
+
+            if "liveliness" in qos_spec:
+                info = detect_substitutions(qos_spec["liveliness"])
+                if info.has_substitutions:
+                    param_code = generate_cpp_int_code(qos_spec["liveliness"])
+                    statements.append(f"detail::apply_liveliness(qos, {param_code});")
+                else:
+                    val = qos_spec["liveliness"]
+                    if val == "automatic":
+                        statements.append("qos.liveliness(rclcpp::LivelinessPolicy::Automatic);")
+                    elif val == "manual_by_topic":
+                        statements.append("qos.liveliness(rclcpp::LivelinessPolicy::ManualByTopic);")
+
+            if "deadline" in qos_spec:
+                deadline = qos_spec["deadline"]
+                if isinstance(deadline, dict):
+                    sec = generate_cpp_int_code(deadline.get("sec", 0))
+                    nsec = generate_cpp_int_code(deadline.get("nsec", 0))
+                    statements.append(f"qos.deadline(rclcpp::Duration({sec}, {nsec}));")
+
+            if "lifespan" in qos_spec:
+                lifespan = qos_spec["lifespan"]
+                if isinstance(lifespan, dict):
+                    sec = generate_cpp_int_code(lifespan.get("sec", 0))
+                    nsec = generate_cpp_int_code(lifespan.get("nsec", 0))
+                    statements.append(f"qos.lifespan(rclcpp::Duration({sec}, {nsec}));")
+
+            statements.append("return qos;")
+            lambda_body = " ".join(statements)
+
+            return QosCodeResult(
+                code=f"[&]() {{ {lambda_body} }}()",
+                has_substitutions=True,
+                has_enum_substitutions=True,
+            )
+
+    # Fallback
+    return QosCodeResult(
+        code=str(DEFAULT_QOS_DEPTH),
+        has_substitutions=False,
+        has_enum_substitutions=False,
+    )
+
+
+def generate_python_qos_code_with_substitutions(qos_spec: Any) -> Tuple[str, Set[str], bool]:
+    """
+    Generate Python QoS code from YAML QoS specification, handling ${params.X} substitutions.
+
+    Returns (code, required_imports, has_enum_substitutions).
+    """
+    # Check for any substitutions in the qos_spec
+    def has_any_substitutions(val: Any) -> bool:
+        if isinstance(val, str):
+            return detect_substitutions(val).has_substitutions
+        elif isinstance(val, dict):
+            return any(has_any_substitutions(v) for v in val.values())
+        return False
+
+    def has_enum_subs(val: Dict[str, Any]) -> bool:
+        """Check if any enum field has substitutions."""
+        enum_fields = ["reliability", "durability", "history", "liveliness"]
+        for field in enum_fields:
+            if field in val:
+                info = detect_substitutions(val[field])
+                if info.has_substitutions:
+                    return True
+        return False
+
+    # Handle simple cases (no substitutions at all)
+    if not has_any_substitutions(qos_spec):
+        code, imports = generate_python_qos_code(qos_spec)
+        return code, imports, False
+
+    # Integer with substitution
+    if isinstance(qos_spec, str):
+        info = detect_substitutions(qos_spec)
+        if info.is_pure_substitution:
+            return generate_python_int_code(qos_spec), set(), False
+
+    required_imports: Set[str] = set()
+
+    # Dict with substitutions
+    if isinstance(qos_spec, dict):
+        has_enum = has_enum_subs(qos_spec)
+
+        required_imports.add("QoSProfile")
+        args = []
+
+        # Depth
+        if "depth" in qos_spec:
+            depth_code = generate_python_int_code(qos_spec["depth"])
+            args.append(f"depth={depth_code}")
+        elif "profile" not in qos_spec:
+            args.append(f"depth={DEFAULT_QOS_DEPTH}")
+
+        # Reliability
+        if "reliability" in qos_spec:
+            info = detect_substitutions(qos_spec["reliability"])
+            if info.has_substitutions:
+                param_code = generate_python_int_code(qos_spec["reliability"])
+                args.append(f"reliability=_RELIABILITY_MAP[{param_code}]")
+            else:
+                required_imports.add("ReliabilityPolicy")
+                val = qos_spec["reliability"]
+                if val == "reliable":
+                    args.append("reliability=ReliabilityPolicy.RELIABLE")
+                elif val == "best_effort":
+                    args.append("reliability=ReliabilityPolicy.BEST_EFFORT")
+
+        # Durability
+        if "durability" in qos_spec:
+            info = detect_substitutions(qos_spec["durability"])
+            if info.has_substitutions:
+                param_code = generate_python_int_code(qos_spec["durability"])
+                args.append(f"durability=_DURABILITY_MAP[{param_code}]")
+            else:
+                required_imports.add("DurabilityPolicy")
+                val = qos_spec["durability"]
+                if val == "volatile":
+                    args.append("durability=DurabilityPolicy.VOLATILE")
+                elif val == "transient_local":
+                    args.append("durability=DurabilityPolicy.TRANSIENT_LOCAL")
+
+        # History
+        if "history" in qos_spec:
+            info = detect_substitutions(qos_spec["history"])
+            if info.has_substitutions:
+                param_code = generate_python_int_code(qos_spec["history"])
+                args.append(f"history=_HISTORY_MAP[{param_code}]")
+            else:
+                required_imports.add("HistoryPolicy")
+                val = qos_spec["history"]
+                if val == "keep_last":
+                    args.append("history=HistoryPolicy.KEEP_LAST")
+                elif val == "keep_all":
+                    args.append("history=HistoryPolicy.KEEP_ALL")
+
+        # Liveliness
+        if "liveliness" in qos_spec:
+            info = detect_substitutions(qos_spec["liveliness"])
+            if info.has_substitutions:
+                param_code = generate_python_int_code(qos_spec["liveliness"])
+                args.append(f"liveliness=_LIVELINESS_MAP[{param_code}]")
+            else:
+                required_imports.add("LivelinessPolicy")
+                val = qos_spec["liveliness"]
+                if val == "automatic":
+                    args.append("liveliness=LivelinessPolicy.AUTOMATIC")
+                elif val == "manual_by_topic":
+                    args.append("liveliness=LivelinessPolicy.MANUAL_BY_TOPIC")
+
+        # Deadline
+        if "deadline" in qos_spec:
+            deadline = qos_spec["deadline"]
+            if isinstance(deadline, dict):
+                required_imports.add("Duration")
+                sec = generate_python_int_code(deadline.get("sec", 0))
+                nsec = generate_python_int_code(deadline.get("nsec", 0))
+                args.append(f"deadline=Duration(seconds={sec}, nanoseconds={nsec})")
+
+        # Lifespan
+        if "lifespan" in qos_spec:
+            lifespan = qos_spec["lifespan"]
+            if isinstance(lifespan, dict):
+                required_imports.add("Duration")
+                sec = generate_python_int_code(lifespan.get("sec", 0))
+                nsec = generate_python_int_code(lifespan.get("nsec", 0))
+                args.append(f"lifespan=Duration(seconds={sec}, nanoseconds={nsec})")
+
+        code = f"QoSProfile({', '.join(args)})"
+        return code, required_imports, has_enum
+
+    # Fallback
+    return str(DEFAULT_QOS_DEPTH), set(), False
+
+
 def prepare_entities(
     entities_raw: List[Dict[str, Any]],
     config: EntityConfig,
-) -> List[Dict[str, str]]:
+) -> Tuple[List[Dict[str, Any]], bool]:
     """
     Generic entity preparation for C++ template rendering.
     Converts raw YAML data into template-ready format based on entity configuration.
+
+    Returns tuple of (entities_list, has_enum_substitutions).
     """
     entities = []
+    has_enum_substitutions = False
+
     for entity in entities_raw:
         if entity.get("manually_created", False):
             continue
 
         name_value = entity[config.name_key]
-        prepared = {
+
+        # Generate code for the topic/name field (with potential substitutions)
+        name_code = generate_cpp_string_code(name_value)
+
+        prepared: Dict[str, Any] = {
             config.name_key: name_value,
             config.output_type_key: ros_type_to_cpp(entity["type"]),
             "field_name": name_to_field_name(name_value),
+            "name_code": name_code,  # C++ code for the topic/name
         }
 
         if config.has_qos:
             if config.qos_allows_int:
                 # Publishers/subscribers: use default depth if not specified
-                prepared["qos_code"] = generate_qos_code(entity.get("qos", DEFAULT_QOS_DEPTH))
+                qos_result = generate_qos_code_with_substitutions(entity.get("qos", DEFAULT_QOS_DEPTH))
+                prepared["qos_code"] = qos_result.code
+                if qos_result.has_enum_substitutions:
+                    has_enum_substitutions = True
             elif "qos" in entity:
                 # Services: only generate QoS if explicitly specified
-                prepared["qos_code"] = generate_qos_code(entity["qos"])
+                qos_result = generate_qos_code_with_substitutions(entity["qos"])
+                prepared["qos_code"] = qos_result.code
+                if qos_result.has_enum_substitutions:
+                    has_enum_substitutions = True
 
         entities.append(prepared)
-    return entities
+    return entities, has_enum_substitutions
 
 
 def ros_type_to_python_import(ros_type: str) -> str:
@@ -498,14 +1071,15 @@ def _get_python_type_key(output_type_key: str) -> str:
 def prepare_python_entities(
     entities_raw: List[Dict[str, Any]],
     config: EntityConfig,
-) -> tuple[List[Dict[str, str]], Set[str]]:
+) -> Tuple[List[Dict[str, Any]], Set[str], bool]:
     """
     Generic entity preparation for Python template rendering.
     Converts raw YAML data into template-ready format based on entity configuration.
-    Returns tuple of (entities_list, qos_imports_needed).
+    Returns tuple of (entities_list, qos_imports_needed, has_enum_substitutions).
     """
     entities = []
     all_qos_imports: Set[str] = set()
+    has_enum_substitutions = False
 
     python_type_key = _get_python_type_key(config.output_type_key)
     python_class_key = _get_python_class_key(config.output_type_key)
@@ -517,28 +1091,38 @@ def prepare_python_entities(
         name_value = entity[config.name_key]
         ros_type = entity["type"]
 
+        # Generate code for the topic/name field (with potential substitutions)
+        name_code = generate_python_string_code(name_value)
+
         prepared: Dict[str, Any] = {
             config.name_key: name_value,
             python_type_key: ros_type,
             python_class_key: ros_type_to_python_class(ros_type),
             "field_name": name_to_field_name(name_value),
             "import_stmt": ros_type_to_python_import(ros_type),
+            "name_code": name_code,  # Python code for the topic/name
         }
 
         if config.has_qos:
             if config.qos_allows_int:
                 # Publishers/subscribers: use default depth if not specified
-                qos_code, qos_imports = generate_python_qos_code(entity.get("qos", DEFAULT_QOS_DEPTH))
+                qos_code, qos_imports, has_enum = generate_python_qos_code_with_substitutions(
+                    entity.get("qos", DEFAULT_QOS_DEPTH)
+                )
                 prepared["qos_code"] = qos_code
                 all_qos_imports.update(qos_imports)
+                if has_enum:
+                    has_enum_substitutions = True
             elif "qos" in entity:
                 # Services: only generate QoS if explicitly specified
-                qos_code, qos_imports = generate_python_qos_code(entity["qos"])
+                qos_code, qos_imports, has_enum = generate_python_qos_code_with_substitutions(entity["qos"])
                 prepared["qos_code"] = qos_code
                 all_qos_imports.update(qos_imports)
+                if has_enum:
+                    has_enum_substitutions = True
 
         entities.append(prepared)
-    return entities, all_qos_imports
+    return entities, all_qos_imports, has_enum_substitutions
 
 
 def collect_includes(interface_data: Dict[str, Any]) -> List[str]:
@@ -693,16 +1277,35 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     package_name = interface_data["node"].get("package", "")
 
     # Prepare template data using generic entity preparation
-    publishers = prepare_entities(interface_data.get("publishers", []), ENTITY_CONFIGS[EntityKind.PUBLISHER])
-    subscribers = prepare_entities(interface_data.get("subscribers", []), ENTITY_CONFIGS[EntityKind.SUBSCRIBER])
-    services = prepare_entities(interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE])
-    service_clients = prepare_entities(
+    # Track whether any entity uses enum substitutions
+    has_enum_substitutions = False
+
+    publishers, pub_enum_subs = prepare_entities(
+        interface_data.get("publishers", []), ENTITY_CONFIGS[EntityKind.PUBLISHER]
+    )
+    has_enum_substitutions = has_enum_substitutions or pub_enum_subs
+
+    subscribers, sub_enum_subs = prepare_entities(
+        interface_data.get("subscribers", []), ENTITY_CONFIGS[EntityKind.SUBSCRIBER]
+    )
+    has_enum_substitutions = has_enum_substitutions or sub_enum_subs
+
+    services, srv_enum_subs = prepare_entities(interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE])
+    has_enum_substitutions = has_enum_substitutions or srv_enum_subs
+
+    service_clients, cli_enum_subs = prepare_entities(
         interface_data.get("service_clients", []), ENTITY_CONFIGS[EntityKind.SERVICE_CLIENT]
     )
-    actions = prepare_entities(interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION])
-    action_clients = prepare_entities(
+    has_enum_substitutions = has_enum_substitutions or cli_enum_subs
+
+    actions, act_enum_subs = prepare_entities(interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION])
+    has_enum_substitutions = has_enum_substitutions or act_enum_subs
+
+    action_clients, actcli_enum_subs = prepare_entities(
         interface_data.get("action_clients", []), ENTITY_CONFIGS[EntityKind.ACTION_CLIENT]
     )
+    has_enum_substitutions = has_enum_substitutions or actcli_enum_subs
+
     message_includes = collect_includes(interface_data)
     implementation_namespace = get_implementation_namespace(interface_data)
     export_namespace = get_namespace(interface_data)
@@ -722,6 +1325,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         service_clients=service_clients,
         actions=actions,
         action_clients=action_clients,
+        has_enum_substitutions=has_enum_substitutions,
     )
 
 
@@ -761,22 +1365,38 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
     package_name = interface_data["node"].get("package", "")
 
     # Prepare template data using generic entity preparation
-    publishers, pub_qos_imports = prepare_python_entities(
+    # Track whether any entity uses enum substitutions
+    has_enum_substitutions = False
+
+    publishers, pub_qos_imports, pub_enum_subs = prepare_python_entities(
         interface_data.get("publishers", []), ENTITY_CONFIGS[EntityKind.PUBLISHER]
     )
-    subscribers, sub_qos_imports = prepare_python_entities(
+    has_enum_substitutions = has_enum_substitutions or pub_enum_subs
+
+    subscribers, sub_qos_imports, sub_enum_subs = prepare_python_entities(
         interface_data.get("subscribers", []), ENTITY_CONFIGS[EntityKind.SUBSCRIBER]
     )
-    services, srv_qos_imports = prepare_python_entities(
+    has_enum_substitutions = has_enum_substitutions or sub_enum_subs
+
+    services, srv_qos_imports, srv_enum_subs = prepare_python_entities(
         interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE]
     )
-    service_clients, cli_qos_imports = prepare_python_entities(
+    has_enum_substitutions = has_enum_substitutions or srv_enum_subs
+
+    service_clients, cli_qos_imports, cli_enum_subs = prepare_python_entities(
         interface_data.get("service_clients", []), ENTITY_CONFIGS[EntityKind.SERVICE_CLIENT]
     )
-    actions, _ = prepare_python_entities(interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION])
-    action_clients, _ = prepare_python_entities(
+    has_enum_substitutions = has_enum_substitutions or cli_enum_subs
+
+    actions, _, act_enum_subs = prepare_python_entities(
+        interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION]
+    )
+    has_enum_substitutions = has_enum_substitutions or act_enum_subs
+
+    action_clients, _, actcli_enum_subs = prepare_python_entities(
         interface_data.get("action_clients", []), ENTITY_CONFIGS[EntityKind.ACTION_CLIENT]
     )
+    has_enum_substitutions = has_enum_substitutions or actcli_enum_subs
 
     # Collect all QoS imports
     qos_imports = pub_qos_imports | sub_qos_imports | srv_qos_imports | cli_qos_imports
@@ -806,6 +1426,7 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
         service_clients=service_clients,
         actions=actions,
         action_clients=action_clients,
+        has_enum_substitutions=has_enum_substitutions,
     )
 
 
@@ -920,6 +1541,7 @@ def main():
     # Validate YAML structure before processing
     try:
         validate_interface_yaml(interface_data)
+        validate_param_substitutions(interface_data)
     except InterfaceValidationError as e:
         print(f"Error: Validation failed for {interface_path}:", file=sys.stderr)
         print(f"  {e}", file=sys.stderr)

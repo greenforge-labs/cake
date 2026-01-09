@@ -58,16 +58,16 @@ class QosPredefinedBase : public cake::BaseNode<"qos_predefined", extend_options
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
 
+        // init parameters (before entities to support ${params.X} substitutions)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         // init publishers
         ctx->publishers.sensor_data_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "sensor_data_topic", rclcpp::SensorDataQoS());
         ctx->publishers.system_defaults_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "system_defaults_topic", rclcpp::SystemDefaultsQoS());
         // init subscribers
         ctx->subscribers.parameters_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "parameters_topic", rclcpp::ParametersQoS());
         ctx->subscribers.services_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "services_topic", rclcpp::ServicesQoS());
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };

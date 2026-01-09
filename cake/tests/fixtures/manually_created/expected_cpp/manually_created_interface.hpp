@@ -59,14 +59,14 @@ class ManuallyCreatedBase : public cake::BaseNode<"manually_created", extend_opt
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
 
+        // init parameters (before entities to support ${params.X} substitutions)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         // init publishers
         ctx->publishers.auto_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "auto_topic", 10);
         // init subscribers
         ctx->subscribers.auto_sub = cake::create_subscriber<std_msgs::msg::Bool>(ctx, "auto_sub", 10);
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };

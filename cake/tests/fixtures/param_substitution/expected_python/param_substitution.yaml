@@ -1,0 +1,63 @@
+node:
+  name: param_substitution
+  package: test_package
+parameters:
+  robot_name:
+    type: string
+    default_value: robot1
+    description: Name of the robot
+    read_only: true
+  topic_prefix:
+    type: string
+    default_value: /robots
+    description: Prefix for all topics
+    read_only: true
+  qos_depth:
+    type: int
+    default_value: 10
+    description: QoS queue depth
+    read_only: true
+  reliability_mode:
+    type: string
+    default_value: reliable
+    description: QoS reliability mode
+    read_only: true
+  deadline_sec:
+    type: int
+    default_value: 5
+    description: Deadline in seconds
+    read_only: true
+publishers:
+- topic: ${params.topic_prefix}
+  type: std_msgs/msg/String
+  qos: 10
+- topic: ${params.topic_prefix}/${params.robot_name}/status
+  type: std_msgs/msg/String
+  qos: ${params.qos_depth}
+- topic: /cmd_vel
+  type: geometry_msgs/msg/Twist
+  qos:
+    depth: ${params.qos_depth}
+    reliability: reliable
+- topic: /sensor_data
+  type: std_msgs/msg/Float32
+  qos:
+    depth: ${params.qos_depth}
+    reliability: ${params.reliability_mode}
+- topic: /critical_data
+  type: std_msgs/msg/String
+  qos:
+    depth: 10
+    deadline:
+      sec: ${params.deadline_sec}
+      nsec: 0
+subscribers:
+- topic: ${params.topic_prefix}/${params.robot_name}/command
+  type: std_msgs/msg/String
+  qos: ${params.qos_depth}
+services:
+- name: ${params.topic_prefix}/${params.robot_name}/reset
+  type: std_srvs/srv/Trigger
+actions:
+- name: ${params.topic_prefix}/${params.robot_name}/navigate
+  type: example_interfaces/action/Fibonacci

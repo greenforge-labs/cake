@@ -46,6 +46,12 @@ properties:
       $ref: "#/$defs/actionClient"
 
 $defs:
+  # Parameter substitution pattern: ${params.parameter_name}
+  paramSubstitution:
+    type: string
+    description: "Parameter substitution: ${params.parameter_name}. Only read-only parameters can be used."
+    pattern: ^\$\{params\.[a-zA-Z_][a-zA-Z0-9_]*\}$
+
   node:
     type: object
     description: Node metadata
@@ -66,6 +72,12 @@ $defs:
     type: string
     description: "ROS topic name. Valid characters: letters, digits, forward slash (/), underscore (_)"
     pattern: ^[a-zA-Z0-9/_]+$
+
+  # Topic name that may contain ${params.X} substitutions
+  topicNameOrSubstitution:
+    type: string
+    description: "ROS topic name, optionally with ${params.X} substitutions for read-only parameters"
+    pattern: ^[a-zA-Z0-9/_${}\.]+$
 
   rosMessageType:
     type: string
@@ -102,59 +114,96 @@ $defs:
       - ParametersQoS
       - ParameterEventsQoS
 
+  # Integer or parameter substitution
+  integerOrSubstitution:
+    oneOf:
+      - type: integer
+        minimum: 0
+      - $ref: "#/$defs/paramSubstitution"
+
+  # Reliability enum or parameter substitution
+  reliabilityOrSubstitution:
+    oneOf:
+      - type: string
+        enum:
+          - reliable
+          - best_effort
+      - $ref: "#/$defs/paramSubstitution"
+
+  # Durability enum or parameter substitution
+  durabilityOrSubstitution:
+    oneOf:
+      - type: string
+        enum:
+          - volatile
+          - transient_local
+      - $ref: "#/$defs/paramSubstitution"
+
+  # History enum or parameter substitution
+  historyOrSubstitution:
+    oneOf:
+      - type: string
+        enum:
+          - keep_last
+          - keep_all
+      - $ref: "#/$defs/paramSubstitution"
+
+  # Liveliness enum or parameter substitution
+  livelinessOrSubstitution:
+    oneOf:
+      - type: string
+        enum:
+          - automatic
+          - manual_by_topic
+      - $ref: "#/$defs/paramSubstitution"
+
   duration:
     type: object
     description: Duration specification with seconds and nanoseconds
     additionalProperties: false
     properties:
       sec:
-        type: integer
-        description: Seconds component
-        minimum: 0
-        default: 0
+        description: Seconds component (integer or ${params.X} substitution)
+        oneOf:
+          - type: integer
+            minimum: 0
+            default: 0
+          - $ref: "#/$defs/paramSubstitution"
       nsec:
-        type: integer
-        description: Nanoseconds component
-        minimum: 0
-        default: 0
+        description: Nanoseconds component (integer or ${params.X} substitution)
+        oneOf:
+          - type: integer
+            minimum: 0
+            default: 0
+          - $ref: "#/$defs/paramSubstitution"
 
   qosCustom:
     type: object
-    description: Custom QoS configuration
+    description: Custom QoS configuration (supports ${params.X} substitutions for read-only parameters)
     additionalProperties: false
     properties:
       depth:
-        type: integer
-        description: Queue depth
-        minimum: 0
-        default: 10
+        description: Queue depth (integer or ${params.X} substitution)
+        oneOf:
+          - type: integer
+            minimum: 0
+            default: 10
+          - $ref: "#/$defs/paramSubstitution"
       profile:
         $ref: "#/$defs/qosProfile"
         description: Base QoS profile to extend
       reliability:
-        type: string
+        $ref: "#/$defs/reliabilityOrSubstitution"
         description: Reliability policy
-        enum:
-          - reliable
-          - best_effort
       durability:
-        type: string
+        $ref: "#/$defs/durabilityOrSubstitution"
         description: Durability policy
-        enum:
-          - volatile
-          - transient_local
       history:
-        type: string
+        $ref: "#/$defs/historyOrSubstitution"
         description: History policy
-        enum:
-          - keep_last
-          - keep_all
       liveliness:
-        type: string
+        $ref: "#/$defs/livelinessOrSubstitution"
         description: Liveliness policy
-        enum:
-          - automatic
-          - manual_by_topic
       deadline:
         $ref: "#/$defs/duration"
         description: Deadline duration
@@ -163,19 +212,21 @@ $defs:
         description: Lifespan duration
 
   qosPubSub:
-    description: "QoS configuration for publishers/subscribers. Can be integer (depth), string (profile), or object (custom)"
+    description: "QoS configuration for publishers/subscribers. Can be integer (depth), string (profile), object (custom), or ${params.X}"
     oneOf:
       - type: integer
         description: Queue depth (shorthand for keep_last with specified depth)
         minimum: 0
       - $ref: "#/$defs/qosProfile"
       - $ref: "#/$defs/qosCustom"
+      - $ref: "#/$defs/paramSubstitution"
 
   qosService:
-    description: "QoS configuration for services. Integer values are NOT allowed - use profile string or custom object"
+    description: "QoS configuration for services. Integer values are NOT allowed - use profile string, custom object, or ${params.X}"
     oneOf:
       - $ref: "#/$defs/qosProfile"
       - $ref: "#/$defs/qosCustom"
+      - $ref: "#/$defs/paramSubstitution"
 
   publisher:
     type: object
@@ -186,8 +237,8 @@ $defs:
     additionalProperties: false
     properties:
       topic:
-        $ref: "#/$defs/topicName"
-        description: Topic name to publish on
+        $ref: "#/$defs/topicNameOrSubstitution"
+        description: Topic name to publish on (supports ${params.X} substitutions)
       type:
         $ref: "#/$defs/rosMessageType"
         description: ROS message type
@@ -217,8 +268,8 @@ $defs:
     additionalProperties: false
     properties:
       topic:
-        $ref: "#/$defs/topicName"
-        description: Topic name to subscribe to
+        $ref: "#/$defs/topicNameOrSubstitution"
+        description: Topic name to subscribe to (supports ${params.X} substitutions)
       type:
         $ref: "#/$defs/rosMessageType"
         description: ROS message type
@@ -239,8 +290,8 @@ $defs:
     additionalProperties: false
     properties:
       name:
-        $ref: "#/$defs/topicName"
-        description: Service name
+        $ref: "#/$defs/topicNameOrSubstitution"
+        description: Service name (supports ${params.X} substitutions)
       type:
         $ref: "#/$defs/rosServiceType"
         description: ROS service type
@@ -261,8 +312,8 @@ $defs:
     additionalProperties: false
     properties:
       name:
-        $ref: "#/$defs/topicName"
-        description: Service name to connect to
+        $ref: "#/$defs/topicNameOrSubstitution"
+        description: Service name to connect to (supports ${params.X} substitutions)
       type:
         $ref: "#/$defs/rosServiceType"
         description: ROS service type
@@ -283,8 +334,8 @@ $defs:
     additionalProperties: false
     properties:
       name:
-        $ref: "#/$defs/topicName"
-        description: Action name
+        $ref: "#/$defs/topicNameOrSubstitution"
+        description: Action name (supports ${params.X} substitutions)
       type:
         $ref: "#/$defs/rosActionType"
         description: ROS action type
@@ -302,8 +353,8 @@ $defs:
     additionalProperties: false
     properties:
       name:
-        $ref: "#/$defs/topicName"
-        description: Action name to connect to
+        $ref: "#/$defs/topicNameOrSubstitution"
+        description: Action name to connect to (supports ${params.X} substitutions)
       type:
         $ref: "#/$defs/rosActionType"
         description: ROS action type

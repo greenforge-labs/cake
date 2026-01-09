@@ -1,0 +1,26 @@
+test_package::param_substitution:
+  robot_name:
+    type: string
+    default_value: robot1
+    description: Name of the robot
+    read_only: true
+  topic_prefix:
+    type: string
+    default_value: /robots
+    description: Prefix for all topics
+    read_only: true
+  qos_depth:
+    type: int
+    default_value: 10
+    description: QoS queue depth
+    read_only: true
+  reliability_mode:
+    type: string
+    default_value: reliable
+    description: QoS reliability mode
+    read_only: true
+  deadline_sec:
+    type: int
+    default_value: 5
+    description: Deadline in seconds
+    read_only: true

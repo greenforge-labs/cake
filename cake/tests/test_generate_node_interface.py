@@ -1449,6 +1449,365 @@ publishers:
     assert "RCLCPP_COMPONENTS_REGISTER_NODE(test_package::TestNode)" in content
 
 
+def test_param_substitution_nonexistent_param(tmp_path):
+    """Test that referencing a non-existent parameter produces an error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: test_package
+
+parameters:
+  robot_name:
+    type: string
+    default_value: "robot1"
+    read_only: true
+
+publishers:
+  - topic: ${params.nonexistent_param}/status
+    type: std_msgs/msg/String
+    qos: 10
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0, "Should fail for non-existent parameter reference"
+    assert "nonexistent_param" in result.stderr
+    assert "does not exist" in result.stderr
+
+
+def test_param_substitution_non_readonly_param(tmp_path):
+    """Test that referencing a non-read_only parameter produces an error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: test_package
+
+parameters:
+  topic_prefix:
+    type: string
+    default_value: "/robots"
+    read_only: false
+
+publishers:
+  - topic: ${params.topic_prefix}/status
+    type: std_msgs/msg/String
+    qos: 10
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0, "Should fail for non-read_only parameter reference"
+    assert "topic_prefix" in result.stderr
+    assert "read_only" in result.stderr
+
+
+def test_param_substitution_valid(tmp_path):
+    """Test that valid parameter substitutions work correctly."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: test_package
+
+parameters:
+  topic_prefix:
+    type: string
+    default_value: "/robots"
+    read_only: true
+  qos_depth:
+    type: int
+    default_value: 10
+    read_only: true
+
+publishers:
+  - topic: ${params.topic_prefix}/status
+    type: std_msgs/msg/String
+    qos: ${params.qos_depth}
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Should succeed for valid param substitutions. stderr: {result.stderr}"
+
+    # Check generated header uses param substitutions
+    header_file = tmp_path / "test_node_interface.hpp"
+    with open(header_file, "r") as f:
+        content = f.read()
+
+    # Check topic is dynamically constructed
+    assert "ctx->params.topic_prefix" in content, "Should use params.topic_prefix for topic"
+    assert "ctx->params.qos_depth" in content, "Should use params.qos_depth for QoS"
+
+
+def test_param_substitution_qos_all_enums(tmp_path):
+    """Test parameter substitutions in all QoS enum fields."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: test_package
+
+parameters:
+  reliability_mode:
+    type: string
+    default_value: "reliable"
+    read_only: true
+  durability_mode:
+    type: string
+    default_value: "volatile"
+    read_only: true
+  history_mode:
+    type: string
+    default_value: "keep_last"
+    read_only: true
+  liveliness_mode:
+    type: string
+    default_value: "automatic"
+    read_only: true
+  queue_depth:
+    type: int
+    default_value: 10
+    read_only: true
+
+publishers:
+  - topic: /test_reliability
+    type: std_msgs/msg/String
+    qos:
+      depth: 10
+      reliability: ${params.reliability_mode}
+  - topic: /test_durability
+    type: std_msgs/msg/String
+    qos:
+      depth: 10
+      durability: ${params.durability_mode}
+  - topic: /test_history
+    type: std_msgs/msg/String
+    qos:
+      depth: ${params.queue_depth}
+      history: ${params.history_mode}
+  - topic: /test_liveliness
+    type: std_msgs/msg/String
+    qos:
+      depth: 10
+      liveliness: ${params.liveliness_mode}
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Should succeed for QoS enum substitutions. stderr: {result.stderr}"
+
+    header_file = tmp_path / "test_node_interface.hpp"
+    with open(header_file, "r") as f:
+        content = f.read()
+
+    # Check that enum helper functions are generated
+    assert "apply_reliability" in content, "Should have reliability helper"
+    assert "apply_durability" in content, "Should have durability helper"
+    assert "apply_history" in content, "Should have history helper"
+    assert "apply_liveliness" in content, "Should have liveliness helper"
+
+    # Check that params are used in QoS construction
+    assert "ctx->params.reliability_mode" in content, "Should use reliability_mode param"
+    assert "ctx->params.durability_mode" in content, "Should use durability_mode param"
+    assert "ctx->params.history_mode" in content, "Should use history_mode param"
+    assert "ctx->params.liveliness_mode" in content, "Should use liveliness_mode param"
+
+
+def test_param_substitution_qos_duration(tmp_path):
+    """Test parameter substitutions in QoS duration fields."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: test_package
+
+parameters:
+  deadline_sec:
+    type: int
+    default_value: 5
+    read_only: true
+  lifespan_sec:
+    type: int
+    default_value: 10
+    read_only: true
+
+publishers:
+  - topic: /test_deadline
+    type: std_msgs/msg/String
+    qos:
+      depth: 10
+      deadline:
+        sec: ${params.deadline_sec}
+        nsec: 0
+  - topic: /test_lifespan
+    type: std_msgs/msg/String
+    qos:
+      depth: 10
+      lifespan:
+        sec: ${params.lifespan_sec}
+        nsec: 0
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Should succeed for QoS duration substitutions. stderr: {result.stderr}"
+
+    header_file = tmp_path / "test_node_interface.hpp"
+    with open(header_file, "r") as f:
+        content = f.read()
+
+    # Check that duration params are used
+    assert "ctx->params.deadline_sec" in content, "Should use deadline_sec param"
+    assert "ctx->params.lifespan_sec" in content, "Should use lifespan_sec param"
+
+
+def test_param_substitution_qos_python(tmp_path):
+    """Test parameter substitutions in QoS fields for Python generation."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: test_package
+
+parameters:
+  reliability_mode:
+    type: string
+    default_value: "reliable"
+    read_only: true
+  queue_depth:
+    type: int
+    default_value: 10
+    read_only: true
+
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      depth: ${params.queue_depth}
+      reliability: ${params.reliability_mode}
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "python",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Should succeed for Python QoS substitutions. stderr: {result.stderr}"
+
+    interface_file = tmp_path / "interface.py"
+    with open(interface_file, "r") as f:
+        content = f.read()
+
+    # Check that mapping dictionaries are generated
+    assert "_RELIABILITY_MAP" in content, "Should have reliability mapping dict"
+
+    # Check that params are used
+    assert "params.queue_depth" in content, "Should use queue_depth param"
+    assert "params.reliability_mode" in content, "Should use reliability_mode param"
+    assert "_RELIABILITY_MAP[params.reliability_mode]" in content, "Should use mapping for reliability"
+
+
 if __name__ == "__main__":
     # Allow running directly with python
     pytest.main([__file__, "-v"])

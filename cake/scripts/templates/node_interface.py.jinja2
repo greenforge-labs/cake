@@ -11,11 +11,25 @@ from rclpy.client import Client
 {%- if action_clients %}
 from rclpy.action import ActionClient
 {%- endif %}
-{%- if qos_imports %}
+{%- if qos_imports or has_enum_substitutions %}
 from rclpy.qos import (
 {%- for qos_import in qos_imports|sort %}
     {{ qos_import }},
 {%- endfor %}
+{%- if has_enum_substitutions %}
+{%- if 'ReliabilityPolicy' not in qos_imports %}
+    ReliabilityPolicy,
+{%- endif %}
+{%- if 'DurabilityPolicy' not in qos_imports %}
+    DurabilityPolicy,
+{%- endif %}
+{%- if 'HistoryPolicy' not in qos_imports %}
+    HistoryPolicy,
+{%- endif %}
+{%- if 'LivelinessPolicy' not in qos_imports %}
+    LivelinessPolicy,
+{%- endif %}
+{%- endif %}
 )
 {%- endif %}
 
@@ -28,6 +42,15 @@ import cake
 from typing import Callable, TypeVar
 
 from .parameters import Params, ParamListener
+
+{%- if has_enum_substitutions %}
+
+# Mapping dictionaries for runtime enum substitution
+_RELIABILITY_MAP = {"reliable": ReliabilityPolicy.RELIABLE, "best_effort": ReliabilityPolicy.BEST_EFFORT}
+_DURABILITY_MAP = {"volatile": DurabilityPolicy.VOLATILE, "transient_local": DurabilityPolicy.TRANSIENT_LOCAL}
+_HISTORY_MAP = {"keep_last": HistoryPolicy.KEEP_LAST, "keep_all": HistoryPolicy.KEEP_ALL}
+_LIVELINESS_MAP = {"automatic": LivelinessPolicy.AUTOMATIC, "manual_by_topic": LivelinessPolicy.MANUAL_BY_TOPIC}
+{%- endif %}
 
 
 @dataclass
@@ -118,6 +141,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("{{ node_name }}")
 
+    # initialise parameters (before entities to support ${params.X} substitutions)
+    param_listener = ParamListener(node)
+    params = param_listener.get_params()
+
     # create publishers - using default constructors
     publishers = Publishers()
 
@@ -131,7 +158,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 {%- if service_clients %}
     service_clients = ServiceClients(
 {%- for client in service_clients %}
-        {{ client.field_name }}=node.create_client({{ client.srv_class }}, "{{ client.name }}"{% if client.qos_code %}, qos_profile={{ client.qos_code }}{% endif %}),
+        {{ client.field_name }}=node.create_client({{ client.srv_class }}, {{ client.name_code }}{% if client.qos_code %}, qos_profile={{ client.qos_code }}{% endif %}),
 {%- endfor %}
     )
 {%- else %}
@@ -142,7 +169,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 {%- if actions %}
     actions = Actions(
 {%- for action in actions %}
-        {{ action.field_name }}=cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback](node, {{ action.action_class }}, "{{ action.name }}"),
+        {{ action.field_name }}=cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback](node, {{ action.action_class }}, {{ action.name_code }}),
 {%- endfor %}
     )
 {%- else %}
@@ -153,15 +180,12 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 {%- if action_clients %}
     action_clients = ActionClients(
 {%- for client in action_clients %}
-        {{ client.field_name }}=ActionClient(node, {{ client.action_class }}, "{{ client.name }}"),
+        {{ client.field_name }}=ActionClient(node, {{ client.action_class }}, {{ client.name_code }}),
 {%- endfor %}
     )
 {%- else %}
     action_clients = ActionClients()
 {%- endif %}
-
-    param_listener = ParamListener(node)
-    params = param_listener.get_params()
 
     ctx = context_type(
         node=node,
@@ -177,17 +201,17 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     # initialise publishers
 {%- for pub in publishers %}
-    ctx.publishers.{{ pub.field_name }}._initialise(ctx, {{ pub.msg_class }}, "{{ pub.topic }}", {{ pub.qos_code }})
+    ctx.publishers.{{ pub.field_name }}._initialise(ctx, {{ pub.msg_class }}, {{ pub.name_code }}, {{ pub.qos_code }})
 {%- endfor %}
 
     # initialise subscribers
 {%- for sub in subscribers %}
-    ctx.subscribers.{{ sub.field_name }}._initialise(ctx, {{ sub.msg_class }}, "{{ sub.topic }}", {{ sub.qos_code }})
+    ctx.subscribers.{{ sub.field_name }}._initialise(ctx, {{ sub.msg_class }}, {{ sub.name_code }}, {{ sub.qos_code }})
 {%- endfor %}
 
     # initialise services
 {%- for srv in services %}
-    ctx.services.{{ srv.field_name }}._initialise(ctx, {{ srv.srv_class }}, "{{ srv.name }}"{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
+    ctx.services.{{ srv.field_name }}._initialise(ctx, {{ srv.srv_class }}, {{ srv.name_code }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
 {%- endfor %}
 
     init_func(ctx)
