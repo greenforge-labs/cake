@@ -6,15 +6,42 @@ Parses interface.yaml and generates C++ header with publishers, subscribers, con
 """
 
 import argparse
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 import re
 import sys
 import tempfile
 
+from ament_index_python.packages import get_package_share_directory
 from jinja2 import Environment, FileSystemLoader
+from jsonschema import Draft202012Validator, RefResolver
 import yaml
 
 from typing import Any, Dict, List, Set
+
+
+class EntityKind(Enum):
+    """Entity types that can be defined in interface.yaml."""
+
+    PUBLISHER = "publisher"
+    SUBSCRIBER = "subscriber"
+    SERVICE = "service"
+    SERVICE_CLIENT = "service_client"
+    ACTION = "action"
+    ACTION_CLIENT = "action_client"
+
+
+@dataclass(frozen=True)
+class EntityConfig:
+    """Configuration for preparing entity data for template rendering."""
+
+    kind: EntityKind
+    name_key: str  # Key in YAML: "topic" for pub/sub, "name" for others
+    output_type_key: str  # Key for template: "msg_type", "service_type", or "action_type"
+    has_qos: bool  # Whether QoS configuration is applicable
+    qos_allows_int: bool  # True for pub/sub (depth shorthand), False for services
+
 
 # Constants
 DEFAULT_QOS_DEPTH = 10
@@ -38,377 +65,109 @@ PYTHON_QOS_PROFILE_MAP = {
     "ParameterEventsQoS": "qos_profile_parameter_events",
 }
 
-# Valid QoS parameter names and values for validation
-VALID_QOS_PARAMS = {
-    "reliability": {"reliable", "best_effort"},
-    "durability": {"volatile", "transient_local"},
-    "history": {"keep_last", "keep_all"},
-    "liveliness": {"automatic", "manual_by_topic"},
+# Entity configurations mapping schema entity types to their template requirements
+ENTITY_CONFIGS: Dict[EntityKind, EntityConfig] = {
+    EntityKind.PUBLISHER: EntityConfig(
+        kind=EntityKind.PUBLISHER,
+        name_key="topic",
+        output_type_key="msg_type",
+        has_qos=True,
+        qos_allows_int=True,
+    ),
+    EntityKind.SUBSCRIBER: EntityConfig(
+        kind=EntityKind.SUBSCRIBER,
+        name_key="topic",
+        output_type_key="msg_type",
+        has_qos=True,
+        qos_allows_int=True,
+    ),
+    EntityKind.SERVICE: EntityConfig(
+        kind=EntityKind.SERVICE,
+        name_key="name",
+        output_type_key="service_type",
+        has_qos=True,
+        qos_allows_int=False,
+    ),
+    EntityKind.SERVICE_CLIENT: EntityConfig(
+        kind=EntityKind.SERVICE_CLIENT,
+        name_key="name",
+        output_type_key="service_type",
+        has_qos=True,
+        qos_allows_int=False,
+    ),
+    EntityKind.ACTION: EntityConfig(
+        kind=EntityKind.ACTION,
+        name_key="name",
+        output_type_key="action_type",
+        has_qos=False,
+        qos_allows_int=False,
+    ),
+    EntityKind.ACTION_CLIENT: EntityConfig(
+        kind=EntityKind.ACTION_CLIENT,
+        name_key="name",
+        output_type_key="action_type",
+        has_qos=False,
+        qos_allows_int=False,
+    ),
 }
-VALID_QOS_TOP_LEVEL_KEYS = {"depth", "profile", "deadline", "lifespan"} | set(VALID_QOS_PARAMS.keys())
 
-
-# Custom exceptions for better error handling
+# Custom exception for validation errors
 class InterfaceValidationError(Exception):
     """Raised when interface.yaml validation fails."""
 
     pass
 
 
-class QoSValidationError(InterfaceValidationError):
-    """Raised when QoS specification validation fails."""
+def load_schemas() -> tuple[dict, dict]:
+    """Load interface and parameter schemas from the installed package share directory."""
+    share_dir = get_package_share_directory("cake")
+    schema_dir = Path(share_dir) / "schemas"
 
-    pass
+    with open(schema_dir / "interface.schema.yaml") as f:
+        interface_schema = yaml.safe_load(f)
 
+    with open(schema_dir / "parameter.schema.yaml") as f:
+        parameter_schema = yaml.safe_load(f)
 
-class RosTypeValidationError(InterfaceValidationError):
-    """Raised when ROS type format validation fails."""
-
-    pass
-
-
-class NameValidationError(InterfaceValidationError):
-    """Raised when name validation fails (topic, service, action, node, package)."""
-
-    pass
+    return interface_schema, parameter_schema
 
 
-def validate_ros_type(ros_type: str, type_category: str = "message") -> None:
+def validate_with_schema(interface_data: Dict[str, Any]) -> None:
     """
-    Validate ROS type format: package/msg|srv|action/TypeName
-
-    Args:
-        ros_type: The ROS type string to validate
-        type_category: Category for error messages ("message", "service", "action")
-
-    Raises:
-        RosTypeValidationError: If format is invalid
-
-    Example valid formats:
-        - std_msgs/msg/String
-        - example_interfaces/srv/AddTwoInts
-        - example_interfaces/action/Fibonacci
-    """
-    if not ros_type or not isinstance(ros_type, str):
-        raise RosTypeValidationError(f"Invalid {type_category} type: must be a non-empty string, got: {repr(ros_type)}")
-
-    parts = ros_type.split("/")
-    if len(parts) != 3:
-        raise RosTypeValidationError(
-            f"Invalid {type_category} type format: '{ros_type}'\n"
-            f"Expected format: package/msg|srv|action/TypeName (e.g., 'std_msgs/msg/String')"
-        )
-
-    package, msg_type, type_name = parts
-
-    if not package:
-        raise RosTypeValidationError(f"Invalid {type_category} type: package name is empty in '{ros_type}'")
-
-    if not msg_type:
-        raise RosTypeValidationError(
-            f"Invalid {type_category} type: middle component is empty in '{ros_type}'\n"
-            f"Expected one of: 'msg', 'srv', 'action'"
-        )
-
-    if not type_name:
-        raise RosTypeValidationError(f"Invalid {type_category} type: type name is empty in '{ros_type}'")
-
-
-def validate_topic_name(name: str, field_type: str = "topic") -> None:
-    """
-    Validate topic/service/action name contains only valid characters.
-
-    Valid characters: alphanumeric, forward slash (/), underscore (_)
-    Note: Leading slash is optional for topics.
-
-    Args:
-        name: The name to validate
-        field_type: Type for error messages ("topic", "service", "action")
-
-    Raises:
-        NameValidationError: If name contains invalid characters or is empty
-    """
-    if not name or not isinstance(name, str):
-        raise NameValidationError(f"Invalid {field_type} name: must be a non-empty string, got: {repr(name)}")
-
-    # Valid ROS name characters: alphanumeric, /, _
-    import string
-
-    valid_chars = set(string.ascii_letters + string.digits + "/_")
-    invalid_chars = set(name) - valid_chars
-
-    if invalid_chars:
-        raise NameValidationError(
-            f"Invalid {field_type} name: '{name}' contains invalid characters: {sorted(invalid_chars)}\n"
-            f"Valid characters: letters, digits, forward slash (/), underscore (_)"
-        )
-
-
-def validate_qos_spec(qos_spec: Any, context: str = "", allow_int: bool = True) -> None:
-    """
-    Validate QoS specification with strict checking.
-
-    Args:
-        qos_spec: QoS specification (int, str, or dict)
-        context: Context string for error messages (e.g., "publisher /cmd_vel")
-        allow_int: Whether to allow integer QoS values (default: True)
-
-    Raises:
-        QoSValidationError: If QoS spec is invalid
-    """
-    context_str = f" for {context}" if context else ""
-
-    # Integer (backward compatible) - just check it's non-negative
-    if isinstance(qos_spec, int):
-        if not allow_int:
-            raise QoSValidationError(
-                f"Integer QoS not allowed{context_str}. "
-                f"Services and service clients require QoSProfile. "
-                f"Use a predefined profile (e.g., 'ServicesQoS') or custom QoS parameters."
-            )
-        if qos_spec < 0:
-            raise QoSValidationError(f"Invalid QoS depth{context_str}: must be non-negative, got {qos_spec}")
-        return
-
-    # String (predefined profile)
-    if isinstance(qos_spec, str):
-        if qos_spec not in CPP_QOS_PROFILE_MAP:
-            raise QoSValidationError(
-                f"Unknown QoS profile{context_str}: '{qos_spec}'\n"
-                f"Valid profiles: {', '.join(sorted(CPP_QOS_PROFILE_MAP.keys()))}"
-            )
-        return
-
-    # Dict (custom parameters)
-    if isinstance(qos_spec, dict):
-        # Check for unknown parameters (catches typos)
-        unknown_params = set(qos_spec.keys()) - VALID_QOS_TOP_LEVEL_KEYS
-        if unknown_params:
-            raise QoSValidationError(
-                f"Unknown QoS parameter(s){context_str}: {sorted(unknown_params)}\n"
-                f"Valid parameters: {sorted(VALID_QOS_TOP_LEVEL_KEYS)}\n"
-                f"Did you mean one of these? Check for typos."
-            )
-
-        # Validate parameter values
-        for param_name, valid_values in VALID_QOS_PARAMS.items():
-            if param_name in qos_spec:
-                value = qos_spec[param_name]
-                if value not in valid_values:
-                    raise QoSValidationError(
-                        f"Invalid QoS {param_name}{context_str}: '{value}'\n" f"Valid values: {sorted(valid_values)}"
-                    )
-
-        # Validate depth is non-negative
-        if "depth" in qos_spec:
-            depth = qos_spec["depth"]
-            if not isinstance(depth, int) or depth < 0:
-                raise QoSValidationError(
-                    f"Invalid QoS depth{context_str}: must be non-negative integer, got {repr(depth)}"
-                )
-
-        # Validate profile if specified
-        if "profile" in qos_spec:
-            profile = qos_spec["profile"]
-            if profile not in CPP_QOS_PROFILE_MAP:
-                raise QoSValidationError(
-                    f"Unknown QoS profile{context_str}: '{profile}'\n"
-                    f"Valid profiles: {', '.join(sorted(CPP_QOS_PROFILE_MAP.keys()))}"
-                )
-
-        # Validate deadline/lifespan duration values
-        for duration_type in ["deadline", "lifespan"]:
-            if duration_type in qos_spec:
-                duration = qos_spec[duration_type]
-                if not isinstance(duration, dict):
-                    raise QoSValidationError(
-                        f"Invalid QoS {duration_type}{context_str}: must be a dict with 'sec' and/or 'nsec', got {type(duration).__name__}"
-                    )
-
-                sec = duration.get("sec", 0)
-                nsec = duration.get("nsec", 0)
-
-                if not isinstance(sec, int) or sec < 0:
-                    raise QoSValidationError(
-                        f"Invalid QoS {duration_type}.sec{context_str}: must be non-negative integer, got {repr(sec)}"
-                    )
-
-                if not isinstance(nsec, int) or nsec < 0:
-                    raise QoSValidationError(
-                        f"Invalid QoS {duration_type}.nsec{context_str}: must be non-negative integer, got {repr(nsec)}"
-                    )
-
-        return
-
-    # Invalid type
-    raise QoSValidationError(
-        f"Invalid QoS specification{context_str}: must be int, string, or dict, got {type(qos_spec).__name__}"
-    )
-
-
-def validate_publisher(pub: Dict[str, Any], index: int) -> None:
-    """Validate a publisher specification."""
-    context = f"publishers[{index}]"
-
-    if "topic" not in pub:
-        raise InterfaceValidationError(f"{context}: missing required field 'topic'")
-
-    if "type" not in pub:
-        raise InterfaceValidationError(f"{context}: missing required field 'type'")
-
-    validate_topic_name(pub["topic"], "topic")
-    validate_ros_type(pub["type"], "message")
-
-    if "qos" in pub:
-        validate_qos_spec(pub["qos"], f"publisher {pub['topic']}")
-
-
-def validate_subscriber(sub: Dict[str, Any], index: int) -> None:
-    """Validate a subscriber specification."""
-    context = f"subscribers[{index}]"
-
-    if "topic" not in sub:
-        raise InterfaceValidationError(f"{context}: missing required field 'topic'")
-
-    if "type" not in sub:
-        raise InterfaceValidationError(f"{context}: missing required field 'type'")
-
-    validate_topic_name(sub["topic"], "topic")
-    validate_ros_type(sub["type"], "message")
-
-    if "qos" in sub:
-        validate_qos_spec(sub["qos"], f"subscriber {sub['topic']}")
-
-
-def validate_service(srv: Dict[str, Any], index: int) -> None:
-    """Validate a service specification."""
-    context = f"services[{index}]"
-
-    if "name" not in srv:
-        raise InterfaceValidationError(f"{context}: missing required field 'name'")
-
-    if "type" not in srv:
-        raise InterfaceValidationError(f"{context}: missing required field 'type'")
-
-    validate_topic_name(srv["name"], "service")
-    validate_ros_type(srv["type"], "service")
-
-    if "qos" in srv:
-        validate_qos_spec(srv["qos"], f"service {srv['name']}", allow_int=False)
-
-
-def validate_service_client(client: Dict[str, Any], index: int) -> None:
-    """Validate a service client specification."""
-    context = f"service_clients[{index}]"
-
-    if "name" not in client:
-        raise InterfaceValidationError(f"{context}: missing required field 'name'")
-
-    if "type" not in client:
-        raise InterfaceValidationError(f"{context}: missing required field 'type'")
-
-    validate_topic_name(client["name"], "service")
-    validate_ros_type(client["type"], "service")
-
-    if "qos" in client:
-        validate_qos_spec(client["qos"], f"service client {client['name']}", allow_int=False)
-
-
-def validate_action(action: Dict[str, Any], index: int) -> None:
-    """Validate an action server specification."""
-    context = f"actions[{index}]"
-
-    if "name" not in action:
-        raise InterfaceValidationError(f"{context}: missing required field 'name'")
-
-    if "type" not in action:
-        raise InterfaceValidationError(f"{context}: missing required field 'type'")
-
-    validate_topic_name(action["name"], "action")
-    validate_ros_type(action["type"], "action")
-
-
-def validate_action_client(client: Dict[str, Any], index: int) -> None:
-    """Validate an action client specification."""
-    context = f"action_clients[{index}]"
-
-    if "name" not in client:
-        raise InterfaceValidationError(f"{context}: missing required field 'name'")
-
-    if "type" not in client:
-        raise InterfaceValidationError(f"{context}: missing required field 'type'")
-
-    validate_topic_name(client["name"], "action")
-    validate_ros_type(client["type"], "action")
-
-
-def validate_interface_yaml(interface_data: Dict[str, Any]) -> None:
-    """
-    Validate the complete interface.yaml structure.
+    Validate interface data against the YAML schema.
 
     Raises:
         InterfaceValidationError: If validation fails
     """
-    # Check node section exists
-    if "node" not in interface_data:
-        raise InterfaceValidationError("Missing required 'node' section in interface.yaml")
+    interface_schema, parameter_schema = load_schemas()
 
-    if "name" not in interface_data["node"]:
-        raise InterfaceValidationError("Missing required 'node.name' field in interface.yaml")
+    # Create a resolver that knows about the parameter schema (for $ref resolution)
+    store = {"parameter.schema.yaml": parameter_schema}
+    resolver = RefResolver.from_schema(interface_schema, store=store)
 
-    # Validate publishers
-    publishers = interface_data.get("publishers", [])
-    if publishers and not isinstance(publishers, list):
-        raise InterfaceValidationError("'publishers' must be a list")
+    validator = Draft202012Validator(interface_schema, resolver=resolver)
+    errors = list(validator.iter_errors(interface_data))
 
-    for i, pub in enumerate(publishers):
-        if not pub.get("manually_created", False):
-            validate_publisher(pub, i)
+    if errors:
+        messages = []
+        for error in errors:
+            # Build readable path
+            path = " -> ".join(str(p) for p in error.path) if error.path else "(root)"
+            messages.append(f"  [{path}] {error.message}")
 
-    # Validate subscribers
-    subscribers = interface_data.get("subscribers", [])
-    if subscribers and not isinstance(subscribers, list):
-        raise InterfaceValidationError("'subscribers' must be a list")
+        raise InterfaceValidationError(
+            f"Interface validation failed with {len(errors)} error(s):\n" + "\n".join(messages)
+        )
 
-    for i, sub in enumerate(subscribers):
-        if not sub.get("manually_created", False):
-            validate_subscriber(sub, i)
 
-    # Validate services
-    services = interface_data.get("services", [])
-    if services and not isinstance(services, list):
-        raise InterfaceValidationError("'services' must be a list")
+def validate_interface_yaml(interface_data: Dict[str, Any]) -> None:
+    """
+    Validate the complete interface.yaml structure using schema.
 
-    for i, srv in enumerate(services):
-        if not srv.get("manually_created", False):
-            validate_service(srv, i)
-
-    # Validate service clients
-    service_clients = interface_data.get("service_clients", [])
-    if service_clients and not isinstance(service_clients, list):
-        raise InterfaceValidationError("'service_clients' must be a list")
-
-    for i, client in enumerate(service_clients):
-        if not client.get("manually_created", False):
-            validate_service_client(client, i)
-
-    # Validate actions
-    actions = interface_data.get("actions", [])
-    if actions and not isinstance(actions, list):
-        raise InterfaceValidationError("'actions' must be a list")
-
-    for i, action in enumerate(actions):
-        if not action.get("manually_created", False):
-            validate_action(action, i)
-
-    # Validate action clients
-    action_clients = interface_data.get("action_clients", [])
-    if action_clients and not isinstance(action_clients, list):
-        raise InterfaceValidationError("'action_clients' must be a list")
-
-    for i, client in enumerate(action_clients):
-        if not client.get("manually_created", False):
-            validate_action_client(client, i)
+    Raises:
+        InterfaceValidationError: If validation fails
+    """
+    validate_with_schema(interface_data)
 
 
 def get_dummy_parameter() -> Dict[str, Any]:
@@ -552,150 +311,36 @@ def generate_qos_code(qos_spec: Any) -> str:
     return str(DEFAULT_QOS_DEPTH)
 
 
-def prepare_publishers(publishers_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def prepare_entities(
+    entities_raw: List[Dict[str, Any]],
+    config: EntityConfig,
+) -> List[Dict[str, str]]:
     """
-    Prepare publisher data for template rendering.
-    Converts raw YAML data into template-ready format.
+    Generic entity preparation for C++ template rendering.
+    Converts raw YAML data into template-ready format based on entity configuration.
     """
-    publishers = []
-    for pub in publishers_raw:
-        if not pub.get("manually_created", False):
-            publishers.append(
-                {
-                    "topic": pub["topic"],
-                    "msg_type": ros_type_to_cpp(pub["type"]),
-                    "field_name": name_to_field_name(pub["topic"]),
-                    "qos_code": generate_qos_code(pub.get("qos", DEFAULT_QOS_DEPTH)),
-                }
-            )
-    return publishers
+    entities = []
+    for entity in entities_raw:
+        if entity.get("manually_created", False):
+            continue
 
+        name_value = entity[config.name_key]
+        prepared = {
+            config.name_key: name_value,
+            config.output_type_key: ros_type_to_cpp(entity["type"]),
+            "field_name": name_to_field_name(name_value),
+        }
 
-def prepare_subscribers(subscribers_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """
-    Prepare subscriber data for template rendering.
-    Converts raw YAML data into template-ready format.
-    """
-    subscribers = []
-    for sub in subscribers_raw:
-        if not sub.get("manually_created", False):
-            subscribers.append(
-                {
-                    "topic": sub["topic"],
-                    "msg_type": ros_type_to_cpp(sub["type"]),
-                    "field_name": name_to_field_name(sub["topic"]),
-                    "qos_code": generate_qos_code(sub.get("qos", DEFAULT_QOS_DEPTH)),
-                }
-            )
-    return subscribers
+        if config.has_qos:
+            if config.qos_allows_int:
+                # Publishers/subscribers: use default depth if not specified
+                prepared["qos_code"] = generate_qos_code(entity.get("qos", DEFAULT_QOS_DEPTH))
+            elif "qos" in entity:
+                # Services: only generate QoS if explicitly specified
+                prepared["qos_code"] = generate_qos_code(entity["qos"])
 
-
-def ros_type_to_service_include(ros_type: str) -> str:
-    """
-    Convert ROS service type to include path.
-    Example: example_interfaces/srv/AddTwoInts -> example_interfaces/srv/add_two_ints.hpp
-    """
-    parts = ros_type.split("/")
-    if len(parts) >= 3:
-        # Convert last part (service name) from PascalCase to snake_case
-        parts[-1] = camel_to_snake(parts[-1])
-    return "/".join(parts) + ".hpp"
-
-
-def ros_type_to_action_include(ros_type: str) -> str:
-    """
-    Convert ROS action type to include path.
-    Example: example_interfaces/action/Fibonacci -> example_interfaces/action/fibonacci.hpp
-    """
-    parts = ros_type.split("/")
-    if len(parts) >= 3:
-        # Convert last part (action name) from PascalCase to snake_case
-        parts[-1] = camel_to_snake(parts[-1])
-    return "/".join(parts) + ".hpp"
-
-
-def prepare_services(services_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """
-    Prepare service data for template rendering.
-    Converts raw YAML data into template-ready format.
-    """
-    services = []
-    for srv in services_raw:
-        if not srv.get("manually_created", False):
-            # Only generate QoS code if explicitly specified
-            qos_code = None
-            if "qos" in srv:
-                qos_code = generate_qos_code(srv["qos"])
-
-            services.append(
-                {
-                    "name": srv["name"],
-                    "service_type": ros_type_to_cpp(srv["type"]),
-                    "field_name": name_to_field_name(srv["name"]),
-                    "qos_code": qos_code,
-                }
-            )
-    return services
-
-
-def prepare_service_clients(service_clients_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """
-    Prepare service client data for template rendering.
-    Converts raw YAML data into template-ready format.
-    """
-    service_clients = []
-    for client in service_clients_raw:
-        if not client.get("manually_created", False):
-            # Only generate QoS code if explicitly specified
-            qos_code = None
-            if "qos" in client:
-                qos_code = generate_qos_code(client["qos"])
-
-            service_clients.append(
-                {
-                    "name": client["name"],
-                    "service_type": ros_type_to_cpp(client["type"]),
-                    "field_name": name_to_field_name(client["name"]),
-                    "qos_code": qos_code,
-                }
-            )
-    return service_clients
-
-
-def prepare_actions(actions_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """
-    Prepare action data for template rendering.
-    Converts raw YAML data into template-ready format.
-    """
-    actions = []
-    for action in actions_raw:
-        if not action.get("manually_created", False):
-            actions.append(
-                {
-                    "name": action["name"],
-                    "action_type": ros_type_to_cpp(action["type"]),
-                    "field_name": name_to_field_name(action["name"]),
-                }
-            )
-    return actions
-
-
-def prepare_action_clients(action_clients_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """
-    Prepare action client data for template rendering.
-    Converts raw YAML data into template-ready format.
-    """
-    action_clients = []
-    for client in action_clients_raw:
-        if not client.get("manually_created", False):
-            action_clients.append(
-                {
-                    "name": client["name"],
-                    "action_type": ros_type_to_cpp(client["type"]),
-                    "field_name": name_to_field_name(client["name"]),
-                }
-            )
-    return action_clients
+        entities.append(prepared)
+    return entities
 
 
 def ros_type_to_python_import(ros_type: str) -> str:
@@ -824,192 +469,86 @@ def generate_python_qos_code(qos_spec: Any) -> tuple[str, Set[str]]:
     return (str(DEFAULT_QOS_DEPTH), required_imports)
 
 
-def prepare_python_publishers(publishers_raw: List[Dict[str, Any]]) -> tuple[List[Dict[str, str]], Set[str]]:
+def _get_python_class_key(output_type_key: str) -> str:
     """
-    Prepare publisher data for Python template rendering.
-    Returns tuple of (publishers_list, qos_imports_needed)
+    Map output_type_key to the corresponding class key for Python templates.
+    msg_type -> msg_class, service_type -> srv_class, action_type -> action_class
     """
-    publishers = []
-    all_qos_imports = set()
-
-    for pub in publishers_raw:
-        if not pub.get("manually_created", False):
-            qos_code, qos_imports = generate_python_qos_code(pub.get("qos", DEFAULT_QOS_DEPTH))
-            all_qos_imports.update(qos_imports)
-
-            publishers.append(
-                {
-                    "topic": pub["topic"],
-                    "msg_type": pub["type"],
-                    "msg_class": ros_type_to_python_class(pub["type"]),
-                    "field_name": name_to_field_name(pub["topic"]),
-                    "qos_code": qos_code,
-                    "import_stmt": ros_type_to_python_import(pub["type"]),
-                }
-            )
-    return publishers, all_qos_imports
+    mapping = {
+        "msg_type": "msg_class",
+        "service_type": "srv_class",
+        "action_type": "action_class",
+    }
+    return mapping.get(output_type_key, output_type_key.replace("_type", "_class"))
 
 
-def prepare_python_subscribers(subscribers_raw: List[Dict[str, Any]]) -> tuple[List[Dict[str, str]], Set[str]]:
+def _get_python_type_key(output_type_key: str) -> str:
     """
-    Prepare subscriber data for Python template rendering.
-    Returns tuple of (subscribers_list, qos_imports_needed)
+    Map output_type_key to the corresponding type key for Python templates.
+    msg_type -> msg_type, service_type -> srv_type, action_type -> action_type
     """
-    subscribers = []
-    all_qos_imports = set()
-
-    for sub in subscribers_raw:
-        if not sub.get("manually_created", False):
-            qos_code, qos_imports = generate_python_qos_code(sub.get("qos", DEFAULT_QOS_DEPTH))
-            all_qos_imports.update(qos_imports)
-
-            subscribers.append(
-                {
-                    "topic": sub["topic"],
-                    "msg_type": sub["type"],
-                    "msg_class": ros_type_to_python_class(sub["type"]),
-                    "field_name": name_to_field_name(sub["topic"]),
-                    "qos_code": qos_code,
-                    "import_stmt": ros_type_to_python_import(sub["type"]),
-                }
-            )
-    return subscribers, all_qos_imports
+    mapping = {
+        "msg_type": "msg_type",
+        "service_type": "srv_type",
+        "action_type": "action_type",
+    }
+    return mapping.get(output_type_key, output_type_key)
 
 
-def prepare_python_services(services_raw: List[Dict[str, Any]]) -> tuple[List[Dict[str, str]], Set[str]]:
+def prepare_python_entities(
+    entities_raw: List[Dict[str, Any]],
+    config: EntityConfig,
+) -> tuple[List[Dict[str, str]], Set[str]]:
     """
-    Prepare service data for Python template rendering.
-    Returns tuple of (services_list, qos_imports_needed)
+    Generic entity preparation for Python template rendering.
+    Converts raw YAML data into template-ready format based on entity configuration.
+    Returns tuple of (entities_list, qos_imports_needed).
     """
-    services = []
-    all_qos_imports = set()
+    entities = []
+    all_qos_imports: Set[str] = set()
 
-    for srv in services_raw:
-        if not srv.get("manually_created", False):
-            # Services default to None (which means use qos_profile_services_default in Python)
-            qos_value = srv.get("qos", None)
-            if qos_value is not None:
-                # Integer QoS is rejected during validation, so we only handle QoSProfile here
-                qos_code, qos_imports = generate_python_qos_code(qos_value)
+    python_type_key = _get_python_type_key(config.output_type_key)
+    python_class_key = _get_python_class_key(config.output_type_key)
+
+    for entity in entities_raw:
+        if entity.get("manually_created", False):
+            continue
+
+        name_value = entity[config.name_key]
+        ros_type = entity["type"]
+
+        prepared: Dict[str, Any] = {
+            config.name_key: name_value,
+            python_type_key: ros_type,
+            python_class_key: ros_type_to_python_class(ros_type),
+            "field_name": name_to_field_name(name_value),
+            "import_stmt": ros_type_to_python_import(ros_type),
+        }
+
+        if config.has_qos:
+            if config.qos_allows_int:
+                # Publishers/subscribers: use default depth if not specified
+                qos_code, qos_imports = generate_python_qos_code(entity.get("qos", DEFAULT_QOS_DEPTH))
+                prepared["qos_code"] = qos_code
                 all_qos_imports.update(qos_imports)
-            else:
-                qos_code = None  # Will use default in template
-
-            services.append(
-                {
-                    "name": srv["name"],
-                    "srv_type": srv["type"],
-                    "srv_class": ros_type_to_python_class(srv["type"]),
-                    "field_name": name_to_field_name(srv["name"]),
-                    "qos_code": qos_code,
-                    "import_stmt": ros_type_to_python_import(srv["type"]),
-                }
-            )
-    return services, all_qos_imports
-
-
-def prepare_python_service_clients(service_clients_raw: List[Dict[str, Any]]) -> tuple[List[Dict[str, str]], Set[str]]:
-    """
-    Prepare service client data for Python template rendering.
-    Returns tuple of (service_clients_list, qos_imports_needed)
-    """
-    service_clients = []
-    all_qos_imports = set()
-
-    for client in service_clients_raw:
-        if not client.get("manually_created", False):
-            # Service clients default to None (which means use qos_profile_services_default in Python)
-            qos_value = client.get("qos", None)
-            if qos_value is not None:
-                # Integer QoS is rejected during validation, so we only handle QoSProfile here
-                qos_code, qos_imports = generate_python_qos_code(qos_value)
+            elif "qos" in entity:
+                # Services: only generate QoS if explicitly specified
+                qos_code, qos_imports = generate_python_qos_code(entity["qos"])
+                prepared["qos_code"] = qos_code
                 all_qos_imports.update(qos_imports)
-            else:
-                qos_code = None  # Will use default in template
 
-            service_clients.append(
-                {
-                    "name": client["name"],
-                    "srv_type": client["type"],
-                    "srv_class": ros_type_to_python_class(client["type"]),
-                    "field_name": name_to_field_name(client["name"]),
-                    "qos_code": qos_code,
-                    "import_stmt": ros_type_to_python_import(client["type"]),
-                }
-            )
-    return service_clients, all_qos_imports
+        entities.append(prepared)
+    return entities, all_qos_imports
 
 
-def prepare_python_actions(actions_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """
-    Prepare action server data for Python template rendering.
-    Actions don't support QoS configuration.
-    """
-    actions = []
-
-    for action in actions_raw:
-        if not action.get("manually_created", False):
-            actions.append(
-                {
-                    "name": action["name"],
-                    "action_type": action["type"],
-                    "action_class": ros_type_to_python_class(action["type"]),
-                    "field_name": name_to_field_name(action["name"]),
-                    "import_stmt": ros_type_to_python_import(action["type"]),
-                }
-            )
-    return actions
-
-
-def prepare_python_action_clients(action_clients_raw: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """
-    Prepare action client data for Python template rendering.
-    Actions don't support QoS configuration.
-    """
-    action_clients = []
-
-    for client in action_clients_raw:
-        if not client.get("manually_created", False):
-            action_clients.append(
-                {
-                    "name": client["name"],
-                    "action_type": client["type"],
-                    "action_class": ros_type_to_python_class(client["type"]),
-                    "field_name": name_to_field_name(client["name"]),
-                    "import_stmt": ros_type_to_python_import(client["type"]),
-                }
-            )
-    return action_clients
-
-
-def collect_includes(
-    publishers: List[Dict[str, Any]],
-    subscribers: List[Dict[str, Any]],
-    services: List[Dict[str, Any]],
-    service_clients: List[Dict[str, Any]],
-    actions: List[Dict[str, Any]],
-    action_clients: List[Dict[str, Any]],
-) -> List[str]:
+def collect_includes(interface_data: Dict[str, Any]) -> List[str]:
     """Collect all required message, service, and action includes."""
     includes = set()
 
-    for pub in publishers:
-        includes.add(ros_type_to_include(pub["type"]))
-
-    for sub in subscribers:
-        includes.add(ros_type_to_include(sub["type"]))
-
-    for srv in services:
-        includes.add(ros_type_to_service_include(srv["type"]))
-
-    for client in service_clients:
-        includes.add(ros_type_to_service_include(client["type"]))
-
-    for action in actions:
-        includes.add(ros_type_to_action_include(action["type"]))
-
-    for action_client in action_clients:
-        includes.add(ros_type_to_action_include(action_client["type"]))
+    entity_keys = ["publishers", "subscribers", "services", "service_clients", "actions", "action_clients"]
+    for key in entity_keys:
+        for entity in interface_data.get(key, []):
+            includes.add(ros_type_to_include(entity["type"]))
 
     return sorted(includes)
 
@@ -1152,23 +691,19 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     # Extract data
     node_name = interface_data["node"]["name"]
     package_name = interface_data["node"].get("package", "")
-    publishers_raw = interface_data.get("publishers", [])
-    subscribers_raw = interface_data.get("subscribers", [])
-    services_raw = interface_data.get("services", [])
-    service_clients_raw = interface_data.get("service_clients", [])
-    actions_raw = interface_data.get("actions", [])
-    action_clients_raw = interface_data.get("action_clients", [])
 
-    # Prepare template data
-    publishers = prepare_publishers(publishers_raw)
-    subscribers = prepare_subscribers(subscribers_raw)
-    services = prepare_services(services_raw)
-    service_clients = prepare_service_clients(service_clients_raw)
-    actions = prepare_actions(actions_raw)
-    action_clients = prepare_action_clients(action_clients_raw)
-    message_includes = collect_includes(
-        publishers_raw, subscribers_raw, services_raw, service_clients_raw, actions_raw, action_clients_raw
+    # Prepare template data using generic entity preparation
+    publishers = prepare_entities(interface_data.get("publishers", []), ENTITY_CONFIGS[EntityKind.PUBLISHER])
+    subscribers = prepare_entities(interface_data.get("subscribers", []), ENTITY_CONFIGS[EntityKind.SUBSCRIBER])
+    services = prepare_entities(interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE])
+    service_clients = prepare_entities(
+        interface_data.get("service_clients", []), ENTITY_CONFIGS[EntityKind.SERVICE_CLIENT]
     )
+    actions = prepare_entities(interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION])
+    action_clients = prepare_entities(
+        interface_data.get("action_clients", []), ENTITY_CONFIGS[EntityKind.ACTION_CLIENT]
+    )
+    message_includes = collect_includes(interface_data)
     implementation_namespace = get_implementation_namespace(interface_data)
     export_namespace = get_namespace(interface_data)
     class_name = get_class_name(node_name)
@@ -1224,44 +759,35 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
     # Extract data
     node_name = interface_data["node"]["name"]
     package_name = interface_data["node"].get("package", "")
-    publishers_raw = interface_data.get("publishers", [])
-    subscribers_raw = interface_data.get("subscribers", [])
-    services_raw = interface_data.get("services", [])
-    service_clients_raw = interface_data.get("service_clients", [])
-    actions_raw = interface_data.get("actions", [])
-    action_clients_raw = interface_data.get("action_clients", [])
 
-    # Prepare template data
-    publishers, pub_qos_imports = prepare_python_publishers(publishers_raw)
-    subscribers, sub_qos_imports = prepare_python_subscribers(subscribers_raw)
-    services, srv_qos_imports = prepare_python_services(services_raw)
-    service_clients, cli_qos_imports = prepare_python_service_clients(service_clients_raw)
-    actions = prepare_python_actions(actions_raw)
-    action_clients = prepare_python_action_clients(action_clients_raw)
+    # Prepare template data using generic entity preparation
+    publishers, pub_qos_imports = prepare_python_entities(
+        interface_data.get("publishers", []), ENTITY_CONFIGS[EntityKind.PUBLISHER]
+    )
+    subscribers, sub_qos_imports = prepare_python_entities(
+        interface_data.get("subscribers", []), ENTITY_CONFIGS[EntityKind.SUBSCRIBER]
+    )
+    services, srv_qos_imports = prepare_python_entities(
+        interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE]
+    )
+    service_clients, cli_qos_imports = prepare_python_entities(
+        interface_data.get("service_clients", []), ENTITY_CONFIGS[EntityKind.SERVICE_CLIENT]
+    )
+    actions, _ = prepare_python_entities(interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION])
+    action_clients, _ = prepare_python_entities(
+        interface_data.get("action_clients", []), ENTITY_CONFIGS[EntityKind.ACTION_CLIENT]
+    )
 
     # Collect all QoS imports
     qos_imports = pub_qos_imports | sub_qos_imports | srv_qos_imports | cli_qos_imports
 
-    # Collect unique import statements
-    message_imports = set()
-    for pub in publishers:
-        if pub["import_stmt"]:
-            message_imports.add(pub["import_stmt"])
-    for sub in subscribers:
-        if sub["import_stmt"]:
-            message_imports.add(sub["import_stmt"])
-    for srv in services:
-        if srv["import_stmt"]:
-            message_imports.add(srv["import_stmt"])
-    for client in service_clients:
-        if client["import_stmt"]:
-            message_imports.add(client["import_stmt"])
-    for action in actions:
-        if action["import_stmt"]:
-            message_imports.add(action["import_stmt"])
-    for action_client in action_clients:
-        if action_client["import_stmt"]:
-            message_imports.add(action_client["import_stmt"])
+    # Collect unique import statements from all entity types
+    message_imports: Set[str] = set()
+    all_entities = [publishers, subscribers, services, service_clients, actions, action_clients]
+    for entity_list in all_entities:
+        for entity in entity_list:
+            if entity.get("import_stmt"):
+                message_imports.add(entity["import_stmt"])
 
     # Convert node_name to context class name
     class_name = get_class_name(node_name)

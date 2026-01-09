@@ -1,0 +1,294 @@
+# NOTE: This schema was generated using AI from the generate_parameter_library implementation.
+# Source: https://github.com/PickNikRobotics/generate_parameter_library
+# If generate_parameter_library adds new features, this schema may need to be updated.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "Cake Parameter Definition Schema"
+description: |
+  Schema for parameter definitions used by cake's interface files.
+  Parameters defined here are passed to generate_parameter_library for code generation.
+  This schema validates individual parameter definitions (type, default_value, validation, etc.).
+
+$defs:
+  # Individual parameter definition
+  parameter_definition:
+    type: object
+    required:
+      - type
+    additionalProperties: false
+    properties:
+      type:
+        $ref: "#/$defs/parameter_type"
+      default_value:
+        $ref: "#/$defs/default_value"
+      description:
+        type: string
+        description: "Human-readable description displayed by `ros2 param describe`"
+        default: ""
+      read_only:
+        type: boolean
+        description: "If true, parameter can only be set at launch, not dynamically"
+        default: false
+      additional_constraints:
+        type: string
+        description: "Custom constraint metadata (e.g., JSON schema) - not validated by the library"
+        default: ""
+      validation:
+        $ref: "#/$defs/validation"
+
+  # Supported parameter types
+  parameter_type:
+    description: "The parameter data type"
+    oneOf:
+      - $ref: "#/$defs/scalar_type"
+      - $ref: "#/$defs/array_type"
+      - $ref: "#/$defs/fixed_size_type"
+
+  scalar_type:
+    type: string
+    enum:
+      - bool
+      - int
+      - double
+      - string
+      - none
+    description: |
+      Scalar types:
+      - bool: C++ bool, Python bool
+      - int: C++ int64_t, Python int
+      - double: C++ double, Python float
+      - string: C++ std::string, Python str
+      - none: No code generated (used for structure-only nodes)
+
+  array_type:
+    type: string
+    enum:
+      - bool_array
+      - int_array
+      - double_array
+      - string_array
+    description: |
+      Array types:
+      - bool_array: C++ std::vector<bool>, Python [bool]
+      - int_array: C++ std::vector<int64_t>, Python [int]
+      - double_array: C++ std::vector<double>, Python [float]
+      - string_array: C++ std::vector<std::string>, Python [str]
+
+  fixed_size_type:
+    type: string
+    pattern: "^(string_fixed_[1-9][0-9]*|int_array_fixed_[1-9][0-9]*|double_array_fixed_[1-9][0-9]*|string_array_fixed_[1-9][0-9]*)$"
+    description: |
+      Fixed-size types with pattern <base_type>_fixed_<size>:
+      - string_fixed_XX: C++ rsl::StaticString<XX>, Python str (max XX chars)
+      - int_array_fixed_XX: C++ rsl::StaticVector<int64_t, XX>, Python [int] (max XX elements)
+      - double_array_fixed_XX: C++ rsl::StaticVector<double, XX>, Python [float] (max XX elements)
+      - string_array_fixed_XX: C++ rsl::StaticVector<std::string, XX>, Python [str] (max XX elements)
+
+      Note: bool_array_fixed is NOT supported.
+      Fixed-size types automatically get a size_lt<> validator with value size+1.
+    examples:
+      - string_fixed_25
+      - int_array_fixed_5
+      - double_array_fixed_10
+      - string_array_fixed_3
+
+  # Default value - type depends on parameter type
+  # Note: The actual type checking is done by the code generator, not this schema.
+  # This schema allows any valid YAML value that could be a parameter default.
+  default_value:
+    description: |
+      Initial value for the parameter. Type must match the declared parameter type.
+      If omitted, the parameter becomes required at initialization.
+      Supports: bool, int, double (including NaN, Inf, scientific notation), string,
+      and arrays of these types.
+
+  # Validation rules
+  validation:
+    type: object
+    description: |
+      Dictionary of validation function names and their arguments.
+      Validators can be specified with or without the <> suffix (both are equivalent).
+      For example: "bounds<>: [0, 100]" is the same as "bounds: [0, 100]"
+    additionalProperties: false
+    properties:
+      # Value validators (for scalar numeric types) - with <> suffix
+      "bounds<>":
+        $ref: "#/$defs/bounds_validator"
+      "lt<>":
+        $ref: "#/$defs/comparison_validator"
+      "gt<>":
+        $ref: "#/$defs/comparison_validator"
+      "lt_eq<>":
+        $ref: "#/$defs/comparison_validator"
+      "gt_eq<>":
+        $ref: "#/$defs/comparison_validator"
+      "one_of<>":
+        $ref: "#/$defs/one_of_validator"
+
+      # Value validators (for scalar numeric types) - without <> suffix
+      "bounds":
+        $ref: "#/$defs/bounds_validator"
+      "lt":
+        $ref: "#/$defs/comparison_validator"
+      "gt":
+        $ref: "#/$defs/comparison_validator"
+      "lt_eq":
+        $ref: "#/$defs/comparison_validator"
+      "gt_eq":
+        $ref: "#/$defs/comparison_validator"
+      "one_of":
+        $ref: "#/$defs/one_of_validator"
+
+      # String validators - with <> suffix
+      "not_empty<>":
+        $ref: "#/$defs/no_arg_validator"
+
+      # String validators - without <> suffix
+      "not_empty":
+        $ref: "#/$defs/no_arg_validator"
+
+      # Size validators (for strings and arrays) - with <> suffix
+      "fixed_size<>":
+        $ref: "#/$defs/size_validator"
+      "size_gt<>":
+        $ref: "#/$defs/size_validator"
+      "size_lt<>":
+        $ref: "#/$defs/size_validator"
+
+      # Size validators (for strings and arrays) - without <> suffix
+      "fixed_size":
+        $ref: "#/$defs/size_validator"
+      "size_gt":
+        $ref: "#/$defs/size_validator"
+      "size_lt":
+        $ref: "#/$defs/size_validator"
+
+      # Array validators - with <> suffix
+      "unique<>":
+        $ref: "#/$defs/no_arg_validator"
+      "subset_of<>":
+        $ref: "#/$defs/subset_of_validator"
+      "element_bounds<>":
+        $ref: "#/$defs/bounds_validator"
+      "lower_element_bounds<>":
+        $ref: "#/$defs/comparison_validator"
+      "upper_element_bounds<>":
+        $ref: "#/$defs/comparison_validator"
+
+      # Array validators - without <> suffix
+      "unique":
+        $ref: "#/$defs/no_arg_validator"
+      "subset_of":
+        $ref: "#/$defs/subset_of_validator"
+      "element_bounds":
+        $ref: "#/$defs/bounds_validator"
+      "lower_element_bounds":
+        $ref: "#/$defs/comparison_validator"
+      "upper_element_bounds":
+        $ref: "#/$defs/comparison_validator"
+
+    patternProperties:
+      # Custom validators with namespace-qualified names (e.g., "custom_validators::my_func")
+      "^[a-zA-Z_][a-zA-Z0-9_]*(::[a-zA-Z_][a-zA-Z0-9_]*)+$":
+        $ref: "#/$defs/custom_validator"
+
+  # Validator argument types
+  bounds_validator:
+    description: "Inclusive bounds checking: [lower, upper]"
+    type: array
+    items:
+      type: number
+    minItems: 2
+    maxItems: 2
+    examples:
+      - [0, 100]
+      - [0.0, 1.0]
+      - [-1.0, 1.0]
+
+  comparison_validator:
+    description: "Single value comparison: [value] or bare value"
+    oneOf:
+      - type: array
+        items:
+          type: number
+        minItems: 1
+        maxItems: 1
+      - type: number
+        description: "Can also be specified as a bare number"
+    examples:
+      - [0]
+      - [100]
+      - [0.001]
+      - 15
+      - 0.5
+
+  size_validator:
+    description: "Size/length constraint: [length]"
+    oneOf:
+      - type: array
+        items:
+          type: integer
+          minimum: 0
+        minItems: 1
+        maxItems: 1
+      - type: integer
+        minimum: 0
+        description: "Can also be specified as a bare integer"
+    examples:
+      - [6]
+      - [10]
+      - 6
+
+  one_of_validator:
+    description: "Parameter must be one of the specified values: [[val1, val2, ...]]"
+    type: array
+    items:
+      type: array
+      minItems: 1
+    minItems: 1
+    maxItems: 1
+    examples:
+      - [["spline", "linear"]]
+      - [[0, 1, 2, -1]]
+      - [[true, false]]
+
+  subset_of_validator:
+    description: "All array elements must be in the specified set: [[val1, val2, ...]]"
+    type: array
+    items:
+      type: array
+      minItems: 1
+    minItems: 1
+    maxItems: 1
+    examples:
+      - [["x", "y", "z"]]
+      - [[1, 2, 3, 4, 5]]
+
+  no_arg_validator:
+    description: "Validator that takes no arguments"
+    oneOf:
+      - type: "null"
+      - type: array
+        maxItems: 0
+    examples:
+      - null
+      - []
+
+  custom_validator:
+    description: |
+      Custom validator with namespace-qualified function name.
+      The function must:
+      - Accept rclcpp::Parameter const& as first argument
+      - Accept additional arguments matching the YAML specification
+      - Return tl::expected<void, std::string> type
+      - Be defined in a header file passed to the code generator
+    oneOf:
+      - type: "null"
+      - type: array
+      - type: number
+      - type: string
+      - type: boolean
+    examples:
+      - null
+      - [1.0, 2.0]
+      - ["arg1", "arg2"]

@@ -139,7 +139,7 @@ def test_missing_node_name(tmp_path):
 
     # Should fail with non-zero exit code
     assert result.returncode != 0, "Script should fail for missing node.name"
-    assert "node.name" in result.stderr or "KeyError" in result.stderr
+    assert "'name' is a required property" in result.stderr
 
 
 def test_missing_node_section(tmp_path):
@@ -846,9 +846,8 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "Invalid QoS reliability" in result.stderr
+    assert "[publishers -> 0 -> qos]" in result.stderr
     assert "invalid_value" in result.stderr
-    assert "best_effort" in result.stderr or "reliable" in result.stderr
 
 
 def test_qos_unknown_parameter(tmp_path):
@@ -885,8 +884,8 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "Unknown QoS parameter" in result.stderr
-    assert "reliabilty" in result.stderr
+    assert "[publishers -> 0 -> qos]" in result.stderr
+    assert "reliabilty" in result.stderr  # The typo is shown in the error
 
 
 def test_qos_negative_depth(tmp_path):
@@ -923,8 +922,8 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "Invalid QoS depth" in result.stderr
-    assert "non-negative" in result.stderr
+    assert "[publishers -> 0 -> qos]" in result.stderr
+    assert "-5" in result.stderr
 
 
 def test_qos_invalid_profile_name(tmp_path):
@@ -960,7 +959,7 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "Unknown QoS profile" in result.stderr
+    assert "[publishers -> 0 -> qos]" in result.stderr
     assert "UnknownProfileQoS" in result.stderr
 
 
@@ -996,8 +995,9 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "Invalid" in result.stderr and "type" in result.stderr
+    assert "[publishers -> 0 -> type]" in result.stderr
     assert "std_msgsmsgString" in result.stderr
+    assert "does not match" in result.stderr
 
 
 def test_ros_type_empty_package(tmp_path):
@@ -1032,8 +1032,9 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "Invalid" in result.stderr and "type" in result.stderr
-    assert "empty" in result.stderr
+    assert "[publishers -> 0 -> type]" in result.stderr
+    assert "/msg/String" in result.stderr
+    assert "does not match" in result.stderr
 
 
 def test_topic_invalid_characters(tmp_path):
@@ -1068,8 +1069,9 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "Invalid" in result.stderr and "name" in result.stderr
-    assert "invalid characters" in result.stderr
+    assert "[publishers -> 0 -> topic]" in result.stderr
+    assert "/test@topic#" in result.stderr
+    assert "does not match" in result.stderr
 
 
 def test_topic_valid_without_leading_slash(tmp_path):
@@ -1137,7 +1139,8 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "missing required field 'topic'" in result.stderr
+    assert "[publishers -> 0]" in result.stderr
+    assert "'topic' is a required property" in result.stderr
 
 
 def test_publisher_missing_type(tmp_path):
@@ -1171,7 +1174,8 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "missing required field 'type'" in result.stderr
+    assert "[publishers -> 0]" in result.stderr
+    assert "'type' is a required property" in result.stderr
 
 
 def test_subscriber_missing_fields(tmp_path):
@@ -1205,7 +1209,8 @@ subscribers:
     )
 
     assert result.returncode != 0
-    assert "missing required field 'type'" in result.stderr
+    assert "[subscribers -> 0]" in result.stderr
+    assert "'type' is a required property" in result.stderr
 
 
 def test_service_missing_name(tmp_path):
@@ -1239,7 +1244,8 @@ services:
     )
 
     assert result.returncode != 0
-    assert "missing required field 'name'" in result.stderr
+    assert "[services -> 0]" in result.stderr
+    assert "'name' is a required property" in result.stderr
 
 
 def test_service_integer_qos_rejected(tmp_path):
@@ -1275,8 +1281,8 @@ services:
     )
 
     assert result.returncode != 0
-    assert "Integer QoS not allowed" in result.stderr
-    assert "Services and service clients require QoSProfile" in result.stderr
+    assert "[services -> 0 -> qos]" in result.stderr
+    assert "10 is not valid" in result.stderr
 
 
 def test_service_client_integer_qos_rejected(tmp_path):
@@ -1312,8 +1318,8 @@ service_clients:
     )
 
     assert result.returncode != 0
-    assert "Integer QoS not allowed" in result.stderr
-    assert "Services and service clients require QoSProfile" in result.stderr
+    assert "[service_clients -> 0 -> qos]" in result.stderr
+    assert "10 is not valid" in result.stderr
 
 
 def test_very_long_topic_name(tmp_path):
@@ -1387,8 +1393,9 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "Invalid QoS deadline" in result.stderr
-    assert "non-negative" in result.stderr
+    assert "[publishers -> 0 -> qos]" in result.stderr
+    assert "deadline" in result.stderr
+    assert "-1" in result.stderr
 
 
 def test_registration_cpp_generation(tmp_path):

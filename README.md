@@ -406,6 +406,31 @@ With `cake_auto_interface_package()`, this becomes just 2 lines. All dependencie
 
 The interface YAML file defines your node's ROS 2 interfaces.
 
+### Schema Validation
+
+Cake provides a YAML Schema for `interface.yaml` files, enabling IDE autocompletion and validation.
+
+#### VS Code Setup
+
+Add to your `.vscode/settings.json` (adjust the path to your workspace):
+
+```json
+{
+  "yaml.schemas": {
+    "<your_workspace>/install/cake/share/cake/schemas/interface.schema.yaml": ["**/interface.yaml"]
+  }
+}
+```
+
+Or add a modeline comment to individual files:
+
+```yaml
+# yaml-language-server: $schema=<your_workspace>/install/cake/share/cake/schemas/interface.schema.yaml
+node:
+    name: ${THIS_NODE}
+    ...
+```
+
 ### Node Metadata
 
 ```yaml

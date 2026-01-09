@@ -1,0 +1,313 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+title: Cake Node Interface
+description: Schema for Cake ROS2 node interface YAML files
+type: object
+required:
+  - node
+additionalProperties: false
+
+properties:
+  node:
+    $ref: "#/$defs/node"
+  parameters:
+    type: object
+    description: ROS parameters for generate_parameter_library (see parameter.schema.yaml)
+    additionalProperties:
+      $ref: "parameter.schema.yaml#/$defs/parameter_definition"
+  publishers:
+    type: array
+    description: List of topic publishers
+    items:
+      $ref: "#/$defs/publisher"
+  subscribers:
+    type: array
+    description: List of topic subscribers
+    items:
+      $ref: "#/$defs/subscriber"
+  services:
+    type: array
+    description: List of service servers
+    items:
+      $ref: "#/$defs/service"
+  service_clients:
+    type: array
+    description: List of service clients
+    items:
+      $ref: "#/$defs/serviceClient"
+  actions:
+    type: array
+    description: List of action servers
+    items:
+      $ref: "#/$defs/action"
+  action_clients:
+    type: array
+    description: List of action clients
+    items:
+      $ref: "#/$defs/actionClient"
+
+$defs:
+  node:
+    type: object
+    description: Node metadata
+    required:
+      - name
+    additionalProperties: false
+    properties:
+      name:
+        type: string
+        description: Node name. Use ${THIS_NODE} to substitute from build system.
+        pattern: ^(\$\{THIS_NODE\}|[a-zA-Z][a-zA-Z0-9_]*)$
+      package:
+        type: string
+        description: Package name. Use ${THIS_PACKAGE} to substitute from build system.
+        pattern: ^(\$\{THIS_PACKAGE\}|[a-zA-Z][a-zA-Z0-9_]*)$
+
+  topicName:
+    type: string
+    description: "ROS topic name. Valid characters: letters, digits, forward slash (/), underscore (_)"
+    pattern: ^[a-zA-Z0-9/_]+$
+
+  rosMessageType:
+    type: string
+    description: "ROS message type in format: package/msg/TypeName"
+    pattern: ^[a-zA-Z][a-zA-Z0-9_]*/msg/[A-Z][a-zA-Z0-9]*$
+    examples:
+      - std_msgs/msg/String
+      - geometry_msgs/msg/Twist
+      - sensor_msgs/msg/JointState
+
+  rosServiceType:
+    type: string
+    description: "ROS service type in format: package/srv/TypeName"
+    pattern: ^[a-zA-Z][a-zA-Z0-9_]*/srv/[A-Z][a-zA-Z0-9]*$
+    examples:
+      - std_srvs/srv/Trigger
+      - example_interfaces/srv/AddTwoInts
+
+  rosActionType:
+    type: string
+    description: "ROS action type in format: package/action/TypeName"
+    pattern: ^[a-zA-Z][a-zA-Z0-9_]*/action/[A-Z][a-zA-Z0-9]*$
+    examples:
+      - example_interfaces/action/Fibonacci
+      - nav2_msgs/action/NavigateToPose
+
+  qosProfile:
+    type: string
+    description: Predefined QoS profile name
+    enum:
+      - SensorDataQoS
+      - SystemDefaultsQoS
+      - ServicesQoS
+      - ParametersQoS
+      - ParameterEventsQoS
+
+  duration:
+    type: object
+    description: Duration specification with seconds and nanoseconds
+    additionalProperties: false
+    properties:
+      sec:
+        type: integer
+        description: Seconds component
+        minimum: 0
+        default: 0
+      nsec:
+        type: integer
+        description: Nanoseconds component
+        minimum: 0
+        default: 0
+
+  qosCustom:
+    type: object
+    description: Custom QoS configuration
+    additionalProperties: false
+    properties:
+      depth:
+        type: integer
+        description: Queue depth
+        minimum: 0
+        default: 10
+      profile:
+        $ref: "#/$defs/qosProfile"
+        description: Base QoS profile to extend
+      reliability:
+        type: string
+        description: Reliability policy
+        enum:
+          - reliable
+          - best_effort
+      durability:
+        type: string
+        description: Durability policy
+        enum:
+          - volatile
+          - transient_local
+      history:
+        type: string
+        description: History policy
+        enum:
+          - keep_last
+          - keep_all
+      liveliness:
+        type: string
+        description: Liveliness policy
+        enum:
+          - automatic
+          - manual_by_topic
+      deadline:
+        $ref: "#/$defs/duration"
+        description: Deadline duration
+      lifespan:
+        $ref: "#/$defs/duration"
+        description: Lifespan duration
+
+  qosPubSub:
+    description: "QoS configuration for publishers/subscribers. Can be integer (depth), string (profile), or object (custom)"
+    oneOf:
+      - type: integer
+        description: Queue depth (shorthand for keep_last with specified depth)
+        minimum: 0
+      - $ref: "#/$defs/qosProfile"
+      - $ref: "#/$defs/qosCustom"
+
+  qosService:
+    description: "QoS configuration for services. Integer values are NOT allowed - use profile string or custom object"
+    oneOf:
+      - $ref: "#/$defs/qosProfile"
+      - $ref: "#/$defs/qosCustom"
+
+  publisher:
+    type: object
+    description: Topic publisher definition
+    required:
+      - topic
+      - type
+    additionalProperties: false
+    properties:
+      topic:
+        $ref: "#/$defs/topicName"
+        description: Topic name to publish on
+      type:
+        $ref: "#/$defs/rosMessageType"
+        description: ROS message type
+      qos:
+        $ref: "#/$defs/qosPubSub"
+        description: QoS configuration
+      manually_created:
+        type: boolean
+        description: If true, skip code generation for this publisher (for documentation only)
+        default: false
+    if:
+      properties:
+        manually_created:
+          const: true
+      required:
+        - manually_created
+    then:
+      required:
+        - topic
+
+  subscriber:
+    type: object
+    description: Topic subscriber definition
+    required:
+      - topic
+      - type
+    additionalProperties: false
+    properties:
+      topic:
+        $ref: "#/$defs/topicName"
+        description: Topic name to subscribe to
+      type:
+        $ref: "#/$defs/rosMessageType"
+        description: ROS message type
+      qos:
+        $ref: "#/$defs/qosPubSub"
+        description: QoS configuration
+      manually_created:
+        type: boolean
+        description: If true, skip code generation for this subscriber (for documentation only)
+        default: false
+
+  service:
+    type: object
+    description: Service server definition
+    required:
+      - name
+      - type
+    additionalProperties: false
+    properties:
+      name:
+        $ref: "#/$defs/topicName"
+        description: Service name
+      type:
+        $ref: "#/$defs/rosServiceType"
+        description: ROS service type
+      qos:
+        $ref: "#/$defs/qosService"
+        description: QoS configuration (integer values not allowed for services)
+      manually_created:
+        type: boolean
+        description: If true, skip code generation for this service (for documentation only)
+        default: false
+
+  serviceClient:
+    type: object
+    description: Service client definition
+    required:
+      - name
+      - type
+    additionalProperties: false
+    properties:
+      name:
+        $ref: "#/$defs/topicName"
+        description: Service name to connect to
+      type:
+        $ref: "#/$defs/rosServiceType"
+        description: ROS service type
+      qos:
+        $ref: "#/$defs/qosService"
+        description: QoS configuration (integer values not allowed for service clients)
+      manually_created:
+        type: boolean
+        description: If true, skip code generation for this service client (for documentation only)
+        default: false
+
+  action:
+    type: object
+    description: Action server definition
+    required:
+      - name
+      - type
+    additionalProperties: false
+    properties:
+      name:
+        $ref: "#/$defs/topicName"
+        description: Action name
+      type:
+        $ref: "#/$defs/rosActionType"
+        description: ROS action type
+      manually_created:
+        type: boolean
+        description: If true, skip code generation for this action server (for documentation only)
+        default: false
+
+  actionClient:
+    type: object
+    description: Action client definition
+    required:
+      - name
+      - type
+    additionalProperties: false
+    properties:
+      name:
+        $ref: "#/$defs/topicName"
+        description: Action name to connect to
+      type:
+        $ref: "#/$defs/rosActionType"
+        description: ROS action type
+      manually_created:
+        type: boolean
+        description: If true, skip code generation for this action client (for documentation only)
+        default: false

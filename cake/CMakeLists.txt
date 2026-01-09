@@ -21,4 +21,4 @@ list(APPEND ${PROJECT_NAME}_CONFIG_EXTRAS cmake/cake_auto_package.cmake cmake/ca
 
 ament_python_install_package(${PROJECT_NAME})
 
-ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
+ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR INSTALL_TO_SHARE schemas)
