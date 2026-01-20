@@ -7,12 +7,22 @@ parameters:
         type: string
         default_value: "oh hi mark"
         description: "A real spicy one"
+    pub_queue_depth:
+        type: int
+        default_value: 10
+        read_only: true
+        description: "Queue depth for publisher"
+    sub_reliability:
+        type: string
+        default_value: "BEST_EFFORT"
+        read_only: true
+        description: "Reliability policy for subscriber"
 
 publishers:
     - topic: some_topic
       type: std_msgs/msg/String
       qos:
-        history: 10
+        history: ${param:pub_queue_depth}
         reliability: RELIABLE
 
 subscribers:
@@ -20,7 +30,7 @@ subscribers:
       type: std_msgs/msg/Bool
       qos:
         history: 5
-        reliability: BEST_EFFORT
+        reliability: ${param:sub_reliability}
 
 services:
     - name: my_service

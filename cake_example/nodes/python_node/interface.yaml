@@ -7,19 +7,29 @@ parameters:
         type: int
         default_value: 420
         description: "42 * 10"
+    topic_queue_depth:
+        type: int
+        default_value: 10
+        read_only: true
+        description: "Queue depth for pub/sub"
+    topic_reliability:
+        type: string
+        default_value: "RELIABLE"
+        read_only: true
+        description: "Reliability policy for pub/sub"
 
 publishers:
     - topic: a_topic
       type: std_msgs/msg/String
       qos:
-        history: 10
-        reliability: RELIABLE
+        history: ${param:topic_queue_depth}
+        reliability: ${param:topic_reliability}
 
 subscribers:
     - topic: another_topic
       type: std_msgs/msg/Bool
       qos:
-        history: 5
+        history: ${param:topic_queue_depth}
         reliability: BEST_EFFORT
 
 services:
