@@ -24,6 +24,9 @@ from rclpy.qos import (
 {%- endfor %}
 
 import cake
+{%- if needs_qos_helpers %}
+from cake.qos_helpers import _to_reliability, _to_durability, _to_liveliness
+{%- endif %}
 
 from typing import Callable, TypeVar
 

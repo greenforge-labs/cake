@@ -21,6 +21,9 @@
 {%- if actions %}
 #include <cake/action_server.hpp>
 {%- endif %}
+{%- if needs_qos_helpers %}
+#include <cake/qos_helpers.hpp>
+{%- endif %}
 #include <{{ package_name }}/{{ node_name }}_parameters.hpp>
 
 namespace {{ implementation_namespace }} {
@@ -117,6 +120,10 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
         // init context
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
+
+        // init parameters (must be before publishers/subscribers for QoS param refs)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
 {%- if publishers %}
 
         // init publishers
@@ -160,10 +167,6 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
 {%- endfor %}
 
 {%- endif %}
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };

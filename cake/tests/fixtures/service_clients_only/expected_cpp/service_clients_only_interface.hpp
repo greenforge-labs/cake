@@ -53,13 +53,13 @@ class ServiceClientsOnlyBase : public cake::BaseNode<"service_clients_only", ext
         // init context
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
+
+        // init parameters (must be before publishers/subscribers for QoS param refs)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
         // init service clients
         ctx->service_clients.add_two_ints = ctx->node->template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints");
         ctx->service_clients.trigger_service = ctx->node->template create_client<std_srvs::srv::Trigger>("trigger_service");
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };
