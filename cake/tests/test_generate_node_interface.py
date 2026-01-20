@@ -1493,6 +1493,221 @@ publishers:
     assert "RCLCPP_COMPONENTS_REGISTER_NODE(test_package::TestNode)" in content
 
 
+def test_qos_param_ref_nonexistent_parameter(tmp_path):
+    """Test that QoS param ref to non-existent parameter produces clear error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      history: ${param:nonexistent_param}
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "nonexistent_param" in result.stderr
+    assert "non-existent parameter" in result.stderr
+
+
+def test_qos_param_ref_not_read_only(tmp_path):
+    """Test that QoS param ref to non-read_only parameter produces clear error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  queue_depth:
+    type: int
+    default_value: 10
+    # Note: read_only is not set (defaults to false)
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      history: ${param:queue_depth}
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "queue_depth" in result.stderr
+    assert "read_only" in result.stderr
+
+
+def test_qos_param_ref_type_mismatch_history(tmp_path):
+    """Test that QoS param ref with wrong type (string for history) produces clear error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  queue_depth:
+    type: string
+    default_value: "10"
+    read_only: true
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      history: ${param:queue_depth}
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "queue_depth" in result.stderr
+    assert "string" in result.stderr
+    assert "int" in result.stderr
+
+
+def test_qos_param_ref_type_mismatch_reliability(tmp_path):
+    """Test that QoS param ref with wrong type (int for reliability) produces clear error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  reliability_mode:
+    type: int
+    default_value: 1
+    read_only: true
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: ${param:reliability_mode}
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "reliability_mode" in result.stderr
+    assert "int" in result.stderr
+    assert "string" in result.stderr
+
+
+def test_qos_param_ref_valid_schema(tmp_path):
+    """Test that valid QoS param ref passes schema validation."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  queue_depth:
+    type: int
+    default_value: 10
+    read_only: true
+publishers:
+  - topic: /test
+    type: std_msgs/msg/String
+    qos:
+      history: ${param:queue_depth}
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Generator script failed:\n{result.stderr}"
+
+
 if __name__ == "__main__":
     # Allow running directly with python
     pytest.main([__file__, "-v"])

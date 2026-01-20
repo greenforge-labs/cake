@@ -1,0 +1,52 @@
+node:
+  name: ${THIS_NODE}
+  package: ${THIS_PACKAGE}
+
+parameters:
+  sensor_queue_depth:
+    type: int
+    default_value: 20
+    read_only: true
+    description: "Queue depth for sensor data"
+  sensor_reliability:
+    type: string
+    default_value: "RELIABLE"
+    read_only: true
+    description: "Reliability policy for sensor data"
+  sensor_durability:
+    type: string
+    default_value: "VOLATILE"
+    read_only: true
+    description: "Durability policy for sensor data"
+  sensor_liveliness:
+    type: string
+    default_value: "AUTOMATIC"
+    read_only: true
+    description: "Liveliness policy for sensor data"
+  sensor_deadline_ms:
+    type: int
+    default_value: 100
+    read_only: true
+    description: "Deadline for sensor data in milliseconds"
+  output_queue_depth:
+    type: int
+    default_value: 5
+    read_only: true
+    description: "Queue depth for output"
+
+subscribers:
+  - topic: /sensor_data
+    type: sensor_msgs/msg/LaserScan
+    qos:
+      history: ${param:sensor_queue_depth}
+      reliability: ${param:sensor_reliability}
+      durability: ${param:sensor_durability}
+      liveliness: ${param:sensor_liveliness}
+      deadline_ms: ${param:sensor_deadline_ms}
+
+publishers:
+  - topic: /processed_data
+    type: std_msgs/msg/String
+    qos:
+      history: ${param:output_queue_depth}
+      reliability: RELIABLE

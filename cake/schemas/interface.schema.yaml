@@ -46,6 +46,11 @@ properties:
       $ref: "#/$defs/actionClient"
 
 $defs:
+  # Parameter reference pattern: ${param:parameter_name}
+  parameterRef:
+    type: string
+    pattern: '^\$\{param:[a-zA-Z_][a-zA-Z0-9_]*\}$'
+
   node:
     type: object
     description: Node metadata
@@ -94,51 +99,52 @@ $defs:
 
   qos:
     type: object
-    description: QoS configuration for publishers and subscribers
+    description: QoS configuration for publishers and subscribers. Fields can use ${param:name} to reference read_only parameters.
     additionalProperties: false
     required:
       - history
       - reliability
     properties:
       history:
-        description: "History policy: positive integer for KEEP_LAST(n), or 'ALL' for KEEP_ALL"
+        description: "History policy: positive integer for KEEP_LAST(n), 'ALL' for KEEP_ALL, or ${param:name} reference"
         oneOf:
           - type: integer
             minimum: 1
-            description: Queue depth for KEEP_LAST policy
-          - type: string
-            const: "ALL"
-            description: KEEP_ALL policy
+          - const: "ALL"
+          - $ref: "#/$defs/parameterRef"
       reliability:
-        type: string
-        description: Reliability policy
-        enum:
-          - BEST_EFFORT
-          - RELIABLE
+        description: "Reliability policy or ${param:name} reference"
+        oneOf:
+          - enum: [BEST_EFFORT, RELIABLE]
+          - $ref: "#/$defs/parameterRef"
       durability:
-        type: string
-        description: Durability policy
-        enum:
-          - TRANSIENT_LOCAL
-          - VOLATILE
+        description: "Durability policy or ${param:name} reference"
+        oneOf:
+          - enum: [TRANSIENT_LOCAL, VOLATILE]
+          - $ref: "#/$defs/parameterRef"
       deadline_ms:
-        type: integer
-        description: Deadline duration in milliseconds
-        minimum: 0
+        description: "Deadline duration in milliseconds or ${param:name} reference"
+        oneOf:
+          - type: integer
+            minimum: 0
+          - $ref: "#/$defs/parameterRef"
       lifespan_ms:
-        type: integer
-        description: Lifespan duration in milliseconds
-        minimum: 0
+        description: "Lifespan duration in milliseconds or ${param:name} reference"
+        oneOf:
+          - type: integer
+            minimum: 0
+          - $ref: "#/$defs/parameterRef"
       liveliness:
-        type: string
-        description: Liveliness policy
-        enum:
-          - AUTOMATIC
-          - MANUAL_BY_TOPIC
+        description: "Liveliness policy or ${param:name} reference"
+        oneOf:
+          - enum: [AUTOMATIC, MANUAL_BY_TOPIC]
+          - $ref: "#/$defs/parameterRef"
       lease_duration_ms:
-        type: integer
-        description: Liveliness lease duration in milliseconds (used with liveliness)
-        minimum: 0
+        description: "Liveliness lease duration in milliseconds or ${param:name} reference"
+        oneOf:
+          - type: integer
+            minimum: 0
+          - $ref: "#/$defs/parameterRef"
 
   publisher:
     type: object

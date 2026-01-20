@@ -58,16 +58,16 @@ class QosCustomBase : public cake::BaseNode<"qos_custom", extend_options> {
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
 
+        // init parameters (must be before publishers/subscribers for QoS param refs)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         // init publishers
         ctx->publishers.reliable_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "reliable_topic", rclcpp::QoS(10).reliable().durability_volatile());
         ctx->publishers.best_effort_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "best_effort_topic", rclcpp::QoS(5).best_effort().transient_local());
         // init subscribers
         ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(rclcpp::KeepAll()).reliable());
         ctx->subscribers.deadline_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "deadline_topic", rclcpp::QoS(20).reliable().deadline(rclcpp::Duration::from_nanoseconds(1000000000)).lifespan(rclcpp::Duration::from_nanoseconds(500000000)));
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };

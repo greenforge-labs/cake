@@ -53,12 +53,12 @@ class WithParametersBase : public cake::BaseNode<"with_parameters", extend_optio
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
 
-        // init publishers
-        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", rclcpp::QoS(10).reliable());
-        // init parameters
+        // init parameters (must be before publishers/subscribers for QoS param refs)
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();
 
+        // init publishers
+        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", rclcpp::QoS(10).reliable());
         init_func(ctx);
     }
 };

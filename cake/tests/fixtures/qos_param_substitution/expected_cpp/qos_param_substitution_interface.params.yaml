@@ -1,0 +1,31 @@
+test_package::qos_param_substitution:
+  sensor_queue_depth:
+    type: int
+    default_value: 20
+    read_only: true
+    description: Queue depth for sensor data
+  sensor_reliability:
+    type: string
+    default_value: RELIABLE
+    read_only: true
+    description: Reliability policy for sensor data
+  sensor_durability:
+    type: string
+    default_value: VOLATILE
+    read_only: true
+    description: Durability policy for sensor data
+  sensor_liveliness:
+    type: string
+    default_value: AUTOMATIC
+    read_only: true
+    description: Liveliness policy for sensor data
+  sensor_deadline_ms:
+    type: int
+    default_value: 100
+    read_only: true
+    description: Deadline for sensor data in milliseconds
+  output_queue_depth:
+    type: int
+    default_value: 5
+    read_only: true
+    description: Queue depth for output

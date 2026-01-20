@@ -55,13 +55,13 @@ class PublishersOnlyBase : public cake::BaseNode<"publishers_only", extend_optio
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
 
-        // init publishers
-        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "status", rclcpp::QoS(10).reliable());
-        ctx->publishers.counter = cake::create_publisher<std_msgs::msg::Int32>(ctx, "counter", rclcpp::QoS(5).best_effort());
-        // init parameters
+        // init parameters (must be before publishers/subscribers for QoS param refs)
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();
 
+        // init publishers
+        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "status", rclcpp::QoS(10).reliable());
+        ctx->publishers.counter = cake::create_publisher<std_msgs::msg::Int32>(ctx, "counter", rclcpp::QoS(5).best_effort());
         init_func(ctx);
     }
 };

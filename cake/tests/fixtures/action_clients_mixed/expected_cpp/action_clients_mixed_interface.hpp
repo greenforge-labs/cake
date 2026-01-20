@@ -73,6 +73,10 @@ class ActionClientsMixedBase : public cake::BaseNode<"action_clients_mixed", ext
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
 
+        // init parameters (must be before publishers/subscribers for QoS param refs)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
         // init publishers
         ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", rclcpp::QoS(10).reliable());
         // init subscribers
@@ -86,10 +90,6 @@ class ActionClientsMixedBase : public cake::BaseNode<"action_clients_mixed", ext
         // init action clients
         ctx->action_clients.navigate = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(ctx->node, "/navigate");
         ctx->action_clients.compute_path = rclcpp_action::create_client<nav2_msgs::action::ComputePathToPose>(ctx->node, "compute_path");
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };

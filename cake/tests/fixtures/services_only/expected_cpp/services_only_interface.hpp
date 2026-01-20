@@ -53,13 +53,13 @@ class ServicesOnlyBase : public cake::BaseNode<"services_only", extend_options> 
         // init context
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
+
+        // init parameters (must be before publishers/subscribers for QoS param refs)
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
         // init services
         ctx->services.add_two_ints = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "add_two_ints");
         ctx->services.math_multiply = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "/math/multiply");
-        // init parameters
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
-
         init_func(ctx);
     }
 };
