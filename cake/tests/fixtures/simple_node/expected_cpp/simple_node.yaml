@@ -5,8 +5,12 @@ node:
 publishers:
 - topic: /cmd_vel
   type: geometry_msgs/msg/Twist
-  qos: 10
+  qos:
+    history: 10
+    reliability: RELIABLE
 subscribers:
 - topic: /odom
   type: nav_msgs/msg/Odometry
-  qos: 10
+  qos:
+    history: 10
+    reliability: RELIABLE

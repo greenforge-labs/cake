@@ -55,8 +55,8 @@ class SubscribersOnlyBase : public cake::BaseNode<"subscribers_only", extend_opt
         auto ctx = std::make_shared<ContextType>();
         ctx->node = this->node_;
         // init subscribers
-        ctx->subscribers.sensor_data = cake::create_subscriber<sensor_msgs::msg::LaserScan>(ctx, "sensor_data", 10);
-        ctx->subscribers.camera_image = cake::create_subscriber<sensor_msgs::msg::Image>(ctx, "camera_image", 1);
+        ctx->subscribers.sensor_data = cake::create_subscriber<sensor_msgs::msg::LaserScan>(ctx, "sensor_data", rclcpp::QoS(10).best_effort());
+        ctx->subscribers.camera_image = cake::create_subscriber<sensor_msgs::msg::Image>(ctx, "camera_image", rclcpp::QoS(1).best_effort());
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

@@ -4,7 +4,11 @@ node:
 subscribers:
 - topic: sensor_data
   type: sensor_msgs/msg/LaserScan
-  qos: 10
+  qos:
+    history: 10
+    reliability: BEST_EFFORT
 - topic: camera_image
   type: sensor_msgs/msg/Image
-  qos: 1
+  qos:
+    history: 1
+    reliability: BEST_EFFORT

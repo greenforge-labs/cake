@@ -20,7 +20,7 @@ template <typename ContextType> struct QosCustomPublishers {
 
 template <typename ContextType> struct QosCustomSubscribers {
     std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> keep_all_topic;
-    std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> profile_override_topic;
+    std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> deadline_topic;
 };
 
 template <typename ContextType> struct QosCustomServices {};
@@ -62,8 +62,8 @@ class QosCustomBase : public cake::BaseNode<"qos_custom", extend_options> {
         ctx->publishers.reliable_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "reliable_topic", rclcpp::QoS(10).reliable().durability_volatile());
         ctx->publishers.best_effort_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "best_effort_topic", rclcpp::QoS(5).best_effort().transient_local());
         // init subscribers
-        ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(10).reliable().keep_all());
-        ctx->subscribers.profile_override_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "profile_override_topic", rclcpp::SensorDataQoS().reliable().keep_last(20));
+        ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(rclcpp::KeepAll()).reliable());
+        ctx->subscribers.deadline_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "deadline_topic", rclcpp::QoS(20).reliable().deadline(rclcpp::Duration::from_nanoseconds(1000000000)).lifespan(rclcpp::Duration::from_nanoseconds(500000000)));
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
+from rclpy.qos import (
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 
@@ -101,10 +106,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise publishers
-    ctx.publishers.cmd_vel._initialise(ctx, Twist, "/cmd_vel", 10)
+    ctx.publishers.cmd_vel._initialise(ctx, Twist, "/cmd_vel", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
 
     # initialise subscribers
-    ctx.subscribers.odom._initialise(ctx, Odometry, "/odom", 10)
+    ctx.subscribers.odom._initialise(ctx, Odometry, "/odom", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
 
     # initialise services
 

@@ -5,15 +5,23 @@ node:
 publishers:
     - topic: pose
       type: geometry_msgs/msg/PoseStamped
-      qos: 10
+      qos:
+        history: 10
+        reliability: RELIABLE
     - topic: path
       type: nav_msgs/msg/Path
-      qos: 5
+      qos:
+        history: 5
+        reliability: RELIABLE
 
 subscribers:
     - topic: joint_states
       type: sensor_msgs/msg/JointState
-      qos: 10
+      qos:
+        history: 10
+        reliability: BEST_EFFORT
     - topic: point_cloud
       type: sensor_msgs/msg/PointCloud2
-      qos: 1
+      qos:
+        history: 1
+        reliability: BEST_EFFORT

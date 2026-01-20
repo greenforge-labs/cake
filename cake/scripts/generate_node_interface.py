@@ -40,30 +40,10 @@ class EntityConfig:
     name_key: str  # Key in YAML: "topic" for pub/sub, "name" for others
     output_type_key: str  # Key for template: "msg_type", "service_type", or "action_type"
     has_qos: bool  # Whether QoS configuration is applicable
-    qos_allows_int: bool  # True for pub/sub (depth shorthand), False for services
 
 
 # Constants
-DEFAULT_QOS_DEPTH = 10
 DUMMY_PARAM_NAME = "__cake_dummy"
-
-# QoS profile mapping for C++ (predefined profiles)
-CPP_QOS_PROFILE_MAP = {
-    "SensorDataQoS": "SensorDataQoS",
-    "SystemDefaultsQoS": "SystemDefaultsQoS",
-    "ServicesQoS": "ServicesQoS",
-    "ParametersQoS": "ParametersQoS",
-    "ParameterEventsQoS": "ParameterEventsQoS",
-}
-
-# QoS profile mapping for Python (predefined profiles)
-PYTHON_QOS_PROFILE_MAP = {
-    "SensorDataQoS": "qos_profile_sensor_data",
-    "SystemDefaultsQoS": "qos_profile_system_default",
-    "ServicesQoS": "qos_profile_services_default",
-    "ParametersQoS": "qos_profile_parameters",
-    "ParameterEventsQoS": "qos_profile_parameter_events",
-}
 
 # Entity configurations mapping schema entity types to their template requirements
 ENTITY_CONFIGS: Dict[EntityKind, EntityConfig] = {
@@ -72,42 +52,36 @@ ENTITY_CONFIGS: Dict[EntityKind, EntityConfig] = {
         name_key="topic",
         output_type_key="msg_type",
         has_qos=True,
-        qos_allows_int=True,
     ),
     EntityKind.SUBSCRIBER: EntityConfig(
         kind=EntityKind.SUBSCRIBER,
         name_key="topic",
         output_type_key="msg_type",
         has_qos=True,
-        qos_allows_int=True,
     ),
     EntityKind.SERVICE: EntityConfig(
         kind=EntityKind.SERVICE,
         name_key="name",
         output_type_key="service_type",
-        has_qos=True,
-        qos_allows_int=False,
+        has_qos=False,
     ),
     EntityKind.SERVICE_CLIENT: EntityConfig(
         kind=EntityKind.SERVICE_CLIENT,
         name_key="name",
         output_type_key="service_type",
-        has_qos=True,
-        qos_allows_int=False,
+        has_qos=False,
     ),
     EntityKind.ACTION: EntityConfig(
         kind=EntityKind.ACTION,
         name_key="name",
         output_type_key="action_type",
         has_qos=False,
-        qos_allows_int=False,
     ),
     EntityKind.ACTION_CLIENT: EntityConfig(
         kind=EntityKind.ACTION_CLIENT,
         name_key="name",
         output_type_key="action_type",
         has_qos=False,
-        qos_allows_int=False,
     ),
 }
 
@@ -225,90 +199,66 @@ def name_to_field_name(name: str) -> str:
     return name.replace("/", "_").lstrip("_")
 
 
-def generate_qos_code(qos_spec: Any) -> str:
+def generate_qos_code(qos_spec: Dict[str, Any]) -> str:
     """
     Generate C++ QoS code from YAML QoS specification.
 
-    Supports:
-    - Integer: 10 -> "10"
-    - String (predefined profile): "SensorDataQoS" -> "rclcpp::SensorDataQoS()"
-    - Dict (custom parameters): {reliability: reliable, depth: 10} -> "rclcpp::QoS(10).reliable()..."
+    New format:
+    - history: integer > 0 for KEEP_LAST(n), or "ALL" for KEEP_ALL (required)
+    - reliability: "BEST_EFFORT" or "RELIABLE" (required)
+    - durability: "TRANSIENT_LOCAL" or "VOLATILE" (optional)
+    - deadline_ms: milliseconds (optional)
+    - lifespan_ms: milliseconds (optional)
+    - liveliness: "AUTOMATIC" or "MANUAL_BY_TOPIC" (optional)
+    - lease_duration_ms: milliseconds (optional)
     """
-    # Backward compatible: integer
-    if isinstance(qos_spec, int):
-        return str(qos_spec)
+    # Handle history - required field
+    history = qos_spec["history"]
+    if history == "ALL":
+        base_qos = "rclcpp::QoS(rclcpp::KeepAll())"
+    else:
+        base_qos = f"rclcpp::QoS({history})"
 
-    # Predefined profile: string
-    if isinstance(qos_spec, str):
-        return f"rclcpp::{qos_spec}()"
+    # Build chain of method calls
+    methods = []
 
-    # Custom parameters: dict
-    if isinstance(qos_spec, dict):
-        # Check if using profile with overrides
-        if "profile" in qos_spec:
-            base_qos = f"rclcpp::{qos_spec['profile']}()"
-            params = {k: v for k, v in qos_spec.items() if k != "profile"}
-        else:
-            # Start with depth if provided, otherwise default to DEFAULT_QOS_DEPTH
-            depth = qos_spec.get("depth", DEFAULT_QOS_DEPTH)
-            base_qos = f"rclcpp::QoS({depth})"
-            params = {k: v for k, v in qos_spec.items() if k != "depth"}
+    # Reliability - required field
+    reliability = qos_spec["reliability"]
+    if reliability == "RELIABLE":
+        methods.append(".reliable()")
+    elif reliability == "BEST_EFFORT":
+        methods.append(".best_effort()")
 
-        # Build chain of method calls
-        methods = []
+    # Durability - optional
+    if "durability" in qos_spec:
+        if qos_spec["durability"] == "VOLATILE":
+            methods.append(".durability_volatile()")
+        elif qos_spec["durability"] == "TRANSIENT_LOCAL":
+            methods.append(".transient_local()")
 
-        # Reliability
-        if "reliability" in params:
-            if params["reliability"] == "reliable":
-                methods.append(".reliable()")
-            elif params["reliability"] == "best_effort":
-                methods.append(".best_effort()")
+    # Deadline - optional (convert ms to nanoseconds)
+    if "deadline_ms" in qos_spec:
+        ns = qos_spec["deadline_ms"] * 1_000_000
+        methods.append(f".deadline(rclcpp::Duration::from_nanoseconds({ns}))")
 
-        # Durability
-        if "durability" in params:
-            if params["durability"] == "volatile":
-                methods.append(".durability_volatile()")
-            elif params["durability"] == "transient_local":
-                methods.append(".transient_local()")
+    # Lifespan - optional (convert ms to nanoseconds)
+    if "lifespan_ms" in qos_spec:
+        ns = qos_spec["lifespan_ms"] * 1_000_000
+        methods.append(f".lifespan(rclcpp::Duration::from_nanoseconds({ns}))")
 
-        # History
-        if "history" in params:
-            if params["history"] == "keep_last":
-                depth_val = params.get("depth", DEFAULT_QOS_DEPTH)
-                methods.append(f".keep_last({depth_val})")
-            elif params["history"] == "keep_all":
-                methods.append(".keep_all()")
-        elif "depth" in params:
-            # Depth specified without explicit history (applies to profiles with overrides)
-            methods.append(f".keep_last({params['depth']})")
+    # Liveliness - optional
+    if "liveliness" in qos_spec:
+        if qos_spec["liveliness"] == "AUTOMATIC":
+            methods.append(".liveliness(rclcpp::LivelinessPolicy::Automatic)")
+        elif qos_spec["liveliness"] == "MANUAL_BY_TOPIC":
+            methods.append(".liveliness(rclcpp::LivelinessPolicy::ManualByTopic)")
 
-        # Deadline
-        if "deadline" in params:
-            deadline = params["deadline"]
-            if isinstance(deadline, dict):
-                sec = deadline.get("sec", 0)
-                nsec = deadline.get("nsec", 0)
-                methods.append(f".deadline(rclcpp::Duration({sec}, {nsec}))")
+    # Liveliness lease duration - optional (convert ms to nanoseconds)
+    if "lease_duration_ms" in qos_spec:
+        ns = qos_spec["lease_duration_ms"] * 1_000_000
+        methods.append(f".liveliness_lease_duration(rclcpp::Duration::from_nanoseconds({ns}))")
 
-        # Lifespan
-        if "lifespan" in params:
-            lifespan = params["lifespan"]
-            if isinstance(lifespan, dict):
-                sec = lifespan.get("sec", 0)
-                nsec = lifespan.get("nsec", 0)
-                methods.append(f".lifespan(rclcpp::Duration({sec}, {nsec}))")
-
-        # Liveliness
-        if "liveliness" in params:
-            if params["liveliness"] == "automatic":
-                methods.append(".liveliness(rclcpp::LivelinessPolicy::Automatic)")
-            elif params["liveliness"] == "manual_by_topic":
-                methods.append(".liveliness(rclcpp::LivelinessPolicy::ManualByTopic)")
-
-        return base_qos + "".join(methods)
-
-    # Default fallback
-    return str(DEFAULT_QOS_DEPTH)
+    return base_qos + "".join(methods)
 
 
 def prepare_entities(
@@ -332,12 +282,8 @@ def prepare_entities(
         }
 
         if config.has_qos:
-            if config.qos_allows_int:
-                # Publishers/subscribers: use default depth if not specified
-                prepared["qos_code"] = generate_qos_code(entity.get("qos", DEFAULT_QOS_DEPTH))
-            elif "qos" in entity:
-                # Services: only generate QoS if explicitly specified
-                prepared["qos_code"] = generate_qos_code(entity["qos"])
+            # QoS is required for publishers/subscribers in the new format
+            prepared["qos_code"] = generate_qos_code(entity["qos"])
 
         entities.append(prepared)
     return entities
@@ -368,105 +314,79 @@ def ros_type_to_python_class(ros_type: str) -> str:
     return ""
 
 
-def generate_python_qos_code(qos_spec: Any) -> tuple[str, Set[str]]:
+def generate_python_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, Set[str]]:
     """
     Generate Python QoS code from YAML QoS specification.
     Returns tuple of (qos_code, required_imports)
 
-    Supports:
-    - Integer: 10 -> ("10", set())
-    - String (predefined profile): "SensorDataQoS" -> ("qos_profile_sensor_data", {"qos_profile_sensor_data"})
-    - Dict (custom parameters): {reliability: reliable, depth: 10} ->
-        ("QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)",
-         {"QoSProfile", "ReliabilityPolicy"})
+    New format:
+    - history: integer > 0 for KEEP_LAST(n), or "ALL" for KEEP_ALL (required)
+    - reliability: "BEST_EFFORT" or "RELIABLE" (required)
+    - durability: "TRANSIENT_LOCAL" or "VOLATILE" (optional)
+    - deadline_ms: milliseconds (optional)
+    - lifespan_ms: milliseconds (optional)
+    - liveliness: "AUTOMATIC" or "MANUAL_BY_TOPIC" (optional)
+    - lease_duration_ms: milliseconds (optional)
     """
-    required_imports = set()
+    required_imports: Set[str] = set()
+    required_imports.add("QoSProfile")
+    required_imports.add("HistoryPolicy")
+    required_imports.add("ReliabilityPolicy")
 
-    # Backward compatible: integer
-    if isinstance(qos_spec, int):
-        return (str(qos_spec), required_imports)
+    # Build constructor arguments
+    args = []
 
-    # Predefined profile: string
-    if isinstance(qos_spec, str):
-        python_profile = PYTHON_QOS_PROFILE_MAP.get(qos_spec, qos_spec)
-        required_imports.add(python_profile)
-        return (python_profile, required_imports)
+    # History - required field
+    history = qos_spec["history"]
+    if history == "ALL":
+        args.append("history=HistoryPolicy.KEEP_ALL")
+    else:
+        args.append("history=HistoryPolicy.KEEP_LAST")
+        args.append(f"depth={history}")
 
-    # Custom parameters: dict
-    if isinstance(qos_spec, dict):
-        # Check if it's only a profile without overrides
-        if "profile" in qos_spec and len(qos_spec) == 1:
-            # Just a profile, treat as string
-            python_profile = PYTHON_QOS_PROFILE_MAP.get(qos_spec["profile"], qos_spec["profile"])
-            required_imports.add(python_profile)
-            return (python_profile, required_imports)
+    # Reliability - required field
+    reliability = qos_spec["reliability"]
+    if reliability == "RELIABLE":
+        args.append("reliability=ReliabilityPolicy.RELIABLE")
+    elif reliability == "BEST_EFFORT":
+        args.append("reliability=ReliabilityPolicy.BEST_EFFORT")
 
-        required_imports.add("QoSProfile")
+    # Durability - optional
+    if "durability" in qos_spec:
+        required_imports.add("DurabilityPolicy")
+        if qos_spec["durability"] == "VOLATILE":
+            args.append("durability=DurabilityPolicy.VOLATILE")
+        elif qos_spec["durability"] == "TRANSIENT_LOCAL":
+            args.append("durability=DurabilityPolicy.TRANSIENT_LOCAL")
 
-        # Build constructor arguments
-        args = []
+    # Deadline - optional (convert ms to nanoseconds)
+    if "deadline_ms" in qos_spec:
+        required_imports.add("Duration")
+        ns = qos_spec["deadline_ms"] * 1_000_000
+        args.append(f"deadline=Duration(nanoseconds={ns})")
 
-        # Depth
-        if "depth" in qos_spec:
-            args.append(f"depth={qos_spec['depth']}")
-        elif "profile" not in qos_spec:
-            args.append(f"depth={DEFAULT_QOS_DEPTH}")
+    # Lifespan - optional (convert ms to nanoseconds)
+    if "lifespan_ms" in qos_spec:
+        required_imports.add("Duration")
+        ns = qos_spec["lifespan_ms"] * 1_000_000
+        args.append(f"lifespan=Duration(nanoseconds={ns})")
 
-        # Reliability
-        if "reliability" in qos_spec:
-            required_imports.add("ReliabilityPolicy")
-            if qos_spec["reliability"] == "reliable":
-                args.append("reliability=ReliabilityPolicy.RELIABLE")
-            elif qos_spec["reliability"] == "best_effort":
-                args.append("reliability=ReliabilityPolicy.BEST_EFFORT")
+    # Liveliness - optional
+    if "liveliness" in qos_spec:
+        required_imports.add("LivelinessPolicy")
+        if qos_spec["liveliness"] == "AUTOMATIC":
+            args.append("liveliness=LivelinessPolicy.AUTOMATIC")
+        elif qos_spec["liveliness"] == "MANUAL_BY_TOPIC":
+            args.append("liveliness=LivelinessPolicy.MANUAL_BY_TOPIC")
 
-        # Durability
-        if "durability" in qos_spec:
-            required_imports.add("DurabilityPolicy")
-            if qos_spec["durability"] == "volatile":
-                args.append("durability=DurabilityPolicy.VOLATILE")
-            elif qos_spec["durability"] == "transient_local":
-                args.append("durability=DurabilityPolicy.TRANSIENT_LOCAL")
+    # Liveliness lease duration - optional (convert ms to nanoseconds)
+    if "lease_duration_ms" in qos_spec:
+        required_imports.add("Duration")
+        ns = qos_spec["lease_duration_ms"] * 1_000_000
+        args.append(f"liveliness_lease_duration=Duration(nanoseconds={ns})")
 
-        # History
-        if "history" in qos_spec:
-            required_imports.add("HistoryPolicy")
-            if qos_spec["history"] == "keep_last":
-                args.append("history=HistoryPolicy.KEEP_LAST")
-            elif qos_spec["history"] == "keep_all":
-                args.append("history=HistoryPolicy.KEEP_ALL")
-
-        # Liveliness
-        if "liveliness" in qos_spec:
-            required_imports.add("LivelinessPolicy")
-            if qos_spec["liveliness"] == "automatic":
-                args.append("liveliness=LivelinessPolicy.AUTOMATIC")
-            elif qos_spec["liveliness"] == "manual_by_topic":
-                args.append("liveliness=LivelinessPolicy.MANUAL_BY_TOPIC")
-
-        # Deadline and lifespan (Duration)
-        if "deadline" in qos_spec or "lifespan" in qos_spec:
-            required_imports.add("Duration")
-
-            if "deadline" in qos_spec:
-                deadline = qos_spec["deadline"]
-                if isinstance(deadline, dict):
-                    sec = deadline.get("sec", 0)
-                    nsec = deadline.get("nsec", 0)
-                    args.append(f"deadline=Duration(seconds={sec}, nanoseconds={nsec})")
-
-            if "lifespan" in qos_spec:
-                lifespan = qos_spec["lifespan"]
-                if isinstance(lifespan, dict):
-                    sec = lifespan.get("sec", 0)
-                    nsec = lifespan.get("nsec", 0)
-                    args.append(f"lifespan=Duration(seconds={sec}, nanoseconds={nsec})")
-
-        qos_code = f"QoSProfile({', '.join(args)})"
-        return (qos_code, required_imports)
-
-    # Default fallback
-    return (str(DEFAULT_QOS_DEPTH), required_imports)
+    qos_code = f"QoSProfile({', '.join(args)})"
+    return (qos_code, required_imports)
 
 
 def _get_python_class_key(output_type_key: str) -> str:
@@ -526,16 +446,10 @@ def prepare_python_entities(
         }
 
         if config.has_qos:
-            if config.qos_allows_int:
-                # Publishers/subscribers: use default depth if not specified
-                qos_code, qos_imports = generate_python_qos_code(entity.get("qos", DEFAULT_QOS_DEPTH))
-                prepared["qos_code"] = qos_code
-                all_qos_imports.update(qos_imports)
-            elif "qos" in entity:
-                # Services: only generate QoS if explicitly specified
-                qos_code, qos_imports = generate_python_qos_code(entity["qos"])
-                prepared["qos_code"] = qos_code
-                all_qos_imports.update(qos_imports)
+            # QoS is required for publishers/subscribers in the new format
+            qos_code, qos_imports = generate_python_qos_code(entity["qos"])
+            prepared["qos_code"] = qos_code
+            all_qos_imports.update(qos_imports)
 
         entities.append(prepared)
     return entities, all_qos_imports

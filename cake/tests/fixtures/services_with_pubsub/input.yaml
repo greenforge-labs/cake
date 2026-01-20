@@ -5,19 +5,19 @@ node:
 publishers:
   - topic: /status
     type: std_msgs/msg/String
-    qos: 10
+    qos:
+      history: 10
+      reliability: RELIABLE
 
 subscribers:
   - topic: /command
     type: std_msgs/msg/String
-    qos: SensorDataQoS
+    qos:
+      history: 5
+      reliability: BEST_EFFORT
 
 services:
   - name: /reset
     type: std_srvs/srv/Trigger
-    qos: ServicesQoS
   - name: compute
     type: example_interfaces/srv/AddTwoInts
-    qos:
-      depth: 5
-      reliability: reliable

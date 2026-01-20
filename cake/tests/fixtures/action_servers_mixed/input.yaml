@@ -5,12 +5,16 @@ node:
 publishers:
     - topic: /status
       type: std_msgs/msg/String
-      qos: 10
+      qos:
+        history: 10
+        reliability: RELIABLE
 
 subscribers:
     - topic: /cmd
       type: std_msgs/msg/Bool
-      qos: 10
+      qos:
+        history: 10
+        reliability: BEST_EFFORT
 
 services:
     - name: /reset

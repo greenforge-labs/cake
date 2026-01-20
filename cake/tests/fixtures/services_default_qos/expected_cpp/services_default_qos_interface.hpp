@@ -56,7 +56,7 @@ class ServicesDefaultQosBase : public cake::BaseNode<"services_default_qos", ext
         ctx->node = this->node_;
         // init services
         ctx->services.trigger_service = cake::create_service<std_srvs::srv::Trigger>(ctx, "/trigger_service");
-        ctx->services.compute = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "compute", rclcpp::QoS(10));
+        ctx->services.compute = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "compute");
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

@@ -6,9 +6,6 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.client import Client
-from rclpy.qos import (
-    QoSProfile,
-)
 from example_interfaces.srv import AddTwoInts
 from std_srvs.srv import Trigger
 
@@ -84,7 +81,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise service clients
     service_clients = ServiceClients(
         add_two_ints=node.create_client(AddTwoInts, "/add_two_ints"),
-        trigger_service=node.create_client(Trigger, "trigger_service", qos_profile=QoSProfile(depth=10)),
+        trigger_service=node.create_client(Trigger, "trigger_service"),
     )
 
     # initialise actions
