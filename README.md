@@ -608,6 +608,65 @@ qos:
   lease_duration_ms: 200
 ```
 
+### QoS Parameter Substitution
+
+QoS fields can reference `read_only` parameters using `${param:parameter_name}` syntax, allowing QoS settings to be configured at launch time rather than hardcoded.
+
+**Requirements:**
+- The referenced parameter must exist in the `parameters` section
+- The parameter must have `read_only: true`
+- The parameter type must be compatible with the QoS field:
+  - `history`, `deadline_ms`, `lifespan_ms`, `lease_duration_ms`: requires `int` type
+  - `reliability`, `durability`, `liveliness`: requires `string` type
+
+**Example:**
+```yaml
+parameters:
+  sensor_queue_depth:
+    type: int
+    default_value: 20
+    read_only: true
+    description: Queue depth for sensor data
+  sensor_reliability:
+    type: string
+    default_value: RELIABLE
+    read_only: true
+    description: Reliability policy for sensor data
+
+subscribers:
+  - topic: /sensor_data
+    type: sensor_msgs/msg/LaserScan
+    qos:
+      history: ${param:sensor_queue_depth}
+      reliability: ${param:sensor_reliability}
+
+publishers:
+  - topic: /processed_data
+    type: std_msgs/msg/String
+    qos:
+      history: ${param:sensor_queue_depth}
+      reliability: RELIABLE  # Can mix literal values and param refs
+```
+
+You can then override QoS settings at launch time:
+```bash
+ros2 run my_package my_node --ros-args -p sensor_queue_depth:=50 -p sensor_reliability:=BEST_EFFORT
+```
+
+Or in a launch file:
+```python
+Node(
+    package='my_package',
+    executable='my_node',
+    parameters=[{
+        'sensor_queue_depth': 50,
+        'sensor_reliability': 'BEST_EFFORT',
+    }]
+)
+```
+
+**Validation:** Invalid parameter values (e.g., `"INVALID"` for reliability) will raise an exception at node startup with a clear error message.
+
 ## QoS Event Callbacks
 
 Cake subscribers and publishers support QoS event callbacks to react when deadlines are missed or liveliness changes.
