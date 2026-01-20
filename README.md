@@ -42,13 +42,15 @@ publishers:
     - topic: some_topic
       type: std_msgs/msg/String
       qos:
-        profile: SystemDefaultsQoS
+        history: 10
+        reliability: RELIABLE
 
 subscribers:
     - topic: other_topic
       type: std_msgs/msg/Bool
       qos:
-        profile: SensorDataQoS
+        history: 5
+        reliability: BEST_EFFORT
 
 services:
     - name: my_service
@@ -459,17 +461,12 @@ parameters:
 publishers:
     - topic: /cmd_vel
       type: geometry_msgs/msg/Twist
-      qos: 10  # Simple depth
-      # OR
       qos:
-        profile: SystemDefaultsQoS
-      # OR
-      qos:
-        reliability: reliable
-        durability: volatile
-        history: keep_last
-        depth: 10
+        history: 10
+        reliability: RELIABLE
 ```
+
+QoS is required for all publishers. See [QoS Configuration](#qos-configuration) for details.
 
 ### Subscribers
 
@@ -478,8 +475,11 @@ subscribers:
     - topic: /odom
       type: nav_msgs/msg/Odometry
       qos:
-        profile: SensorDataQoS
+        history: 5
+        reliability: BEST_EFFORT
 ```
+
+QoS is required for all subscribers. See [QoS Configuration](#qos-configuration) for details.
 
 ### Services
 
@@ -529,45 +529,83 @@ subscribers:
     - topic: /camera/image
       type: sensor_msgs/msg/Image
       qos:
-        profile: SensorDataQoS
+        history: 5
+        reliability: BEST_EFFORT
       manually_created: true  # Won't be generated - handle this yourself
 ```
 
 ## QoS Configuration
 
-Cake supports three QoS specification methods:
+QoS (Quality of Service) is **required** for all publishers and subscribers. QoS is not applicable to services, service clients, actions, or action clients.
 
-### 1. Simple Depth (Backward Compatible)
+### QoS Fields
 
-```yaml
-qos: 10
-```
+**Required fields:**
 
-### 2. Predefined Profiles
+| Field | Type | Values |
+|-------|------|--------|
+| `history` | integer or string | Integer > 0 for KEEP_LAST(n), or `"ALL"` for KEEP_ALL |
+| `reliability` | string | `BEST_EFFORT` or `RELIABLE` |
 
+**Optional fields:**
+
+| Field | Type | Values |
+|-------|------|--------|
+| `durability` | string | `TRANSIENT_LOCAL` or `VOLATILE` |
+| `deadline_ms` | integer | >= 0 (milliseconds) |
+| `lifespan_ms` | integer | >= 0 (milliseconds) |
+| `liveliness` | string | `AUTOMATIC` or `MANUAL_BY_TOPIC` |
+| `lease_duration_ms` | integer | >= 0 (milliseconds, used with liveliness) |
+
+### Examples
+
+**Minimal QoS (required fields only):**
 ```yaml
 qos:
-  profile: SensorDataQoS  # or SystemDefaultsQoS, ServicesDefaultQoS, ParametersQoS, etc.
+  history: 10
+  reliability: RELIABLE
 ```
 
-### 3. Custom Parameters
-
+**Sensor data (best effort, small queue):**
 ```yaml
 qos:
-  reliability: reliable  # or best_effort
-  durability: volatile   # or transient_local
-  history: keep_last     # or keep_all
-  depth: 10
-  deadline:
-    sec: 1
-    nsec: 0
-  lifespan:
-    sec: 10
-    nsec: 0
-  liveliness: automatic  # or manual_by_topic, manual_by_node
-  liveliness_lease_duration:
-    sec: 1
-    nsec: 0
+  history: 5
+  reliability: BEST_EFFORT
+```
+
+**Latched topic (transient local durability):**
+```yaml
+qos:
+  history: 1
+  reliability: RELIABLE
+  durability: TRANSIENT_LOCAL
+```
+
+**With deadline monitoring:**
+```yaml
+qos:
+  history: 10
+  reliability: RELIABLE
+  deadline_ms: 1000  # 1 second deadline
+```
+
+**Keep all messages:**
+```yaml
+qos:
+  history: ALL
+  reliability: RELIABLE
+```
+
+**Full configuration with all options:**
+```yaml
+qos:
+  history: 5
+  reliability: BEST_EFFORT
+  durability: VOLATILE
+  deadline_ms: 100
+  lifespan_ms: 500
+  liveliness: AUTOMATIC
+  lease_duration_ms: 200
 ```
 
 ## QoS Event Callbacks
@@ -682,17 +720,17 @@ subscribers:
     - topic: ok
       type: std_msgs/msg/Bool
       qos:
-        deadline:
-          sec: 1
-          nsec: 0
+        history: 10
+        reliability: RELIABLE
+        deadline_ms: 1000  # 1 second
 
 publishers:
     - topic: status
       type: std_msgs/msg/String
       qos:
-        deadline:
-          sec: 0
-          nsec: 500000000  # 500ms
+        history: 10
+        reliability: RELIABLE
+        deadline_ms: 500  # 500ms
 ```
 
 For liveliness callbacks, configure liveliness and lease duration:
@@ -702,19 +740,19 @@ subscribers:
     - topic: sensor
       type: sensor_msgs/msg/Imu
       qos:
-        liveliness: automatic
-        liveliness_lease_duration:
-          sec: 2
-          nsec: 0
+        history: 5
+        reliability: BEST_EFFORT
+        liveliness: AUTOMATIC
+        lease_duration_ms: 2000  # 2 seconds
 
 publishers:
     - topic: heartbeat
       type: std_msgs/msg/Empty
       qos:
-        liveliness: automatic
-        liveliness_lease_duration:
-          sec: 1
-          nsec: 0
+        history: 1
+        reliability: RELIABLE
+        liveliness: AUTOMATIC
+        lease_duration_ms: 1000  # 1 second
 ```
 
 ## Development
