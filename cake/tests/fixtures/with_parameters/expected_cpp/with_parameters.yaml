@@ -14,4 +14,6 @@ parameters:
 publishers:
 - topic: /status
   type: std_msgs/msg/String
-  qos: 10
+  qos:
+    history: 10
+    reliability: RELIABLE

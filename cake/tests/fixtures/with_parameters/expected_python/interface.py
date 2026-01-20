@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
+from rclpy.qos import (
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
 from std_msgs.msg import String
 
 import cake
@@ -100,7 +105,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise publishers
-    ctx.publishers.status._initialise(ctx, String, "/status", 10)
+    ctx.publishers.status._initialise(ctx, String, "/status", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
 
     # initialise subscribers
 

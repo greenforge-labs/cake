@@ -54,7 +54,7 @@ class WithParametersBase : public cake::BaseNode<"with_parameters", extend_optio
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", 10);
+        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", rclcpp::QoS(10).reliable());
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

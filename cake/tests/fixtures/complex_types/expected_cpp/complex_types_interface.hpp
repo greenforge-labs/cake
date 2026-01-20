@@ -62,11 +62,11 @@ class ComplexTypesBase : public cake::BaseNode<"complex_types", extend_options> 
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.pose = cake::create_publisher<geometry_msgs::msg::PoseStamped>(ctx, "pose", 10);
-        ctx->publishers.path = cake::create_publisher<nav_msgs::msg::Path>(ctx, "path", 5);
+        ctx->publishers.pose = cake::create_publisher<geometry_msgs::msg::PoseStamped>(ctx, "pose", rclcpp::QoS(10).reliable());
+        ctx->publishers.path = cake::create_publisher<nav_msgs::msg::Path>(ctx, "path", rclcpp::QoS(5).reliable());
         // init subscribers
-        ctx->subscribers.joint_states = cake::create_subscriber<sensor_msgs::msg::JointState>(ctx, "joint_states", 10);
-        ctx->subscribers.point_cloud = cake::create_subscriber<sensor_msgs::msg::PointCloud2>(ctx, "point_cloud", 1);
+        ctx->subscribers.joint_states = cake::create_subscriber<sensor_msgs::msg::JointState>(ctx, "joint_states", rclcpp::QoS(10).best_effort());
+        ctx->subscribers.point_cloud = cake::create_subscriber<sensor_msgs::msg::PointCloud2>(ctx, "point_cloud", rclcpp::QoS(1).best_effort());
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

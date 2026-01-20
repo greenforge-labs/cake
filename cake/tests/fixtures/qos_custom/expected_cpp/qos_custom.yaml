@@ -6,24 +6,25 @@ publishers:
 - topic: reliable_topic
   type: std_msgs/msg/String
   qos:
-    reliability: reliable
-    durability: volatile
-    depth: 10
+    history: 10
+    reliability: RELIABLE
+    durability: VOLATILE
 - topic: best_effort_topic
   type: std_msgs/msg/String
   qos:
-    reliability: best_effort
-    durability: transient_local
-    depth: 5
+    history: 5
+    reliability: BEST_EFFORT
+    durability: TRANSIENT_LOCAL
 subscribers:
 - topic: keep_all_topic
   type: std_msgs/msg/String
   qos:
-    history: keep_all
-    reliability: reliable
-- topic: profile_override_topic
+    history: ALL
+    reliability: RELIABLE
+- topic: deadline_topic
   type: std_msgs/msg/String
   qos:
-    profile: SensorDataQoS
-    reliability: reliable
-    depth: 20
+    history: 20
+    reliability: RELIABLE
+    deadline_ms: 1000
+    lifespan_ms: 500

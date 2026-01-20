@@ -59,11 +59,11 @@ class QosBackwardCompatBase : public cake::BaseNode<"qos_backward_compat", exten
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.int_qos_pub = cake::create_publisher<std_msgs::msg::String>(ctx, "int_qos_pub", 10);
-        ctx->publishers.default_qos_pub = cake::create_publisher<std_msgs::msg::String>(ctx, "default_qos_pub", 10);
+        ctx->publishers.int_qos_pub = cake::create_publisher<std_msgs::msg::String>(ctx, "int_qos_pub", rclcpp::QoS(10).best_effort());
+        ctx->publishers.default_qos_pub = cake::create_publisher<std_msgs::msg::String>(ctx, "default_qos_pub", rclcpp::QoS(10).reliable());
         // init subscribers
-        ctx->subscribers.int_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "int_qos_sub", 5);
-        ctx->subscribers.default_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "default_qos_sub", 10);
+        ctx->subscribers.int_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "int_qos_sub", rclcpp::QoS(5).best_effort());
+        ctx->subscribers.default_qos_sub = cake::create_subscriber<std_msgs::msg::String>(ctx, "default_qos_sub", rclcpp::QoS(10).reliable());
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

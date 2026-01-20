@@ -7,5 +7,3 @@ service_clients:
     type: example_interfaces/srv/AddTwoInts
   - name: trigger_service
     type: std_srvs/srv/Trigger
-    qos:
-      depth: 10

@@ -12,13 +12,15 @@ publishers:
     - topic: a_topic
       type: std_msgs/msg/String
       qos:
-        profile: SystemDefaultsQoS
+        history: 10
+        reliability: RELIABLE
 
 subscribers:
     - topic: another_topic
       type: std_msgs/msg/Bool
       qos:
-        profile: SensorDataQoS
+        history: 5
+        reliability: BEST_EFFORT
 
 services:
     - name: my_other_service

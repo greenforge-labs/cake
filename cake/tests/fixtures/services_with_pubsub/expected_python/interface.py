@@ -6,8 +6,7 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.qos import (
-    qos_profile_sensor_data,
-    qos_profile_services_default,
+    HistoryPolicy,
     QoSProfile,
     ReliabilityPolicy,
 )
@@ -109,14 +108,14 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise publishers
-    ctx.publishers.status._initialise(ctx, String, "/status", 10)
+    ctx.publishers.status._initialise(ctx, String, "/status", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
 
     # initialise subscribers
-    ctx.subscribers.command._initialise(ctx, String, "/command", qos_profile_sensor_data)
+    ctx.subscribers.command._initialise(ctx, String, "/command", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5, reliability=ReliabilityPolicy.BEST_EFFORT))
 
     # initialise services
-    ctx.services.reset._initialise(ctx, Trigger, "/reset", qos_profile_services_default)
-    ctx.services.compute._initialise(ctx, AddTwoInts, "compute", QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE))
+    ctx.services.reset._initialise(ctx, Trigger, "/reset")
+    ctx.services.compute._initialise(ctx, AddTwoInts, "compute")
 
     init_func(ctx)
 

@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
+from rclpy.qos import (
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import LaserScan
 
@@ -104,8 +109,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise publishers
 
     # initialise subscribers
-    ctx.subscribers.sensor_data._initialise(ctx, LaserScan, "sensor_data", 10)
-    ctx.subscribers.camera_image._initialise(ctx, Image, "camera_image", 1)
+    ctx.subscribers.sensor_data._initialise(ctx, LaserScan, "sensor_data", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
+    ctx.subscribers.camera_image._initialise(ctx, Image, "camera_image", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
 
     # initialise services
 

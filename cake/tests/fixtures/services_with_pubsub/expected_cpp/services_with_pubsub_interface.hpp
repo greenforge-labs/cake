@@ -63,12 +63,12 @@ class ServicesWithPubsubBase : public cake::BaseNode<"services_with_pubsub", ext
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", 10);
+        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/status", rclcpp::QoS(10).reliable());
         // init subscribers
-        ctx->subscribers.command = cake::create_subscriber<std_msgs::msg::String>(ctx, "/command", rclcpp::SensorDataQoS());
+        ctx->subscribers.command = cake::create_subscriber<std_msgs::msg::String>(ctx, "/command", rclcpp::QoS(5).best_effort());
         // init services
-        ctx->services.reset = cake::create_service<std_srvs::srv::Trigger>(ctx, "/reset", rclcpp::ServicesQoS());
-        ctx->services.compute = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "compute", rclcpp::QoS(5).reliable());
+        ctx->services.reset = cake::create_service<std_srvs::srv::Trigger>(ctx, "/reset");
+        ctx->services.compute = cake::create_service<example_interfaces::srv::AddTwoInts>(ctx, "compute");
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

@@ -92,90 +92,53 @@ $defs:
       - example_interfaces/action/Fibonacci
       - nav2_msgs/action/NavigateToPose
 
-  qosProfile:
-    type: string
-    description: Predefined QoS profile name
-    enum:
-      - SensorDataQoS
-      - SystemDefaultsQoS
-      - ServicesQoS
-      - ParametersQoS
-      - ParameterEventsQoS
-
-  duration:
+  qos:
     type: object
-    description: Duration specification with seconds and nanoseconds
+    description: QoS configuration for publishers and subscribers
     additionalProperties: false
+    required:
+      - history
+      - reliability
     properties:
-      sec:
-        type: integer
-        description: Seconds component
-        minimum: 0
-        default: 0
-      nsec:
-        type: integer
-        description: Nanoseconds component
-        minimum: 0
-        default: 0
-
-  qosCustom:
-    type: object
-    description: Custom QoS configuration
-    additionalProperties: false
-    properties:
-      depth:
-        type: integer
-        description: Queue depth
-        minimum: 0
-        default: 10
-      profile:
-        $ref: "#/$defs/qosProfile"
-        description: Base QoS profile to extend
+      history:
+        description: "History policy: positive integer for KEEP_LAST(n), or 'ALL' for KEEP_ALL"
+        oneOf:
+          - type: integer
+            minimum: 1
+            description: Queue depth for KEEP_LAST policy
+          - type: string
+            const: "ALL"
+            description: KEEP_ALL policy
       reliability:
         type: string
         description: Reliability policy
         enum:
-          - reliable
-          - best_effort
+          - BEST_EFFORT
+          - RELIABLE
       durability:
         type: string
         description: Durability policy
         enum:
-          - volatile
-          - transient_local
-      history:
-        type: string
-        description: History policy
-        enum:
-          - keep_last
-          - keep_all
+          - TRANSIENT_LOCAL
+          - VOLATILE
+      deadline_ms:
+        type: integer
+        description: Deadline duration in milliseconds
+        minimum: 0
+      lifespan_ms:
+        type: integer
+        description: Lifespan duration in milliseconds
+        minimum: 0
       liveliness:
         type: string
         description: Liveliness policy
         enum:
-          - automatic
-          - manual_by_topic
-      deadline:
-        $ref: "#/$defs/duration"
-        description: Deadline duration
-      lifespan:
-        $ref: "#/$defs/duration"
-        description: Lifespan duration
-
-  qosPubSub:
-    description: "QoS configuration for publishers/subscribers. Can be integer (depth), string (profile), or object (custom)"
-    oneOf:
-      - type: integer
-        description: Queue depth (shorthand for keep_last with specified depth)
+          - AUTOMATIC
+          - MANUAL_BY_TOPIC
+      lease_duration_ms:
+        type: integer
+        description: Liveliness lease duration in milliseconds (used with liveliness)
         minimum: 0
-      - $ref: "#/$defs/qosProfile"
-      - $ref: "#/$defs/qosCustom"
-
-  qosService:
-    description: "QoS configuration for services. Integer values are NOT allowed - use profile string or custom object"
-    oneOf:
-      - $ref: "#/$defs/qosProfile"
-      - $ref: "#/$defs/qosCustom"
 
   publisher:
     type: object
@@ -183,6 +146,7 @@ $defs:
     required:
       - topic
       - type
+      - qos
     additionalProperties: false
     properties:
       topic:
@@ -192,8 +156,8 @@ $defs:
         $ref: "#/$defs/rosMessageType"
         description: ROS message type
       qos:
-        $ref: "#/$defs/qosPubSub"
-        description: QoS configuration
+        $ref: "#/$defs/qos"
+        description: QoS configuration (required for publishers)
       manually_created:
         type: boolean
         description: If true, skip code generation for this publisher (for documentation only)
@@ -214,6 +178,7 @@ $defs:
     required:
       - topic
       - type
+      - qos
     additionalProperties: false
     properties:
       topic:
@@ -223,8 +188,8 @@ $defs:
         $ref: "#/$defs/rosMessageType"
         description: ROS message type
       qos:
-        $ref: "#/$defs/qosPubSub"
-        description: QoS configuration
+        $ref: "#/$defs/qos"
+        description: QoS configuration (required for subscribers)
       manually_created:
         type: boolean
         description: If true, skip code generation for this subscriber (for documentation only)
@@ -244,9 +209,6 @@ $defs:
       type:
         $ref: "#/$defs/rosServiceType"
         description: ROS service type
-      qos:
-        $ref: "#/$defs/qosService"
-        description: QoS configuration (integer values not allowed for services)
       manually_created:
         type: boolean
         description: If true, skip code generation for this service (for documentation only)
@@ -266,9 +228,6 @@ $defs:
       type:
         $ref: "#/$defs/rosServiceType"
         description: ROS service type
-      qos:
-        $ref: "#/$defs/qosService"
-        description: QoS configuration (integer values not allowed for service clients)
       manually_created:
         type: boolean
         description: If true, skip code generation for this service client (for documentation only)

@@ -407,7 +407,9 @@ def test_no_parameters_generates_dummy(tmp_path):
 publishers:
     - topic: /status
       type: std_msgs/msg/String
-      qos: 10
+      qos:
+        history: 10
+        reliability: RELIABLE
 """
     )
 
@@ -547,12 +549,16 @@ def test_python_syntax_validation(tmp_path):
 publishers:
     - topic: /status
       type: std_msgs/msg/String
-      qos: 10
+      qos:
+        history: 10
+        reliability: RELIABLE
 
 subscribers:
     - topic: /input
       type: std_msgs/msg/Bool
-      qos: 5
+      qos:
+        history: 5
+        reliability: BEST_EFFORT
 """
     )
     output_dir = tmp_path / "output"
@@ -691,7 +697,9 @@ def test_python_publisher_usage_conditional(tmp_path):
 publishers:
     - topic: /status
       type: std_msgs/msg/String
-      qos: 10
+      qos:
+        history: 10
+        reliability: RELIABLE
 """
     )
     output_with_pubs = tmp_path / "output_with_pubs"
@@ -729,7 +737,9 @@ publishers:
 subscribers:
     - topic: /input
       type: std_msgs/msg/Bool
-      qos: 5
+      qos:
+        history: 5
+        reliability: BEST_EFFORT
 """
     )
     output_no_pubs = tmp_path / "output_no_pubs"
@@ -770,13 +780,16 @@ publishers:
     - topic: /status
       type: std_msgs/msg/String
       qos:
-        profile: SystemDefaultsQoS
+        history: 10
+        reliability: RELIABLE
+        durability: TRANSIENT_LOCAL
 
 subscribers:
     - topic: /sensor
       type: std_msgs/msg/Bool
       qos:
-        profile: SensorDataQoS
+        history: 5
+        reliability: BEST_EFFORT
 """
     )
     output_dir = tmp_path / "output"
@@ -803,13 +816,14 @@ subscribers:
     with open(output_dir / "interface.py", "r") as f:
         content = f.read()
 
-    # Check imports
-    assert "qos_profile_system_default" in content, "Should import qos_profile_system_default"
-    assert "qos_profile_sensor_data" in content, "Should import qos_profile_sensor_data"
+    # Check imports for new QoS format
+    assert "QoSProfile" in content, "Should import QoSProfile"
+    assert "HistoryPolicy" in content, "Should import HistoryPolicy"
+    assert "ReliabilityPolicy" in content, "Should import ReliabilityPolicy"
+    assert "DurabilityPolicy" in content, "Should import DurabilityPolicy"
 
     # Check usage
-    assert "qos_profile_system_default" in content.split("def run")[1], "Should use qos_profile_system_default"
-    assert "qos_profile_sensor_data" in content.split("def run")[1], "Should use qos_profile_sensor_data"
+    assert "QoSProfile(" in content, "Should use QoSProfile"
 
 
 def test_qos_invalid_reliability_value(tmp_path):
@@ -823,6 +837,7 @@ publishers:
   - topic: /test
     type: std_msgs/msg/String
     qos:
+      history: 10
       reliability: invalid_value
 """
     )
@@ -846,7 +861,7 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "[publishers -> 0 -> qos]" in result.stderr
+    assert "[publishers -> 0 -> qos -> reliability]" in result.stderr
     assert "invalid_value" in result.stderr
 
 
@@ -861,7 +876,9 @@ publishers:
   - topic: /test
     type: std_msgs/msg/String
     qos:
-      reliabilty: reliable
+      history: 10
+      reliability: RELIABLE
+      durabilty: VOLATILE
 """
     )
 
@@ -885,11 +902,11 @@ publishers:
 
     assert result.returncode != 0
     assert "[publishers -> 0 -> qos]" in result.stderr
-    assert "reliabilty" in result.stderr  # The typo is shown in the error
+    assert "durabilty" in result.stderr  # The typo is shown in the error
 
 
-def test_qos_negative_depth(tmp_path):
-    """Test that negative QoS depth produces error."""
+def test_qos_zero_history(tmp_path):
+    """Test that zero history depth produces error."""
     yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """node:
@@ -899,7 +916,8 @@ publishers:
   - topic: /test
     type: std_msgs/msg/String
     qos:
-      depth: -5
+      history: 0
+      reliability: RELIABLE
 """
     )
 
@@ -922,12 +940,12 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "[publishers -> 0 -> qos]" in result.stderr
-    assert "-5" in result.stderr
+    assert "[publishers -> 0 -> qos -> history]" in result.stderr
+    assert "0" in result.stderr
 
 
-def test_qos_invalid_profile_name(tmp_path):
-    """Test that invalid QoS profile name produces error."""
+def test_qos_invalid_durability_value(tmp_path):
+    """Test that invalid QoS durability value produces error."""
     yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """node:
@@ -936,7 +954,10 @@ def test_qos_invalid_profile_name(tmp_path):
 publishers:
   - topic: /test
     type: std_msgs/msg/String
-    qos: UnknownProfileQoS
+    qos:
+      history: 10
+      reliability: RELIABLE
+      durability: INVALID_VALUE
 """
     )
 
@@ -959,8 +980,8 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "[publishers -> 0 -> qos]" in result.stderr
-    assert "UnknownProfileQoS" in result.stderr
+    assert "[publishers -> 0 -> qos -> durability]" in result.stderr
+    assert "INVALID_VALUE" in result.stderr
 
 
 def test_ros_type_missing_slash(tmp_path):
@@ -973,6 +994,9 @@ def test_ros_type_missing_slash(tmp_path):
 publishers:
   - topic: /test
     type: std_msgsmsgString
+    qos:
+      history: 10
+      reliability: RELIABLE
 """
     )
 
@@ -1010,6 +1034,9 @@ def test_ros_type_empty_package(tmp_path):
 publishers:
   - topic: /test
     type: /msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
 """
     )
 
@@ -1047,6 +1074,9 @@ def test_topic_invalid_characters(tmp_path):
 publishers:
   - topic: /test@topic#
     type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
 """
     )
 
@@ -1084,6 +1114,9 @@ def test_topic_valid_without_leading_slash(tmp_path):
 publishers:
   - topic: cmd_vel
     type: geometry_msgs/msg/Twist
+    qos:
+      history: 10
+      reliability: RELIABLE
 """
     )
 
@@ -1117,6 +1150,9 @@ def test_publisher_missing_topic(tmp_path):
   package: ${THIS_PACKAGE}
 publishers:
   - type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
 """
     )
 
@@ -1248,8 +1284,8 @@ services:
     assert "'name' is a required property" in result.stderr
 
 
-def test_service_integer_qos_rejected(tmp_path):
-    """Test that integer QoS is rejected for services."""
+def test_service_qos_not_allowed(tmp_path):
+    """Test that QoS is not allowed for services."""
     yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """node:
@@ -1258,7 +1294,9 @@ def test_service_integer_qos_rejected(tmp_path):
 services:
   - name: /my_service
     type: std_srvs/srv/Trigger
-    qos: 10
+    qos:
+      history: 10
+      reliability: RELIABLE
 """
     )
 
@@ -1281,12 +1319,12 @@ services:
     )
 
     assert result.returncode != 0
-    assert "[services -> 0 -> qos]" in result.stderr
-    assert "10 is not valid" in result.stderr
+    assert "[services -> 0]" in result.stderr
+    assert "Additional properties are not allowed" in result.stderr
 
 
-def test_service_client_integer_qos_rejected(tmp_path):
-    """Test that integer QoS is rejected for service clients."""
+def test_service_client_qos_not_allowed(tmp_path):
+    """Test that QoS is not allowed for service clients."""
     yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """node:
@@ -1295,7 +1333,9 @@ def test_service_client_integer_qos_rejected(tmp_path):
 service_clients:
   - name: /my_client
     type: std_srvs/srv/Trigger
-    qos: 10
+    qos:
+      history: 10
+      reliability: RELIABLE
 """
     )
 
@@ -1318,8 +1358,8 @@ service_clients:
     )
 
     assert result.returncode != 0
-    assert "[service_clients -> 0 -> qos]" in result.stderr
-    assert "10 is not valid" in result.stderr
+    assert "[service_clients -> 0]" in result.stderr
+    assert "Additional properties are not allowed" in result.stderr
 
 
 def test_very_long_topic_name(tmp_path):
@@ -1333,6 +1373,9 @@ def test_very_long_topic_name(tmp_path):
 publishers:
   - topic: {long_name}
     type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
 """
     )
 
@@ -1358,7 +1401,7 @@ publishers:
 
 
 def test_qos_negative_deadline(tmp_path):
-    """Test that negative deadline duration produces error."""
+    """Test that negative deadline_ms produces error."""
     yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """node:
@@ -1368,9 +1411,9 @@ publishers:
   - topic: /test
     type: std_msgs/msg/String
     qos:
-      deadline:
-        sec: -1
-        nsec: 0
+      history: 10
+      reliability: RELIABLE
+      deadline_ms: -1
 """
     )
 
@@ -1393,8 +1436,7 @@ publishers:
     )
 
     assert result.returncode != 0
-    assert "[publishers -> 0 -> qos]" in result.stderr
-    assert "deadline" in result.stderr
+    assert "[publishers -> 0 -> qos -> deadline_ms]" in result.stderr
     assert "-1" in result.stderr
 
 
@@ -1409,7 +1451,9 @@ def test_registration_cpp_generation(tmp_path):
 publishers:
     - topic: /status
       type: std_msgs/msg/String
-      qos: 10
+      qos:
+        history: 10
+        reliability: RELIABLE
 """
     )
 

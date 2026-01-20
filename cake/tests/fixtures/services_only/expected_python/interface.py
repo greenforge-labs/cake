@@ -5,10 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.qos import (
-    qos_profile_services_default,
-    QoSProfile,
-)
 from example_interfaces.srv import AddTwoInts
 
 import cake
@@ -109,8 +105,8 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     # initialise subscribers
 
     # initialise services
-    ctx.services.add_two_ints._initialise(ctx, AddTwoInts, "add_two_ints", qos_profile_services_default)
-    ctx.services.math_multiply._initialise(ctx, AddTwoInts, "/math/multiply", QoSProfile(depth=10))
+    ctx.services.add_two_ints._initialise(ctx, AddTwoInts, "add_two_ints")
+    ctx.services.math_multiply._initialise(ctx, AddTwoInts, "/math/multiply")
 
     init_func(ctx)
 

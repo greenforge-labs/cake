@@ -60,9 +60,9 @@ class ManuallyCreatedBase : public cake::BaseNode<"manually_created", extend_opt
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.auto_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "auto_topic", 10);
+        ctx->publishers.auto_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "auto_topic", rclcpp::QoS(10).reliable());
         // init subscribers
-        ctx->subscribers.auto_sub = cake::create_subscriber<std_msgs::msg::Bool>(ctx, "auto_sub", 10);
+        ctx->subscribers.auto_sub = cake::create_subscriber<std_msgs::msg::Bool>(ctx, "auto_sub", rclcpp::QoS(10).best_effort());
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

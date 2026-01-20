@@ -5,15 +5,25 @@ node:
 publishers:
     - topic: int_qos_pub
       type: std_msgs/msg/String
-      qos: 10
+      qos:
+        history: 10
+        reliability: BEST_EFFORT
 
     - topic: default_qos_pub
       type: std_msgs/msg/String
+      qos:
+        history: 10
+        reliability: RELIABLE
 
 subscribers:
     - topic: int_qos_sub
       type: std_msgs/msg/String
-      qos: 5
+      qos:
+        history: 5
+        reliability: BEST_EFFORT
 
     - topic: default_qos_sub
       type: std_msgs/msg/String
+      qos:
+        history: 10
+        reliability: RELIABLE

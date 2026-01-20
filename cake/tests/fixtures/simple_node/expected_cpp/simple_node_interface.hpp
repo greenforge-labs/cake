@@ -58,9 +58,9 @@ class SimpleNodeBase : public cake::BaseNode<"simple_node", extend_options> {
         ctx->node = this->node_;
 
         // init publishers
-        ctx->publishers.cmd_vel = cake::create_publisher<geometry_msgs::msg::Twist>(ctx, "/cmd_vel", 10);
+        ctx->publishers.cmd_vel = cake::create_publisher<geometry_msgs::msg::Twist>(ctx, "/cmd_vel", rclcpp::QoS(10).reliable());
         // init subscribers
-        ctx->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(ctx, "/odom", 10);
+        ctx->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(ctx, "/odom", rclcpp::QoS(10).reliable());
         // init parameters
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();

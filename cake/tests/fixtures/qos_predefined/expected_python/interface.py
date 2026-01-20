@@ -6,10 +6,9 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.qos import (
-    qos_profile_parameters,
-    qos_profile_sensor_data,
-    qos_profile_services_default,
-    qos_profile_system_default,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
 )
 from std_msgs.msg import String
 
@@ -108,12 +107,12 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise publishers
-    ctx.publishers.sensor_data_topic._initialise(ctx, String, "sensor_data_topic", qos_profile_sensor_data)
-    ctx.publishers.system_defaults_topic._initialise(ctx, String, "system_defaults_topic", qos_profile_system_default)
+    ctx.publishers.sensor_data_topic._initialise(ctx, String, "sensor_data_topic", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5, reliability=ReliabilityPolicy.BEST_EFFORT))
+    ctx.publishers.system_defaults_topic._initialise(ctx, String, "system_defaults_topic", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
 
     # initialise subscribers
-    ctx.subscribers.parameters_topic._initialise(ctx, String, "parameters_topic", qos_profile_parameters)
-    ctx.subscribers.services_topic._initialise(ctx, String, "services_topic", qos_profile_services_default)
+    ctx.subscribers.parameters_topic._initialise(ctx, String, "parameters_topic", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
+    ctx.subscribers.services_topic._initialise(ctx, String, "services_topic", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
 
     # initialise services
 

@@ -7,5 +7,3 @@ services:
     type: std_srvs/srv/Trigger
   - name: compute
     type: example_interfaces/srv/AddTwoInts
-    qos:
-      depth: 10
