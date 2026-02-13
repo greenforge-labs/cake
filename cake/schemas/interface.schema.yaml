@@ -51,6 +51,12 @@ $defs:
     type: string
     pattern: '^\$\{param:[a-zA-Z_][a-zA-Z0-9_]*\}$'
 
+  # Topic/service/action name that may contain ${param:name} references
+  topicNameWithParams:
+    type: string
+    description: "Topic/service/action name that may contain ${param:name} references"
+    pattern: '^[a-zA-Z0-9/_${}: ]+$'
+
   node:
     type: object
     description: Node metadata
@@ -156,8 +162,12 @@ $defs:
     additionalProperties: false
     properties:
       topic:
-        $ref: "#/$defs/topicName"
-        description: Topic name to publish on
+        $ref: "#/$defs/topicNameWithParams"
+        description: Topic name to publish on (may contain ${param:name} references)
+      field_name:
+        type: string
+        description: "C++ field name. Required when topic contains ${param:...}"
+        pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
       type:
         $ref: "#/$defs/rosMessageType"
         description: ROS message type
@@ -188,8 +198,12 @@ $defs:
     additionalProperties: false
     properties:
       topic:
-        $ref: "#/$defs/topicName"
-        description: Topic name to subscribe to
+        $ref: "#/$defs/topicNameWithParams"
+        description: Topic name to subscribe to (may contain ${param:name} references)
+      field_name:
+        type: string
+        description: "C++ field name. Required when topic contains ${param:...}"
+        pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
       type:
         $ref: "#/$defs/rosMessageType"
         description: ROS message type
@@ -210,8 +224,12 @@ $defs:
     additionalProperties: false
     properties:
       name:
-        $ref: "#/$defs/topicName"
-        description: Service name
+        $ref: "#/$defs/topicNameWithParams"
+        description: Service name (may contain ${param:name} references)
+      field_name:
+        type: string
+        description: "C++ field name. Required when name contains ${param:...}"
+        pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
       type:
         $ref: "#/$defs/rosServiceType"
         description: ROS service type
@@ -229,8 +247,12 @@ $defs:
     additionalProperties: false
     properties:
       name:
-        $ref: "#/$defs/topicName"
-        description: Service name to connect to
+        $ref: "#/$defs/topicNameWithParams"
+        description: Service name to connect to (may contain ${param:name} references)
+      field_name:
+        type: string
+        description: "C++ field name. Required when name contains ${param:...}"
+        pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
       type:
         $ref: "#/$defs/rosServiceType"
         description: ROS service type
@@ -248,8 +270,12 @@ $defs:
     additionalProperties: false
     properties:
       name:
-        $ref: "#/$defs/topicName"
-        description: Action name
+        $ref: "#/$defs/topicNameWithParams"
+        description: Action name (may contain ${param:name} references)
+      field_name:
+        type: string
+        description: "C++ field name. Required when name contains ${param:...}"
+        pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
       type:
         $ref: "#/$defs/rosActionType"
         description: ROS action type
@@ -267,8 +293,12 @@ $defs:
     additionalProperties: false
     properties:
       name:
-        $ref: "#/$defs/topicName"
-        description: Action name to connect to
+        $ref: "#/$defs/topicNameWithParams"
+        description: Action name to connect to (may contain ${param:name} references)
+      field_name:
+        type: string
+        description: "C++ field name. Required when name contains ${param:...}"
+        pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
       type:
         $ref: "#/$defs/rosActionType"
         description: ROS action type

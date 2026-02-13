@@ -1,0 +1,16 @@
+test_package::name_param_substitution:
+  robot_id:
+    type: string
+    default_value: robot1
+    read_only: true
+    description: Robot identifier
+  namespace:
+    type: string
+    default_value: default_ns
+    read_only: true
+    description: Topic namespace
+  sensor_num:
+    type: int
+    default_value: 1
+    read_only: true
+    description: Sensor number

@@ -1708,6 +1708,338 @@ publishers:
     assert result.returncode == 0, f"Generator script failed:\n{result.stderr}"
 
 
+def test_name_param_missing_field_name(tmp_path):
+    """Test that topic with param substitution without field_name produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  robot_id:
+    type: string
+    default_value: "robot1"
+    read_only: true
+publishers:
+  - topic: /robot/${param:robot_id}/cmd_vel
+    type: geometry_msgs/msg/Twist
+    qos:
+      history: 10
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "field_name is required" in result.stderr
+    assert "${param:...}" in result.stderr
+
+
+def test_name_param_nonexistent_parameter(tmp_path):
+    """Test that topic with param ref to non-existent parameter produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+publishers:
+  - topic: /robot/${param:nonexistent}/cmd_vel
+    field_name: cmd_vel
+    type: geometry_msgs/msg/Twist
+    qos:
+      history: 10
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "nonexistent" in result.stderr
+    assert "non-existent parameter" in result.stderr
+
+
+def test_name_param_not_read_only(tmp_path):
+    """Test that topic with param ref to non-read_only parameter produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  robot_id:
+    type: string
+    default_value: "robot1"
+    # Note: read_only is not set (defaults to false)
+publishers:
+  - topic: /robot/${param:robot_id}/cmd_vel
+    field_name: cmd_vel
+    type: geometry_msgs/msg/Twist
+    qos:
+      history: 10
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "robot_id" in result.stderr
+    assert "read_only" in result.stderr
+
+
+def test_name_param_invalid_type(tmp_path):
+    """Test that topic with param ref to parameter with invalid type produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  robot_id:
+    type: double
+    default_value: 1.0
+    read_only: true
+publishers:
+  - topic: /robot/${param:robot_id}/cmd_vel
+    field_name: cmd_vel
+    type: geometry_msgs/msg/Twist
+    qos:
+      history: 10
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "robot_id" in result.stderr
+    assert "double" in result.stderr
+    assert "string/int" in result.stderr
+
+
+def test_name_param_int_type_works(tmp_path):
+    """Test that topic with param ref to int parameter works."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  sensor_num:
+    type: int
+    default_value: 1
+    read_only: true
+publishers:
+  - topic: /sensor_${param:sensor_num}/data
+    field_name: sensor_data
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Generator script failed:\n{result.stderr}"
+
+    # Verify the generated code uses cake::to_string
+    output_file = tmp_path / "test_node_interface.hpp"
+    with open(output_file, "r") as f:
+        content = f.read()
+
+    assert "cake::to_string(ctx->params.sensor_num)" in content
+    assert "#include <cake/to_string.hpp>" in content
+
+
+def test_name_param_multiple_substitutions(tmp_path):
+    """Test that multiple param substitutions in one name work."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  namespace:
+    type: string
+    default_value: "ns1"
+    read_only: true
+  robot_id:
+    type: string
+    default_value: "robot1"
+    read_only: true
+publishers:
+  - topic: /${param:namespace}/${param:robot_id}/cmd_vel
+    field_name: cmd_vel
+    type: geometry_msgs/msg/Twist
+    qos:
+      history: 10
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Generator script failed:\n{result.stderr}"
+
+    # Verify the generated code handles multiple substitutions
+    output_file = tmp_path / "test_node_interface.hpp"
+    with open(output_file, "r") as f:
+        content = f.read()
+
+    assert "cake::to_string(ctx->params.namespace)" in content
+    assert "cake::to_string(ctx->params.robot_id)" in content
+
+
+def test_name_param_whitespace_tolerance(tmp_path):
+    """Test that whitespace inside ${param: name} is tolerated."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  robot_name:
+    type: string
+    default_value: "robot1"
+    read_only: true
+publishers:
+  - topic: "${param: robot_name}/test_pub"
+    field_name: test_pub
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Generator script failed:\n{result.stderr}"
+
+    # Verify the generated code uses the correct (trimmed) parameter name
+    output_file = tmp_path / "test_node_interface.hpp"
+    with open(output_file, "r") as f:
+        content = f.read()
+
+    assert "cake::to_string(ctx->params.robot_name)" in content
+    assert "#include <cake/to_string.hpp>" in content
+
+
 if __name__ == "__main__":
     # Allow running directly with python
     pytest.main([__file__, "-v"])

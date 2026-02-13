@@ -466,7 +466,7 @@ publishers:
         reliability: RELIABLE
 ```
 
-QoS is required for all publishers. See [QoS Configuration](#qos-configuration) for details.
+QoS is required for all publishers. See [QoS Configuration](#qos-configuration) for details. Topic names support `${param:name}` substitution — see [Dynamic Topic/Service/Action Names](#dynamic-topicserviceaction-names).
 
 ### Subscribers
 
@@ -479,7 +479,7 @@ subscribers:
         reliability: BEST_EFFORT
 ```
 
-QoS is required for all subscribers. See [QoS Configuration](#qos-configuration) for details.
+QoS is required for all subscribers. See [QoS Configuration](#qos-configuration) for details. Topic names support `${param:name}` substitution — see [Dynamic Topic/Service/Action Names](#dynamic-topicserviceaction-names).
 
 ### Services
 
@@ -512,6 +512,8 @@ action_clients:
     - name: navigate
       type: nav2_msgs/action/NavigateToPose
 ```
+
+All entity types (services, service clients, actions, action clients) support `${param:name}` substitution in their names — see [Dynamic Topic/Service/Action Names](#dynamic-topicserviceaction-names).
 
 ### Common Optional Fields
 
@@ -666,6 +668,106 @@ Node(
 ```
 
 **Validation:** Invalid parameter values (e.g., `"INVALID"` for reliability) will raise an exception at node startup with a clear error message.
+
+### Dynamic Topic/Service/Action Names
+
+Topic, service, and action names can contain `${param:parameter_name}` references for dynamic name construction at startup. This is useful for multi-robot systems or configurable namespacing.
+
+**Requirements:**
+- The referenced parameter must exist in the `parameters` section
+- The parameter must have `read_only: true`
+- The parameter type must be `string` or `int`
+- A `field_name` must be provided (since the topic name can't be used to derive a C++ identifier)
+
+**Example:**
+```yaml
+parameters:
+  robot_id:
+    type: string
+    default_value: "robot1"
+    read_only: true
+    description: "Robot identifier for topic namespacing"
+
+publishers:
+  - topic: /robot/${param:robot_id}/cmd_vel
+    field_name: cmd_vel
+    type: geometry_msgs/msg/Twist
+    qos:
+      history: 10
+      reliability: RELIABLE
+
+subscribers:
+  - topic: /robot/${param:robot_id}/odom
+    field_name: odom
+    type: nav_msgs/msg/Odometry
+    qos:
+      history: 5
+      reliability: BEST_EFFORT
+
+services:
+  - name: /robot/${param:robot_id}/get_state
+    field_name: get_state
+    type: std_srvs/srv/Trigger
+```
+
+This generates code that constructs the topic name at startup using the parameter value. In C++:
+```cpp
+// Generated: topic name built from parameter
+cake::create_publisher<...>(ctx, "/robot/" + cake::to_string(ctx->params.robot_id) + "/cmd_vel", ...);
+```
+
+In Python:
+```python
+# Generated: topic name built from parameter
+ctx.publishers.cmd_vel._initialise(ctx, Twist, f"/robot/{params.robot_id}/cmd_vel", ...)
+```
+
+You can then configure different robots at launch time:
+```bash
+ros2 run my_package my_node --ros-args -p robot_id:=robot2
+```
+
+**Multiple substitutions** are supported in a single name:
+```yaml
+subscribers:
+  - topic: /${param:namespace}/${param:robot_id}/sensor
+    field_name: sensor
+    type: sensor_msgs/msg/Imu
+    qos:
+      history: 10
+      reliability: RELIABLE
+```
+
+**Integer parameters** also work (converted to string automatically):
+```yaml
+parameters:
+  sensor_num:
+    type: int
+    default_value: 1
+    read_only: true
+
+publishers:
+  - topic: /sensor_${param:sensor_num}/data
+    field_name: sensor_data
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
+```
+
+**`field_name` explained:** When a topic/service/action name contains `${param:...}`, Cake can't derive a valid C++ field name from it automatically, so you must provide one explicitly. The `field_name` is used as the struct member name in the generated context:
+
+```cpp
+// With field_name: cmd_vel
+ctx->publishers.cmd_vel->publish(msg);
+```
+
+```python
+# With field_name: cmd_vel
+ctx.publishers.cmd_vel.publish(msg)
+```
+
+The `field_name` property is also available for entities without parameter substitution, allowing you to override the auto-derived field name if desired.
 
 ## QoS Event Callbacks
 

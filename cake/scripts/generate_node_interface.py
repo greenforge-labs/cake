@@ -88,6 +88,13 @@ ENTITY_CONFIGS: Dict[EntityKind, EntityConfig] = {
 # Regular expression for parameter reference pattern ${param:parameter_name}
 PARAM_REF_PATTERN = re.compile(r"^\$\{param:([a-zA-Z_][a-zA-Z0-9_]*)\}$")
 
+# Pattern for finding ${param:name} anywhere in a string (partial substitution)
+# Allows optional whitespace around the parameter name: ${param: robot_name } is valid
+PARTIAL_PARAM_PATTERN = re.compile(r"\$\{param:\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}")
+
+# Allowed types for name substitution (topic/service/action names)
+NAME_PARAM_ALLOWED_TYPES = {"string", "int"}
+
 # QoS field type requirements for parameter validation
 QOS_FIELD_TYPES = {
     "history": "int",
@@ -120,6 +127,55 @@ def extract_param_name(ref: str) -> str:
     if not match:
         raise ValueError(f"Invalid parameter reference format: {ref}")
     return match.group(1)
+
+
+def contains_param_ref(value: str) -> bool:
+    """Check if string contains any ${param:...} reference."""
+    if not isinstance(value, str):
+        return False
+    return PARTIAL_PARAM_PATTERN.search(value) is not None
+
+
+def extract_all_param_names(value: str) -> list[str]:
+    """Extract all parameter names from string with ${param:...} references."""
+    if not isinstance(value, str):
+        return []
+    return PARTIAL_PARAM_PATTERN.findall(value)
+
+
+def generate_cpp_name_expression(name: str) -> str:
+    """Generate C++ expression for topic/service/action name.
+
+    Examples:
+        "/cmd_vel" -> '"/cmd_vel"'
+        "/robot/${param:id}/cmd" -> '"/robot/" + cake::to_string(ctx->params.id) + "/cmd"'
+    """
+    if not contains_param_ref(name):
+        return f'"{name}"'
+
+    parts = []
+    last_end = 0
+    for match in PARTIAL_PARAM_PATTERN.finditer(name):
+        if match.start() > last_end:
+            parts.append(f'"{name[last_end:match.start()]}"')
+        parts.append(f"cake::to_string(ctx->params.{match.group(1)})")
+        last_end = match.end()
+    if last_end < len(name):
+        parts.append(f'"{name[last_end:]}"')
+    return " + ".join(parts)
+
+
+def generate_python_name_expression(name: str) -> str:
+    """Generate Python expression for topic/service/action name.
+
+    Examples:
+        "/cmd_vel" -> '"/cmd_vel"'
+        "/robot/${param:id}/cmd" -> 'f"/robot/{params.id}/cmd"'
+    """
+    if not contains_param_ref(name):
+        return f'"{name}"'
+    result = PARTIAL_PARAM_PATTERN.sub(r"{params.\1}", name)
+    return f'f"{result}"'
 
 
 def validate_param_references(interface_data: Dict[str, Any]) -> None:
@@ -227,6 +283,68 @@ def validate_with_schema(interface_data: Dict[str, Any]) -> None:
         )
 
 
+def validate_name_param_references(interface_data: Dict[str, Any]) -> None:
+    """
+    Validate parameter references in topic/service/action names.
+
+    Checks:
+    1. Referenced parameter exists in parameters section
+    2. Referenced parameter has read_only: true
+    3. Parameter type is string or int
+    4. field_name is provided when name contains ${param:...}
+
+    Raises:
+        InterfaceValidationError: If validation fails
+    """
+    parameters = interface_data.get("parameters", {})
+
+    entity_checks = [
+        ("publishers", "topic", "publisher"),
+        ("subscribers", "topic", "subscriber"),
+        ("services", "name", "service"),
+        ("service_clients", "name", "service_client"),
+        ("actions", "name", "action"),
+        ("action_clients", "name", "action_client"),
+    ]
+
+    for entity_list_key, name_key, entity_type in entity_checks:
+        for entity in interface_data.get(entity_list_key, []):
+            if entity.get("manually_created", False):
+                continue
+
+            name_value = entity.get(name_key, "")
+            if not contains_param_ref(name_value):
+                continue
+
+            # Check: field_name required when using param substitution
+            if "field_name" not in entity:
+                raise InterfaceValidationError(
+                    f"{entity_type} '{name_value}': field_name is required when "
+                    f"{name_key} contains ${{param:...}} substitution"
+                )
+
+            # Validate each parameter reference
+            for param_name in extract_all_param_names(name_value):
+                if param_name not in parameters:
+                    raise InterfaceValidationError(
+                        f"{entity_type} '{name_value}': references non-existent " f"parameter '{param_name}'"
+                    )
+
+                param_def = parameters[param_name]
+
+                if not param_def.get("read_only", False):
+                    raise InterfaceValidationError(
+                        f"{entity_type} '{name_value}': parameter '{param_name}' " "must have read_only: true"
+                    )
+
+                actual_type = param_def.get("type", "")
+                if actual_type not in NAME_PARAM_ALLOWED_TYPES:
+                    raise InterfaceValidationError(
+                        f"{entity_type} '{name_value}': parameter '{param_name}' "
+                        f"has type '{actual_type}', only string/int allowed"
+                    )
+
+
 def validate_interface_yaml(interface_data: Dict[str, Any]) -> None:
     """
     Validate the complete interface.yaml structure using schema.
@@ -236,6 +354,7 @@ def validate_interface_yaml(interface_data: Dict[str, Any]) -> None:
     """
     validate_with_schema(interface_data)
     validate_param_references(interface_data)
+    validate_name_param_references(interface_data)
 
 
 def get_dummy_parameter() -> Dict[str, Any]:
@@ -398,26 +517,41 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
 def prepare_entities(
     entities_raw: List[Dict[str, Any]],
     config: EntityConfig,
-) -> tuple[List[Dict[str, str]], bool]:
+) -> tuple[List[Dict[str, str]], bool, bool]:
     """
     Generic entity preparation for C++ template rendering.
     Converts raw YAML data into template-ready format based on entity configuration.
 
     Returns:
-        tuple of (entities_list, needs_qos_helpers) where needs_qos_helpers is True if
-        any entity uses QoS parameter references that require cake::to_* helpers.
+        tuple of (entities_list, needs_qos_helpers, needs_to_string_helper) where:
+        - needs_qos_helpers is True if any entity uses QoS parameter references
+        - needs_to_string_helper is True if any entity uses name param substitution
     """
     entities = []
     needs_qos_helpers = False
+    needs_to_string_helper = False
     for entity in entities_raw:
         if entity.get("manually_created", False):
             continue
 
         name_value = entity[config.name_key]
+
+        # Use explicit field_name if provided, otherwise derive from name
+        if "field_name" in entity:
+            field_name = entity["field_name"]
+        else:
+            field_name = name_to_field_name(name_value)
+
+        # Generate name expression (handles param substitution)
+        name_expr = generate_cpp_name_expression(name_value)
+        if contains_param_ref(name_value):
+            needs_to_string_helper = True
+
         prepared = {
             config.name_key: name_value,
             config.output_type_key: ros_type_to_cpp(entity["type"]),
-            "field_name": name_to_field_name(name_value),
+            "field_name": field_name,
+            "name_expr": name_expr,
         }
 
         if config.has_qos:
@@ -428,7 +562,7 @@ def prepare_entities(
                 needs_qos_helpers = True
 
         entities.append(prepared)
-    return entities, needs_qos_helpers
+    return entities, needs_qos_helpers, needs_to_string_helper
 
 
 def ros_type_to_python_import(ros_type: str) -> str:
@@ -616,11 +750,21 @@ def prepare_python_entities(
         name_value = entity[config.name_key]
         ros_type = entity["type"]
 
+        # Use explicit field_name if provided, otherwise derive from name
+        if "field_name" in entity:
+            field_name = entity["field_name"]
+        else:
+            field_name = name_to_field_name(name_value)
+
+        # Generate name expression (handles param substitution)
+        name_expr = generate_python_name_expression(name_value)
+
         prepared: Dict[str, Any] = {
             config.name_key: name_value,
             python_type_key: ros_type,
             python_class_key: ros_type_to_python_class(ros_type),
-            "field_name": name_to_field_name(name_value),
+            "field_name": field_name,
+            "name_expr": name_expr,
             "import_stmt": ros_type_to_python_import(ros_type),
         }
 
@@ -788,18 +932,22 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     package_name = interface_data["node"].get("package", "")
 
     # Prepare template data using generic entity preparation
-    publishers, pub_needs_helpers = prepare_entities(
+    publishers, pub_needs_qos_helpers, pub_needs_to_string = prepare_entities(
         interface_data.get("publishers", []), ENTITY_CONFIGS[EntityKind.PUBLISHER]
     )
-    subscribers, sub_needs_helpers = prepare_entities(
+    subscribers, sub_needs_qos_helpers, sub_needs_to_string = prepare_entities(
         interface_data.get("subscribers", []), ENTITY_CONFIGS[EntityKind.SUBSCRIBER]
     )
-    services, _ = prepare_entities(interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE])
-    service_clients, _ = prepare_entities(
+    services, _, srv_needs_to_string = prepare_entities(
+        interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE]
+    )
+    service_clients, _, cli_needs_to_string = prepare_entities(
         interface_data.get("service_clients", []), ENTITY_CONFIGS[EntityKind.SERVICE_CLIENT]
     )
-    actions, _ = prepare_entities(interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION])
-    action_clients, _ = prepare_entities(
+    actions, _, act_needs_to_string = prepare_entities(
+        interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION]
+    )
+    action_clients, _, actcli_needs_to_string = prepare_entities(
         interface_data.get("action_clients", []), ENTITY_CONFIGS[EntityKind.ACTION_CLIENT]
     )
     message_includes = collect_includes(interface_data)
@@ -808,7 +956,17 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     class_name = get_class_name(node_name)
 
     # Determine if QoS helpers are needed
-    needs_qos_helpers = pub_needs_helpers or sub_needs_helpers
+    needs_qos_helpers = pub_needs_qos_helpers or sub_needs_qos_helpers
+
+    # Determine if to_string helper is needed (for name param substitution)
+    needs_to_string_helper = (
+        pub_needs_to_string
+        or sub_needs_to_string
+        or srv_needs_to_string
+        or cli_needs_to_string
+        or act_needs_to_string
+        or actcli_needs_to_string
+    )
 
     # Render template
     return template.render(
@@ -825,6 +983,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         actions=actions,
         action_clients=action_clients,
         needs_qos_helpers=needs_qos_helpers,
+        needs_to_string_helper=needs_to_string_helper,
     )
 
 

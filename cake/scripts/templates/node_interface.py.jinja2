@@ -121,6 +121,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("{{ node_name }}")
 
+    # init parameters (must be before publishers/subscribers for param refs in names)
+    param_listener = ParamListener(node)
+    params = param_listener.get_params()
+
     # create publishers - using default constructors
     publishers = Publishers()
 
@@ -134,7 +138,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 {%- if service_clients %}
     service_clients = ServiceClients(
 {%- for client in service_clients %}
-        {{ client.field_name }}=node.create_client({{ client.srv_class }}, "{{ client.name }}"{% if client.qos_code %}, qos_profile={{ client.qos_code }}{% endif %}),
+        {{ client.field_name }}=node.create_client({{ client.srv_class }}, {{ client.name_expr }}{% if client.qos_code %}, qos_profile={{ client.qos_code }}{% endif %}),
 {%- endfor %}
     )
 {%- else %}
@@ -145,7 +149,7 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 {%- if actions %}
     actions = Actions(
 {%- for action in actions %}
-        {{ action.field_name }}=cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback](node, {{ action.action_class }}, "{{ action.name }}"),
+        {{ action.field_name }}=cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback](node, {{ action.action_class }}, {{ action.name_expr }}),
 {%- endfor %}
     )
 {%- else %}
@@ -156,15 +160,12 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 {%- if action_clients %}
     action_clients = ActionClients(
 {%- for client in action_clients %}
-        {{ client.field_name }}=ActionClient(node, {{ client.action_class }}, "{{ client.name }}"),
+        {{ client.field_name }}=ActionClient(node, {{ client.action_class }}, {{ client.name_expr }}),
 {%- endfor %}
     )
 {%- else %}
     action_clients = ActionClients()
 {%- endif %}
-
-    param_listener = ParamListener(node)
-    params = param_listener.get_params()
 
     ctx = context_type(
         node=node,
@@ -180,17 +181,17 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     # initialise publishers
 {%- for pub in publishers %}
-    ctx.publishers.{{ pub.field_name }}._initialise(ctx, {{ pub.msg_class }}, "{{ pub.topic }}", {{ pub.qos_code }})
+    ctx.publishers.{{ pub.field_name }}._initialise(ctx, {{ pub.msg_class }}, {{ pub.name_expr }}, {{ pub.qos_code }})
 {%- endfor %}
 
     # initialise subscribers
 {%- for sub in subscribers %}
-    ctx.subscribers.{{ sub.field_name }}._initialise(ctx, {{ sub.msg_class }}, "{{ sub.topic }}", {{ sub.qos_code }})
+    ctx.subscribers.{{ sub.field_name }}._initialise(ctx, {{ sub.msg_class }}, {{ sub.name_expr }}, {{ sub.qos_code }})
 {%- endfor %}
 
     # initialise services
 {%- for srv in services %}
-    ctx.services.{{ srv.field_name }}._initialise(ctx, {{ srv.srv_class }}, "{{ srv.name }}"{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
+    ctx.services.{{ srv.field_name }}._initialise(ctx, {{ srv.srv_class }}, {{ srv.name_expr }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
 {%- endfor %}
 
     init_func(ctx)

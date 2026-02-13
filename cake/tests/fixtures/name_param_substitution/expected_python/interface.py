@@ -5,13 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rclpy
+from rclpy.client import Client
 from rclpy.qos import (
     HistoryPolicy,
     QoSProfile,
     ReliabilityPolicy,
 )
-from std_msgs.msg import Int32
-from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+from std_srvs.srv import SetBool
+from std_srvs.srv import Trigger
 
 import cake
 
@@ -22,23 +25,22 @@ from .parameters import Params, ParamListener
 
 @dataclass
 class Publishers:
-    status: cake.Publisher[String] = field(default_factory=cake.Publisher[String])
-    counter: cake.Publisher[Int32] = field(default_factory=cake.Publisher[Int32])
+    cmd_vel: cake.Publisher[Twist] = field(default_factory=cake.Publisher[Twist])
 
 
 @dataclass
 class Subscribers:
-    pass
+    odom: cake.Subscriber[Odometry] = field(default_factory=cake.Subscriber[Odometry])
 
 
 @dataclass
 class Services:
-    pass
+    get_state: cake.Service[Trigger, Trigger.Request, Trigger.Response] = field(default_factory=cake.Service[Trigger, Trigger.Request, Trigger.Response])
 
 
 @dataclass
 class ServiceClients:
-    pass
+    external_service: Client  # srv_type: std_srvs/srv/SetBool
 
 
 @dataclass
@@ -52,7 +54,7 @@ class ActionClients:
 
 
 @dataclass
-class PublishersOnlyContext(cake.Context):
+class NameParamSubstitutionContext(cake.Context):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
@@ -64,14 +66,14 @@ class PublishersOnlyContext(cake.Context):
     params: Params
 
 
-T = TypeVar("T", bound=PublishersOnlyContext)
+T = TypeVar("T", bound=NameParamSubstitutionContext)
 
 
 def run(context_type: type[T], init_func: Callable[[T], None]):
 
     rclpy.init()
 
-    node = rclpy.create_node("publishers_only")
+    node = rclpy.create_node("name_param_substitution")
 
     # init parameters (must be before publishers/subscribers for param refs in names)
     param_listener = ParamListener(node)
@@ -87,7 +89,9 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     services = Services()
 
     # initialise service clients
-    service_clients = ServiceClients()
+    service_clients = ServiceClients(
+        external_service=node.create_client(SetBool, f"/{params.namespace}/service"),
+    )
 
     # initialise actions
     actions = Actions()
@@ -108,12 +112,13 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     )
 
     # initialise publishers
-    ctx.publishers.status._initialise(ctx, String, "status", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
-    ctx.publishers.counter._initialise(ctx, Int32, "counter", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5, reliability=ReliabilityPolicy.BEST_EFFORT))
+    ctx.publishers.cmd_vel._initialise(ctx, Twist, f"/robot/{params.robot_id}/cmd_vel", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
 
     # initialise subscribers
+    ctx.subscribers.odom._initialise(ctx, Odometry, f"/{params.namespace}/{params.robot_id}/odom", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5, reliability=ReliabilityPolicy.BEST_EFFORT))
 
     # initialise services
+    ctx.services.get_state._initialise(ctx, Trigger, f"/robot/{params.robot_id}/get_state")
 
     init_func(ctx)
 

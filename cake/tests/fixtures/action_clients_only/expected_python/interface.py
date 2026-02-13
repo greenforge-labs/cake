@@ -69,6 +69,10 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     node = rclpy.create_node("action_clients_only")
 
+    # init parameters (must be before publishers/subscribers for param refs in names)
+    param_listener = ParamListener(node)
+    params = param_listener.get_params()
+
     # create publishers - using default constructors
     publishers = Publishers()
 
@@ -89,9 +93,6 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
         fibonacci=ActionClient(node, Fibonacci, "/fibonacci"),
         navigate_to_pose=ActionClient(node, NavigateToPose, "navigate_to_pose"),
     )
-
-    param_listener = ParamListener(node)
-    params = param_listener.get_params()
 
     ctx = context_type(
         node=node,

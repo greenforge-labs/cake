@@ -17,6 +17,11 @@ parameters:
         default_value: "BEST_EFFORT"
         read_only: true
         description: "Reliability policy for subscriber"
+    robot_name:
+      type: string
+      default_value: "robot_1"
+      description: "A parameter used in topic a topic name"
+      read_only: true
 
 publishers:
     - topic: some_topic
@@ -24,6 +29,13 @@ publishers:
       qos:
         history: ${param:pub_queue_depth}
         reliability: RELIABLE
+    - topic: "${param: robot_name}/test_pub"
+      field_name: robot_name_test_pub
+      type: std_msgs/msg/String
+      qos:
+        history: 5
+        reliability: RELIABLE
+
 
 subscribers:
     - topic: other_topic
@@ -31,11 +43,20 @@ subscribers:
       qos:
         history: 5
         reliability: ${param:sub_reliability}
+    - topic: "/abs_sub/${param: robot_name}/test"
+      field_name: robot_name_test_sub
+      type: std_msgs/msg/Bool
+      qos:
+        history: 1
+        reliability: BEST_EFFORT
 
 services:
     - name: my_service
       type: example_interfaces/srv/AddTwoInts
     - name: bing_bong
+      type: example_interfaces/srv/Trigger
+    - name: "robot_service/${param: robot_name}"
+      field_name: robot_service
       type: example_interfaces/srv/Trigger
 
 service_clients:
@@ -44,6 +65,9 @@ service_clients:
 
 actions:
     - name: my_action
+      type: example_interfaces/action/Fibonacci
+    - name: "/robot_action/${param: robot_name}"
+      field_name: robot_action
       type: example_interfaces/action/Fibonacci
 
 action_clients:

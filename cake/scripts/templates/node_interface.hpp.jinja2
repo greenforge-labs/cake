@@ -24,6 +24,9 @@
 {%- if needs_qos_helpers %}
 #include <cake/qos_helpers.hpp>
 {%- endif %}
+{%- if needs_to_string_helper %}
+#include <cake/to_string.hpp>
+{%- endif %}
 #include <{{ package_name }}/{{ node_name }}_parameters.hpp>
 
 namespace {{ implementation_namespace }} {
@@ -128,42 +131,42 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
 
         // init publishers
 {%- for pub in publishers %}
-        ctx->publishers.{{ pub.field_name }} = cake::create_publisher<{{ pub.msg_type }}>(ctx, "{{ pub.topic }}", {{ pub.qos_code }});
+        ctx->publishers.{{ pub.field_name }} = cake::create_publisher<{{ pub.msg_type }}>(ctx, {{ pub.name_expr }}, {{ pub.qos_code }});
 {%- endfor %}
 
 {%- endif %}
 {%- if subscribers %}
         // init subscribers
 {%- for sub in subscribers %}
-        ctx->subscribers.{{ sub.field_name }} = cake::create_subscriber<{{ sub.msg_type }}>(ctx, "{{ sub.topic }}", {{ sub.qos_code }});
+        ctx->subscribers.{{ sub.field_name }} = cake::create_subscriber<{{ sub.msg_type }}>(ctx, {{ sub.name_expr }}, {{ sub.qos_code }});
 {%- endfor %}
 
 {%- endif %}
 {%- if services %}
         // init services
 {%- for srv in services %}
-        ctx->services.{{ srv.field_name }} = cake::create_service<{{ srv.service_type }}>(ctx, "{{ srv.name }}"{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %});
+        ctx->services.{{ srv.field_name }} = cake::create_service<{{ srv.service_type }}>(ctx, {{ srv.name_expr }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %});
 {%- endfor %}
 
 {%- endif %}
 {%- if service_clients %}
         // init service clients
 {%- for client in service_clients %}
-        ctx->service_clients.{{ client.field_name }} = ctx->node->template create_client<{{ client.service_type }}>("{{ client.name }}"{% if client.qos_code %}, {{ client.qos_code }}{% endif %});
+        ctx->service_clients.{{ client.field_name }} = ctx->node->template create_client<{{ client.service_type }}>({{ client.name_expr }}{% if client.qos_code %}, {{ client.qos_code }}{% endif %});
 {%- endfor %}
 
 {%- endif %}
 {%- if actions %}
         // init actions
 {%- for action in actions %}
-        ctx->actions.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx, "{{ action.name }}");
+        ctx->actions.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx, {{ action.name_expr }});
 {%- endfor %}
 
 {%- endif %}
 {%- if action_clients %}
         // init action clients
 {%- for client in action_clients %}
-        ctx->action_clients.{{ client.field_name }} = rclcpp_action::create_client<{{ client.action_type }}>(ctx->node, "{{ client.name }}");
+        ctx->action_clients.{{ client.field_name }} = rclcpp_action::create_client<{{ client.action_type }}>(ctx->node, {{ client.name_expr }});
 {%- endfor %}
 
 {%- endif %}

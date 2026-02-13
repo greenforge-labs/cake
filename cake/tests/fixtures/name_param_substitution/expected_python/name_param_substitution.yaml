@@ -1,0 +1,41 @@
+node:
+  name: name_param_substitution
+  package: test_package
+parameters:
+  robot_id:
+    type: string
+    default_value: robot1
+    read_only: true
+    description: Robot identifier
+  namespace:
+    type: string
+    default_value: default_ns
+    read_only: true
+    description: Topic namespace
+  sensor_num:
+    type: int
+    default_value: 1
+    read_only: true
+    description: Sensor number
+publishers:
+- topic: /robot/${param:robot_id}/cmd_vel
+  field_name: cmd_vel
+  type: geometry_msgs/msg/Twist
+  qos:
+    history: 10
+    reliability: RELIABLE
+subscribers:
+- topic: /${param:namespace}/${param:robot_id}/odom
+  field_name: odom
+  type: nav_msgs/msg/Odometry
+  qos:
+    history: 5
+    reliability: BEST_EFFORT
+services:
+- name: /robot/${param:robot_id}/get_state
+  field_name: get_state
+  type: std_srvs/srv/Trigger
+service_clients:
+- name: /${param:namespace}/service
+  field_name: external_service
+  type: std_srvs/srv/SetBool
