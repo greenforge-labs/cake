@@ -2213,6 +2213,279 @@ publishers: []
     assert "class ExplicitNode" in output
 
 
+def test_for_each_param_nonexistent_parameter(tmp_path):
+    """Test that for_each_param referencing a non-existent parameter produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+service_clients:
+  - name: /${for_each_param:nonexistent}/change_state
+    field_name: change_state_clients
+    type: std_srvs/srv/Trigger
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "nonexistent" in result.stderr
+    assert "non-existent parameter" in result.stderr
+
+
+def test_for_each_param_not_read_only(tmp_path):
+    """Test that for_each_param referencing a non-read_only parameter produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  managed_nodes:
+    type: string_array
+    default_value:
+      - "node_a"
+service_clients:
+  - name: /${for_each_param:managed_nodes}/change_state
+    field_name: change_state_clients
+    type: std_srvs/srv/Trigger
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "managed_nodes" in result.stderr
+    assert "read_only" in result.stderr
+
+
+def test_for_each_param_wrong_type(tmp_path):
+    """Test that for_each_param referencing a non-string_array parameter produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  managed_nodes:
+    type: string
+    default_value: "node_a"
+    read_only: true
+service_clients:
+  - name: /${for_each_param:managed_nodes}/change_state
+    field_name: change_state_clients
+    type: std_srvs/srv/Trigger
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "managed_nodes" in result.stderr
+    assert "string" in result.stderr
+    assert "string_array" in result.stderr
+
+
+def test_for_each_param_missing_field_name(tmp_path):
+    """Test that for_each_param without field_name produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  managed_nodes:
+    type: string_array
+    default_value:
+      - "node_a"
+    read_only: true
+service_clients:
+  - name: /${for_each_param:managed_nodes}/change_state
+    type: std_srvs/srv/Trigger
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "field_name is required" in result.stderr
+
+
+def test_for_each_param_multiple_refs(tmp_path):
+    """Test that multiple for_each_param references in one name produces error."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  managed_nodes:
+    type: string_array
+    default_value:
+      - "node_a"
+    read_only: true
+  other_nodes:
+    type: string_array
+    default_value:
+      - "node_b"
+    read_only: true
+service_clients:
+  - name: /${for_each_param:managed_nodes}/${for_each_param:other_nodes}
+    field_name: multi_clients
+    type: std_srvs/srv/Trigger
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "only one ${for_each_param:...}" in result.stderr
+
+
+def test_for_each_param_mixed_with_param(tmp_path):
+    """Test that ${param:...} and ${for_each_param:...} can coexist in the same interface."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+  name: test_node
+  package: ${THIS_PACKAGE}
+parameters:
+  managed_nodes:
+    type: string_array
+    default_value:
+      - "node_a"
+    read_only: true
+  robot_id:
+    type: string
+    default_value: "robot1"
+    read_only: true
+publishers:
+  - topic: /robot/${param:robot_id}/status
+    field_name: status
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
+service_clients:
+  - name: /${for_each_param:managed_nodes}/change_state
+    field_name: change_state_clients
+    type: std_srvs/srv/Trigger
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "test_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Generator should succeed with mixed param types:\n{result.stderr}"
+
+    # Verify the generated code
+    output_file = tmp_path / "test_node_interface.hpp"
+    with open(output_file, "r") as f:
+        content = f.read()
+
+    # Should have regular publisher with to_string
+    assert "cake::to_string(ctx->params.robot_id)" in content
+    # Should have for_each_param service client with unordered_map
+    assert "std::unordered_map<std::string, rclcpp::Client" in content
+    assert "for (const auto& key : ctx->params.managed_nodes)" in content
+
+
 if __name__ == "__main__":
     # Allow running directly with python
     pytest.main([__file__, "-v"])

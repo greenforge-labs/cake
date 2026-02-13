@@ -1,0 +1,13 @@
+test_package::for_each_param:
+  managed_nodes:
+    type: string_array
+    default_value:
+    - node_a
+    - node_b
+    read_only: true
+    description: List of managed node names
+  robot_id:
+    type: string
+    default_value: robot1
+    read_only: true
+    description: Robot identifier

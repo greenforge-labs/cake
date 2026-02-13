@@ -52,6 +52,10 @@ Located in `fixtures/`:
 - **manually_created** - Tests the `manually_created: true` flag
 - **complex_types** - Various ROS message types (geometry_msgs, sensor_msgs, nav_msgs)
 
+**Dynamic Names:**
+- **name_param_substitution** - Tests `${param:name}` substitution in topic/service/action names
+- **for_each_param** - Tests `${for_each_param:name}` with `string_array` parameters for generating map/dict-typed entity collections
+
 **QoS Configuration:**
 - **qos_predefined** - Tests predefined QoS profiles (SensorDataQoS, SystemDefaultsQoS, etc.)
 - **qos_custom** - Tests custom QoS parameters and profile overrides

@@ -92,6 +92,12 @@ PARAM_REF_PATTERN = re.compile(r"^\$\{param:([a-zA-Z_][a-zA-Z0-9_]*)\}$")
 # Allows optional whitespace around the parameter name: ${param: robot_name } is valid
 PARTIAL_PARAM_PATTERN = re.compile(r"\$\{param:\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}")
 
+# Pattern for finding ${for_each_param:name} anywhere in a string
+FOR_EACH_PARAM_PATTERN = re.compile(r"\$\{for_each_param:\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}")
+
+# Allowed parameter types for for_each_param (must be an array type)
+FOR_EACH_PARAM_ALLOWED_TYPES = {"string_array"}
+
 # Allowed types for name substitution (topic/service/action names)
 NAME_PARAM_ALLOWED_TYPES = {"string", "int"}
 
@@ -143,38 +149,74 @@ def extract_all_param_names(value: str) -> list[str]:
     return PARTIAL_PARAM_PATTERN.findall(value)
 
 
-def generate_cpp_name_expression(name: str) -> str:
+def contains_for_each_param_ref(value: str) -> bool:
+    """Check if string contains any ${for_each_param:...} reference."""
+    if not isinstance(value, str):
+        return False
+    return FOR_EACH_PARAM_PATTERN.search(value) is not None
+
+
+def extract_for_each_param_name(value: str) -> str | None:
+    """Extract the first for_each_param parameter name from string. Returns None if not found."""
+    if not isinstance(value, str):
+        return None
+    match = FOR_EACH_PARAM_PATTERN.search(value)
+    return match.group(1) if match else None
+
+
+def count_for_each_param_refs(value: str) -> int:
+    """Count the number of ${for_each_param:...} references in a string."""
+    if not isinstance(value, str):
+        return 0
+    return len(FOR_EACH_PARAM_PATTERN.findall(value))
+
+
+def generate_cpp_name_expression(name: str, for_each_loop_var: str | None = None) -> str:
     """Generate C++ expression for topic/service/action name.
 
     Examples:
         "/cmd_vel" -> '"/cmd_vel"'
         "/robot/${param:id}/cmd" -> '"/robot/" + cake::to_string(ctx->params.id) + "/cmd"'
+        "/${for_each_param:nodes}/state" with for_each_loop_var="key" -> '"/" + key + "/state"'
     """
-    if not contains_param_ref(name):
+    # Combined pattern matching both ${param:...} and ${for_each_param:...}
+    combined_pattern = re.compile(
+        r"\$\{param:\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}" r"|\$\{for_each_param:\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}"
+    )
+
+    if not combined_pattern.search(name):
         return f'"{name}"'
 
     parts = []
     last_end = 0
-    for match in PARTIAL_PARAM_PATTERN.finditer(name):
+    for match in combined_pattern.finditer(name):
         if match.start() > last_end:
             parts.append(f'"{name[last_end:match.start()]}"')
-        parts.append(f"cake::to_string(ctx->params.{match.group(1)})")
+        if match.group(1) is not None:
+            # ${param:X} token
+            parts.append(f"cake::to_string(ctx->params.{match.group(1)})")
+        else:
+            # ${for_each_param:X} token - use loop variable directly (string_array -> std::string)
+            parts.append(for_each_loop_var or "key")
         last_end = match.end()
     if last_end < len(name):
         parts.append(f'"{name[last_end:]}"')
     return " + ".join(parts)
 
 
-def generate_python_name_expression(name: str) -> str:
+def generate_python_name_expression(name: str, for_each_loop_var: str | None = None) -> str:
     """Generate Python expression for topic/service/action name.
 
     Examples:
         "/cmd_vel" -> '"/cmd_vel"'
         "/robot/${param:id}/cmd" -> 'f"/robot/{params.id}/cmd"'
+        "/${for_each_param:nodes}/state" with for_each_loop_var="key" -> 'f"/{key}/state"'
     """
-    if not contains_param_ref(name):
+    if not contains_param_ref(name) and not contains_for_each_param_ref(name):
         return f'"{name}"'
     result = PARTIAL_PARAM_PATTERN.sub(r"{params.\1}", name)
+    loop_var = for_each_loop_var or "key"
+    result = FOR_EACH_PARAM_PATTERN.sub(rf"{{{loop_var}}}", result)
     return f'f"{result}"'
 
 
@@ -313,17 +355,17 @@ def validate_name_param_references(interface_data: Dict[str, Any]) -> None:
                 continue
 
             name_value = entity.get(name_key, "")
-            if not contains_param_ref(name_value):
+            if not contains_param_ref(name_value) and not contains_for_each_param_ref(name_value):
                 continue
 
             # Check: field_name required when using param substitution
             if "field_name" not in entity:
                 raise InterfaceValidationError(
                     f"{entity_type} '{name_value}': field_name is required when "
-                    f"{name_key} contains ${{param:...}} substitution"
+                    f"{name_key} contains ${{param:...}} or ${{for_each_param:...}} substitution"
                 )
 
-            # Validate each parameter reference
+            # Validate ${param:...} references
             for param_name in extract_all_param_names(name_value):
                 if param_name not in parameters:
                     raise InterfaceValidationError(
@@ -342,6 +384,35 @@ def validate_name_param_references(interface_data: Dict[str, Any]) -> None:
                     raise InterfaceValidationError(
                         f"{entity_type} '{name_value}': parameter '{param_name}' "
                         f"has type '{actual_type}', only string/int allowed"
+                    )
+
+            # Validate ${for_each_param:...} references
+            if contains_for_each_param_ref(name_value):
+                if count_for_each_param_refs(name_value) > 1:
+                    raise InterfaceValidationError(
+                        f"{entity_type} '{name_value}': only one ${{for_each_param:...}} " f"allowed per entity"
+                    )
+
+                fe_param_name = extract_for_each_param_name(name_value)
+
+                if fe_param_name not in parameters:
+                    raise InterfaceValidationError(
+                        f"{entity_type} '{name_value}': references non-existent " f"parameter '{fe_param_name}'"
+                    )
+
+                fe_param_def = parameters[fe_param_name]
+
+                if not fe_param_def.get("read_only", False):
+                    raise InterfaceValidationError(
+                        f"{entity_type} '{name_value}': parameter '{fe_param_name}' " "must have read_only: true"
+                    )
+
+                fe_actual_type = fe_param_def.get("type", "")
+                if fe_actual_type not in FOR_EACH_PARAM_ALLOWED_TYPES:
+                    raise InterfaceValidationError(
+                        f"{entity_type} '{name_value}': parameter '{fe_param_name}' "
+                        f"has type '{fe_actual_type}', only string_array allowed "
+                        f"for ${{for_each_param:...}}"
                     )
 
 
@@ -542,8 +613,16 @@ def prepare_entities(
         else:
             field_name = name_to_field_name(name_value)
 
+        # Check for ${for_each_param:...}
+        fe_param_name = extract_for_each_param_name(name_value)
+
         # Generate name expression (handles param substitution)
-        name_expr = generate_cpp_name_expression(name_value)
+        if fe_param_name:
+            name_expr = generate_cpp_name_expression(name_value, for_each_loop_var="key")
+        else:
+            name_expr = generate_cpp_name_expression(name_value)
+
+        # needs_to_string_helper only if ${param:...} is used (for_each_param loop var is already std::string)
         if contains_param_ref(name_value):
             needs_to_string_helper = True
 
@@ -553,6 +632,9 @@ def prepare_entities(
             "field_name": field_name,
             "name_expr": name_expr,
         }
+
+        if fe_param_name:
+            prepared["for_each_param"] = fe_param_name
 
         if config.has_qos:
             # QoS is required for publishers/subscribers in the new format
@@ -756,8 +838,14 @@ def prepare_python_entities(
         else:
             field_name = name_to_field_name(name_value)
 
+        # Check for ${for_each_param:...}
+        fe_param_name = extract_for_each_param_name(name_value)
+
         # Generate name expression (handles param substitution)
-        name_expr = generate_python_name_expression(name_value)
+        if fe_param_name:
+            name_expr = generate_python_name_expression(name_value, for_each_loop_var="key")
+        else:
+            name_expr = generate_python_name_expression(name_value)
 
         prepared: Dict[str, Any] = {
             config.name_key: name_value,
@@ -767,6 +855,9 @@ def prepare_python_entities(
             "name_expr": name_expr,
             "import_stmt": ros_type_to_python_import(ros_type),
         }
+
+        if fe_param_name:
+            prepared["for_each_param"] = fe_param_name
 
         if config.has_qos:
             # QoS is required for publishers/subscribers in the new format
@@ -989,6 +1080,10 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         or actcli_needs_to_string
     )
 
+    # Determine if any entity uses for_each_param
+    all_entity_lists = [publishers, subscribers, services, service_clients, actions, action_clients]
+    has_for_each_param = any(entity.get("for_each_param") for entity_list in all_entity_lists for entity in entity_list)
+
     # Render template
     return template.render(
         node_name=node_name,
@@ -1005,6 +1100,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         action_clients=action_clients,
         needs_qos_helpers=needs_qos_helpers,
         needs_to_string_helper=needs_to_string_helper,
+        has_for_each_param=has_for_each_param,
     )
 
 
@@ -1075,6 +1171,9 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
             if entity.get("import_stmt"):
                 message_imports.add(entity["import_stmt"])
 
+    # Determine if any entity uses for_each_param
+    has_for_each_param = any(entity.get("for_each_param") for entity_list in all_entities for entity in entity_list)
+
     # Convert node_name to context class name
     class_name = get_class_name(node_name)
     context_class = f"{class_name}Context"
@@ -1093,6 +1192,7 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
         actions=actions,
         action_clients=action_clients,
         needs_qos_helpers=needs_qos_helpers,
+        has_for_each_param=has_for_each_param,
     )
 
 

@@ -783,6 +783,102 @@ ctx.publishers.cmd_vel.publish(msg)
 
 The `field_name` property is also available for entities without parameter substitution, allowing you to override the auto-derived field name if desired.
 
+### Dynamic Collections with `${for_each_param:...}`
+
+When the **number** of entities varies per deployment (e.g., a lifecycle manager that needs N service clients for N managed nodes), use `${for_each_param:parameter_name}` in entity names. This generates a `std::unordered_map` (C++) or `dict` (Python) keyed by the parameter's string values, with a loop that creates one entity per element at startup.
+
+**Requirements:**
+- The referenced parameter must exist in the `parameters` section
+- The parameter must have `read_only: true`
+- The parameter type must be `string_array`
+- A `field_name` must be provided
+- Only **one** `${for_each_param:...}` reference is allowed per entity name (but `${param:...}` references can coexist alongside it)
+
+**Example:**
+```yaml
+parameters:
+  managed_nodes:
+    type: string_array
+    default_value:
+      - "node_a"
+      - "node_b"
+    read_only: true
+    description: "List of managed node names"
+  robot_id:
+    type: string
+    default_value: "robot1"
+    read_only: true
+    description: "Robot identifier"
+
+publishers:
+  # Regular publisher — single instance, uses ${param:...}
+  - topic: /robot/${param:robot_id}/status
+    field_name: status
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
+
+subscribers:
+  # for_each_param subscriber — one per managed node
+  - topic: /${for_each_param:managed_nodes}/state
+    field_name: node_states
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
+
+service_clients:
+  # for_each_param service client — one per managed node
+  - name: /${for_each_param:managed_nodes}/change_state
+    field_name: change_state_clients
+    type: lifecycle_msgs/srv/ChangeState
+```
+
+This generates map/dict-typed fields and loop initialization. In C++:
+
+```cpp
+// Struct field is a map
+std::unordered_map<std::string, std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>>> node_states;
+
+// Constructor loops over parameter values
+for (const auto& key : ctx->params.managed_nodes) {
+    ctx->subscribers.node_states[key] = cake::create_subscriber<std_msgs::msg::String>(
+        ctx, "/" + key + "/state", rclcpp::QoS(10).reliable());
+}
+```
+
+In Python:
+
+```python
+# Dataclass field is a dict
+node_states: dict[str, cake.Subscriber[String]] = field(default_factory=dict)
+
+# Initialization loops over parameter values
+for key in params.managed_nodes:
+    ctx.subscribers.node_states[key] = cake.Subscriber[String]()
+    ctx.subscribers.node_states[key]._initialise(ctx, String, f"/{key}/state", ...)
+```
+
+Access entities by iterating over the map/dict at runtime:
+
+```cpp
+// C++
+for (const auto& [name, client] : ctx->service_clients.change_state_clients) {
+    auto request = std::make_shared<lifecycle_msgs::srv::ChangeState::Request>();
+    client->async_send_request(request);
+}
+```
+
+```python
+# Python
+for name, client in ctx.service_clients.change_state_clients.items():
+    request = ChangeState.Request()
+    client.call_async(request)
+```
+
+`${for_each_param:...}` works with all entity types: publishers, subscribers, services, service clients, actions, and action clients.
+
 ## QoS Event Callbacks
 
 Cake subscribers and publishers support QoS event callbacks to react when deadlines are missed or liveliness changes.

@@ -37,7 +37,11 @@ from .parameters import Params, ParamListener
 class Publishers:
 {%- if publishers %}
 {%- for pub in publishers %}
+{%- if pub.for_each_param %}
+    {{ pub.field_name }}: dict[str, cake.Publisher[{{ pub.msg_class }}]] = field(default_factory=dict)
+{%- else %}
     {{ pub.field_name }}: cake.Publisher[{{ pub.msg_class }}] = field(default_factory=cake.Publisher[{{ pub.msg_class }}])
+{%- endif %}
 {%- endfor %}
 {%- else %}
     pass
@@ -48,7 +52,11 @@ class Publishers:
 class Subscribers:
 {%- if subscribers %}
 {%- for sub in subscribers %}
+{%- if sub.for_each_param %}
+    {{ sub.field_name }}: dict[str, cake.Subscriber[{{ sub.msg_class }}]] = field(default_factory=dict)
+{%- else %}
     {{ sub.field_name }}: cake.Subscriber[{{ sub.msg_class }}] = field(default_factory=cake.Subscriber[{{ sub.msg_class }}])
+{%- endif %}
 {%- endfor %}
 {%- else %}
     pass
@@ -59,7 +67,11 @@ class Subscribers:
 class Services:
 {%- if services %}
 {%- for srv in services %}
+{%- if srv.for_each_param %}
+    {{ srv.field_name }}: dict[str, cake.Service[{{ srv.srv_class }}, {{ srv.srv_class }}.Request, {{ srv.srv_class }}.Response]] = field(default_factory=dict)
+{%- else %}
     {{ srv.field_name }}: cake.Service[{{ srv.srv_class }}, {{ srv.srv_class }}.Request, {{ srv.srv_class }}.Response] = field(default_factory=cake.Service[{{ srv.srv_class }}, {{ srv.srv_class }}.Request, {{ srv.srv_class }}.Response])
+{%- endif %}
 {%- endfor %}
 {%- else %}
     pass
@@ -70,7 +82,11 @@ class Services:
 class ServiceClients:
 {%- if service_clients %}
 {%- for client in service_clients %}
+{%- if client.for_each_param %}
+    {{ client.field_name }}: dict[str, Client] = field(default_factory=dict)  # srv_type: {{ client.srv_type }}
+{%- else %}
     {{ client.field_name }}: Client  # srv_type: {{ client.srv_type }}
+{%- endif %}
 {%- endfor %}
 {%- else %}
     pass
@@ -81,7 +97,11 @@ class ServiceClients:
 class Actions:
 {%- if actions %}
 {%- for action in actions %}
+{%- if action.for_each_param %}
+    {{ action.field_name }}: dict[str, cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback]] = field(default_factory=dict)
+{%- else %}
     {{ action.field_name }}: cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback]
+{%- endif %}
 {%- endfor %}
 {%- else %}
     pass
@@ -92,7 +112,11 @@ class Actions:
 class ActionClients:
 {%- if action_clients %}
 {%- for client in action_clients %}
+{%- if client.for_each_param %}
+    {{ client.field_name }}: dict[str, ActionClient] = field(default_factory=dict)  # action_type: {{ client.action_type }}
+{%- else %}
     {{ client.field_name }}: ActionClient  # action_type: {{ client.action_type }}
+{%- endif %}
 {%- endfor %}
 {%- else %}
     pass
@@ -135,9 +159,11 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
     services = Services()
 
     # initialise service clients
-{%- if service_clients %}
+{%- set regular_service_clients = service_clients | rejectattr('for_each_param', 'defined') | list %}
+{%- set foreach_service_clients = service_clients | selectattr('for_each_param', 'defined') | list %}
+{%- if regular_service_clients %}
     service_clients = ServiceClients(
-{%- for client in service_clients %}
+{%- for client in regular_service_clients %}
         {{ client.field_name }}=node.create_client({{ client.srv_class }}, {{ client.name_expr }}{% if client.qos_code %}, qos_profile={{ client.qos_code }}{% endif %}),
 {%- endfor %}
     )
@@ -146,9 +172,11 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 {%- endif %}
 
     # initialise actions
-{%- if actions %}
+{%- set regular_actions = actions | rejectattr('for_each_param', 'defined') | list %}
+{%- set foreach_actions = actions | selectattr('for_each_param', 'defined') | list %}
+{%- if regular_actions %}
     actions = Actions(
-{%- for action in actions %}
+{%- for action in regular_actions %}
         {{ action.field_name }}=cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback](node, {{ action.action_class }}, {{ action.name_expr }}),
 {%- endfor %}
     )
@@ -157,9 +185,11 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 {%- endif %}
 
     # initialise action clients
-{%- if action_clients %}
+{%- set regular_action_clients = action_clients | rejectattr('for_each_param', 'defined') | list %}
+{%- set foreach_action_clients = action_clients | selectattr('for_each_param', 'defined') | list %}
+{%- if regular_action_clients %}
     action_clients = ActionClients(
-{%- for client in action_clients %}
+{%- for client in regular_action_clients %}
         {{ client.field_name }}=ActionClient(node, {{ client.action_class }}, {{ client.name_expr }}),
 {%- endfor %}
     )
@@ -181,17 +211,53 @@ def run(context_type: type[T], init_func: Callable[[T], None]):
 
     # initialise publishers
 {%- for pub in publishers %}
+{%- if pub.for_each_param %}
+    for key in params.{{ pub.for_each_param }}:
+        ctx.publishers.{{ pub.field_name }}[key] = cake.Publisher[{{ pub.msg_class }}]()
+        ctx.publishers.{{ pub.field_name }}[key]._initialise(ctx, {{ pub.msg_class }}, {{ pub.name_expr }}, {{ pub.qos_code }})
+{%- else %}
     ctx.publishers.{{ pub.field_name }}._initialise(ctx, {{ pub.msg_class }}, {{ pub.name_expr }}, {{ pub.qos_code }})
+{%- endif %}
 {%- endfor %}
 
     # initialise subscribers
 {%- for sub in subscribers %}
+{%- if sub.for_each_param %}
+    for key in params.{{ sub.for_each_param }}:
+        ctx.subscribers.{{ sub.field_name }}[key] = cake.Subscriber[{{ sub.msg_class }}]()
+        ctx.subscribers.{{ sub.field_name }}[key]._initialise(ctx, {{ sub.msg_class }}, {{ sub.name_expr }}, {{ sub.qos_code }})
+{%- else %}
     ctx.subscribers.{{ sub.field_name }}._initialise(ctx, {{ sub.msg_class }}, {{ sub.name_expr }}, {{ sub.qos_code }})
+{%- endif %}
 {%- endfor %}
 
     # initialise services
 {%- for srv in services %}
+{%- if srv.for_each_param %}
+    for key in params.{{ srv.for_each_param }}:
+        ctx.services.{{ srv.field_name }}[key] = cake.Service[{{ srv.srv_class }}, {{ srv.srv_class }}.Request, {{ srv.srv_class }}.Response]()
+        ctx.services.{{ srv.field_name }}[key]._initialise(ctx, {{ srv.srv_class }}, {{ srv.name_expr }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
+{%- else %}
     ctx.services.{{ srv.field_name }}._initialise(ctx, {{ srv.srv_class }}, {{ srv.name_expr }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %})
+{%- endif %}
+{%- endfor %}
+{%- for client in foreach_service_clients %}
+
+    # initialise for_each_param service clients: {{ client.field_name }}
+    for key in params.{{ client.for_each_param }}:
+        ctx.service_clients.{{ client.field_name }}[key] = node.create_client({{ client.srv_class }}, {{ client.name_expr }}{% if client.qos_code %}, qos_profile={{ client.qos_code }}{% endif %})
+{%- endfor %}
+{%- for action in foreach_actions %}
+
+    # initialise for_each_param actions: {{ action.field_name }}
+    for key in params.{{ action.for_each_param }}:
+        ctx.actions.{{ action.field_name }}[key] = cake.SingleGoalActionServer[{{ action.action_class }}, {{ action.action_class }}.Goal, {{ action.action_class }}.Result, {{ action.action_class }}.Feedback](node, {{ action.action_class }}, {{ action.name_expr }})
+{%- endfor %}
+{%- for client in foreach_action_clients %}
+
+    # initialise for_each_param action clients: {{ client.field_name }}
+    for key in params.{{ client.for_each_param }}:
+        ctx.action_clients.{{ client.field_name }}[key] = ActionClient(node, {{ client.action_class }}, {{ client.name_expr }})
 {%- endfor %}
 
     init_func(ctx)

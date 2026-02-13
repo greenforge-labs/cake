@@ -1,0 +1,38 @@
+node:
+  name: ${THIS_NODE}
+  package: ${THIS_PACKAGE}
+
+parameters:
+  managed_nodes:
+    type: string_array
+    default_value:
+      - "node_a"
+      - "node_b"
+    read_only: true
+    description: "List of managed node names"
+  robot_id:
+    type: string
+    default_value: "robot1"
+    read_only: true
+    description: "Robot identifier"
+
+publishers:
+  - topic: /robot/${param:robot_id}/status
+    field_name: status
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
+
+subscribers:
+  - topic: /${for_each_param:managed_nodes}/state
+    field_name: node_states
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
+
+service_clients:
+  - name: /${for_each_param:managed_nodes}/change_state
+    field_name: change_state_clients
+    type: lifecycle_msgs/srv/ChangeState
