@@ -53,14 +53,6 @@ services:
       type: example_interfaces/srv/AddTwoInts
 ```
 
-> **Note:** The `node:` section (with `name` and `package`) is optional. The build system automatically provides these from the directory structure and CMake project name. You can override them explicitly if needed:
-> ```yaml
-> node:
->     name: custom_name
->     package: custom_package
-> ```
-> For backward compatibility, `${THIS_NODE}` and `${THIS_PACKAGE}` placeholders still work.
-
 ### 3. Implement Your Node
 
 #### C++ Example
