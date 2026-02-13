@@ -10,7 +10,6 @@
 #include <cake/context.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
-#include <cake/to_string.hpp>
 #include <string>
 #include <unordered_map>
 #include <test_package/for_each_param_parameters.hpp>
@@ -67,7 +66,7 @@ class ForEachParamBase : public cake::BaseNode<"for_each_param", extend_options>
         ctx->params = ctx->param_listener->get_params();
 
         // init publishers
-        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/robot/" + cake::to_string(ctx->params.robot_id) + "/status", rclcpp::QoS(10).reliable());
+        ctx->publishers.status = cake::create_publisher<std_msgs::msg::String>(ctx, "/robot/" + ctx->params.robot_id + "/status", rclcpp::QoS(10).reliable());
         // init subscribers
         for (const auto& key : ctx->params.managed_nodes) {
             ctx->subscribers.node_states[key] = cake::create_subscriber<std_msgs::msg::String>(ctx, "/" + key + "/state", rclcpp::QoS(10).reliable());

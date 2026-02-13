@@ -13,7 +13,6 @@
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <cake/service.hpp>
-#include <cake/to_string.hpp>
 #include <test_package/name_param_substitution_parameters.hpp>
 
 namespace test_package::name_param_substitution {
@@ -70,13 +69,13 @@ class NameParamSubstitutionBase : public cake::BaseNode<"name_param_substitution
         ctx->params = ctx->param_listener->get_params();
 
         // init publishers
-        ctx->publishers.cmd_vel = cake::create_publisher<geometry_msgs::msg::Twist>(ctx, "/robot/" + cake::to_string(ctx->params.robot_id) + "/cmd_vel", rclcpp::QoS(10).reliable());
+        ctx->publishers.cmd_vel = cake::create_publisher<geometry_msgs::msg::Twist>(ctx, "/robot/" + ctx->params.robot_id + "/cmd_vel", rclcpp::QoS(10).reliable());
         // init subscribers
-        ctx->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(ctx, "/" + cake::to_string(ctx->params.namespace) + "/" + cake::to_string(ctx->params.robot_id) + "/odom", rclcpp::QoS(5).best_effort());
+        ctx->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(ctx, "/" + ctx->params.namespace + "/" + ctx->params.robot_id + "/odom", rclcpp::QoS(5).best_effort());
         // init services
-        ctx->services.get_state = cake::create_service<std_srvs::srv::Trigger>(ctx, "/robot/" + cake::to_string(ctx->params.robot_id) + "/get_state");
+        ctx->services.get_state = cake::create_service<std_srvs::srv::Trigger>(ctx, "/robot/" + ctx->params.robot_id + "/get_state");
         // init service clients
-        ctx->service_clients.external_service = ctx->node->template create_client<std_srvs::srv::SetBool>("/" + cake::to_string(ctx->params.namespace) + "/service");
+        ctx->service_clients.external_service = ctx->node->template create_client<std_srvs::srv::SetBool>("/" + ctx->params.namespace + "/service");
         init_func(ctx);
     }
 };

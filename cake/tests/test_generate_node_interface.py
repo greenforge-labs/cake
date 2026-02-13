@@ -1894,11 +1894,11 @@ publishers:
     assert result.returncode != 0
     assert "robot_id" in result.stderr
     assert "double" in result.stderr
-    assert "string/int" in result.stderr
+    assert "only string allowed" in result.stderr
 
 
-def test_name_param_int_type_works(tmp_path):
-    """Test that topic with param ref to int parameter works."""
+def test_name_param_int_type_rejected(tmp_path):
+    """Test that topic with param ref to int parameter is rejected."""
     yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """node:
@@ -1937,15 +1937,9 @@ publishers:
         text=True,
     )
 
-    assert result.returncode == 0, f"Generator script failed:\n{result.stderr}"
-
-    # Verify the generated code uses cake::to_string
-    output_file = tmp_path / "test_node_interface.hpp"
-    with open(output_file, "r") as f:
-        content = f.read()
-
-    assert "cake::to_string(ctx->params.sensor_num)" in content
-    assert "#include <cake/to_string.hpp>" in content
+    assert result.returncode != 0
+    assert "sensor_num" in result.stderr
+    assert "only string allowed" in result.stderr
 
 
 def test_name_param_multiple_substitutions(tmp_path):
@@ -1999,8 +1993,9 @@ publishers:
     with open(output_file, "r") as f:
         content = f.read()
 
-    assert "cake::to_string(ctx->params.namespace)" in content
-    assert "cake::to_string(ctx->params.robot_id)" in content
+    assert "ctx->params.namespace" in content
+    assert "ctx->params.robot_id" in content
+    assert "cake::to_string" not in content
 
 
 def test_name_param_whitespace_tolerance(tmp_path):
@@ -2050,8 +2045,8 @@ publishers:
     with open(output_file, "r") as f:
         content = f.read()
 
-    assert "cake::to_string(ctx->params.robot_name)" in content
-    assert "#include <cake/to_string.hpp>" in content
+    assert "ctx->params.robot_name" in content
+    assert "cake::to_string" not in content
 
 
 def test_node_name_defaults_from_cli_arg(tmp_path):
@@ -2479,8 +2474,9 @@ service_clients:
     with open(output_file, "r") as f:
         content = f.read()
 
-    # Should have regular publisher with to_string
-    assert "cake::to_string(ctx->params.robot_id)" in content
+    # Should have regular publisher with direct param ref
+    assert "ctx->params.robot_id" in content
+    assert "cake::to_string" not in content
     # Should have for_each_param service client with unordered_map
     assert "std::unordered_map<std::string, rclcpp::Client" in content
     assert "for (const auto& key : ctx->params.managed_nodes)" in content

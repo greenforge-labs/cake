@@ -99,7 +99,7 @@ FOR_EACH_PARAM_PATTERN = re.compile(r"\$\{for_each_param:\s*([a-zA-Z_][a-zA-Z0-9
 FOR_EACH_PARAM_ALLOWED_TYPES = {"string_array"}
 
 # Allowed types for name substitution (topic/service/action names)
-NAME_PARAM_ALLOWED_TYPES = {"string", "int"}
+NAME_PARAM_ALLOWED_TYPES = {"string"}
 
 # QoS field type requirements for parameter validation
 QOS_FIELD_TYPES = {
@@ -176,7 +176,7 @@ def generate_cpp_name_expression(name: str, for_each_loop_var: str | None = None
 
     Examples:
         "/cmd_vel" -> '"/cmd_vel"'
-        "/robot/${param:id}/cmd" -> '"/robot/" + cake::to_string(ctx->params.id) + "/cmd"'
+        "/robot/${param:id}/cmd" -> '"/robot/" + ctx->params.id + "/cmd"'
         "/${for_each_param:nodes}/state" with for_each_loop_var="key" -> '"/" + key + "/state"'
     """
     # Combined pattern matching both ${param:...} and ${for_each_param:...}
@@ -194,7 +194,7 @@ def generate_cpp_name_expression(name: str, for_each_loop_var: str | None = None
             parts.append(f'"{name[last_end:match.start()]}"')
         if match.group(1) is not None:
             # ${param:X} token
-            parts.append(f"cake::to_string(ctx->params.{match.group(1)})")
+            parts.append(f"ctx->params.{match.group(1)}")
         else:
             # ${for_each_param:X} token - use loop variable directly (string_array -> std::string)
             parts.append(for_each_loop_var or "key")
@@ -332,7 +332,7 @@ def validate_name_param_references(interface_data: Dict[str, Any]) -> None:
     Checks:
     1. Referenced parameter exists in parameters section
     2. Referenced parameter has read_only: true
-    3. Parameter type is string or int
+    3. Parameter type is string
     4. field_name is provided when name contains ${param:...}
 
     Raises:
@@ -383,7 +383,7 @@ def validate_name_param_references(interface_data: Dict[str, Any]) -> None:
                 if actual_type not in NAME_PARAM_ALLOWED_TYPES:
                     raise InterfaceValidationError(
                         f"{entity_type} '{name_value}': parameter '{param_name}' "
-                        f"has type '{actual_type}', only string/int allowed"
+                        f"has type '{actual_type}', only string allowed"
                     )
 
             # Validate ${for_each_param:...} references
@@ -588,19 +588,17 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
 def prepare_entities(
     entities_raw: List[Dict[str, Any]],
     config: EntityConfig,
-) -> tuple[List[Dict[str, str]], bool, bool]:
+) -> tuple[List[Dict[str, str]], bool]:
     """
     Generic entity preparation for C++ template rendering.
     Converts raw YAML data into template-ready format based on entity configuration.
 
     Returns:
-        tuple of (entities_list, needs_qos_helpers, needs_to_string_helper) where:
+        tuple of (entities_list, needs_qos_helpers) where:
         - needs_qos_helpers is True if any entity uses QoS parameter references
-        - needs_to_string_helper is True if any entity uses name param substitution
     """
     entities = []
     needs_qos_helpers = False
-    needs_to_string_helper = False
     for entity in entities_raw:
         if entity.get("manually_created", False):
             continue
@@ -622,10 +620,6 @@ def prepare_entities(
         else:
             name_expr = generate_cpp_name_expression(name_value)
 
-        # needs_to_string_helper only if ${param:...} is used (for_each_param loop var is already std::string)
-        if contains_param_ref(name_value):
-            needs_to_string_helper = True
-
         prepared = {
             config.name_key: name_value,
             config.output_type_key: ros_type_to_cpp(entity["type"]),
@@ -644,7 +638,7 @@ def prepare_entities(
                 needs_qos_helpers = True
 
         entities.append(prepared)
-    return entities, needs_qos_helpers, needs_to_string_helper
+    return entities, needs_qos_helpers
 
 
 def ros_type_to_python_import(ros_type: str) -> str:
@@ -1044,22 +1038,18 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     package_name = interface_data["node"].get("package", "")
 
     # Prepare template data using generic entity preparation
-    publishers, pub_needs_qos_helpers, pub_needs_to_string = prepare_entities(
+    publishers, pub_needs_qos_helpers = prepare_entities(
         interface_data.get("publishers", []), ENTITY_CONFIGS[EntityKind.PUBLISHER]
     )
-    subscribers, sub_needs_qos_helpers, sub_needs_to_string = prepare_entities(
+    subscribers, sub_needs_qos_helpers = prepare_entities(
         interface_data.get("subscribers", []), ENTITY_CONFIGS[EntityKind.SUBSCRIBER]
     )
-    services, _, srv_needs_to_string = prepare_entities(
-        interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE]
-    )
-    service_clients, _, cli_needs_to_string = prepare_entities(
+    services, _ = prepare_entities(interface_data.get("services", []), ENTITY_CONFIGS[EntityKind.SERVICE])
+    service_clients, _ = prepare_entities(
         interface_data.get("service_clients", []), ENTITY_CONFIGS[EntityKind.SERVICE_CLIENT]
     )
-    actions, _, act_needs_to_string = prepare_entities(
-        interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION]
-    )
-    action_clients, _, actcli_needs_to_string = prepare_entities(
+    actions, _ = prepare_entities(interface_data.get("actions", []), ENTITY_CONFIGS[EntityKind.ACTION])
+    action_clients, _ = prepare_entities(
         interface_data.get("action_clients", []), ENTITY_CONFIGS[EntityKind.ACTION_CLIENT]
     )
     message_includes = collect_includes(interface_data)
@@ -1069,16 +1059,6 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
 
     # Determine if QoS helpers are needed
     needs_qos_helpers = pub_needs_qos_helpers or sub_needs_qos_helpers
-
-    # Determine if to_string helper is needed (for name param substitution)
-    needs_to_string_helper = (
-        pub_needs_to_string
-        or sub_needs_to_string
-        or srv_needs_to_string
-        or cli_needs_to_string
-        or act_needs_to_string
-        or actcli_needs_to_string
-    )
 
     # Determine if any entity uses for_each_param
     all_entity_lists = [publishers, subscribers, services, service_clients, actions, action_clients]
@@ -1099,7 +1079,6 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         actions=actions,
         action_clients=action_clients,
         needs_qos_helpers=needs_qos_helpers,
-        needs_to_string_helper=needs_to_string_helper,
         has_for_each_param=has_for_each_param,
     )
 

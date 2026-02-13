@@ -13,11 +13,6 @@ parameters:
     default_value: "default_ns"
     read_only: true
     description: "Topic namespace"
-  sensor_num:
-    type: int
-    default_value: 1
-    read_only: true
-    description: "Sensor number"
 
 publishers:
   - topic: /robot/${param:robot_id}/cmd_vel

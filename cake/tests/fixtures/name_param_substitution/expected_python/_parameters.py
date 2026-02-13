@@ -23,7 +23,6 @@ class parameters:
 
         namespace = "default_ns"
         robot_id = "robot1"
-        sensor_num = 1
 
 
 
@@ -101,10 +100,6 @@ class parameters:
                     updated_params.robot_id = param.value
                     self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
 
-                if param.name == self.prefix_ + "sensor_num":
-                    updated_params.sensor_num = param.value
-                    self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
-
 
 
             updated_params.stamp_ = self.clock_.now()
@@ -129,11 +124,6 @@ class parameters:
                 parameter = updated_params.robot_id
                 self.node_.declare_parameter(self.prefix_ + "robot_id", parameter, descriptor)
 
-            if not self.node_.has_parameter(self.prefix_ + "sensor_num"):
-                descriptor = ParameterDescriptor(description="Sensor number", read_only = True)
-                parameter = updated_params.sensor_num
-                self.node_.declare_parameter(self.prefix_ + "sensor_num", parameter, descriptor)
-
             # TODO: need validation
             # get parameters and fill struct fields
             param = self.node_.get_parameter(self.prefix_ + "namespace")
@@ -142,9 +132,6 @@ class parameters:
             param = self.node_.get_parameter(self.prefix_ + "robot_id")
             self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
             updated_params.robot_id = param.value
-            param = self.node_.get_parameter(self.prefix_ + "sensor_num")
-            self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
-            updated_params.sensor_num = param.value
 
 
             self.update_internal_params(updated_params)
