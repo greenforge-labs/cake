@@ -1,7 +1,3 @@
-node:
-    name: ${THIS_NODE}
-    package: ${THIS_PACKAGE}
-
 parameters:
     spicy_param:
         type: string

@@ -1,0 +1,15 @@
+publishers:
+- topic: /status
+  type: std_msgs/msg/String
+  qos:
+    history: 10
+    reliability: RELIABLE
+subscribers:
+- topic: /input
+  type: std_msgs/msg/Bool
+  qos:
+    history: 5
+    reliability: BEST_EFFORT
+node:
+  name: no_node_section
+  package: test_package

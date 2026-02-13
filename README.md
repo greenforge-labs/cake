@@ -28,10 +28,6 @@ my_package/
 Create `nodes/my_node/interface.yaml`:
 
 ```yaml
-node:
-    name: ${THIS_NODE}
-    package: ${THIS_PACKAGE}
-
 parameters:
     important_parameter:
         type: string
@@ -56,6 +52,14 @@ services:
     - name: my_service
       type: example_interfaces/srv/AddTwoInts
 ```
+
+> **Note:** The `node:` section (with `name` and `package`) is optional. The build system automatically provides these from the directory structure and CMake project name. You can override them explicitly if needed:
+> ```yaml
+> node:
+>     name: custom_name
+>     package: custom_package
+> ```
+> For backward compatibility, `${THIS_NODE}` and `${THIS_PACKAGE}` placeholders still work.
 
 ### 3. Implement Your Node
 
@@ -428,17 +432,35 @@ Or add a modeline comment to individual files:
 
 ```yaml
 # yaml-language-server: $schema=<your_workspace>/install/cake/share/cake/schemas/interface.schema.yaml
-node:
-    name: ${THIS_NODE}
+publishers:
     ...
 ```
 
 ### Node Metadata
 
+The `node:` section is **optional**. When omitted, `name` and `package` default to the values provided by the build system (derived from the directory structure and CMake `PROJECT_NAME`).
+
+```yaml
+# Minimal: no node section needed, defaults from build system
+publishers:
+    - topic: /cmd_vel
+      ...
+```
+
+You can explicitly provide `node:` to override the defaults:
+
 ```yaml
 node:
-    name: ${THIS_NODE}       # Replaced by the node name detected from the folder structure
-    package: ${THIS_PACKAGE} # Replaced by the package name detected from cmake project name
+    name: custom_node_name
+    package: custom_package
+```
+
+For backward compatibility, `${THIS_NODE}` and `${THIS_PACKAGE}` placeholders are still supported but no longer needed:
+
+```yaml
+node:
+    name: ${THIS_NODE}       # Equivalent to omitting name entirely
+    package: ${THIS_PACKAGE} # Equivalent to omitting package entirely
 ```
 
 ### Parameters

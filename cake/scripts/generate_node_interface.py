@@ -797,10 +797,18 @@ def substitute_template_variables(
 ) -> None:
     """
     Substitute template variables (${THIS_PACKAGE}, ${THIS_NODE}) in interface_data in-place.
-    Raises SystemExit with error message if template is used but value not provided.
+
+    If the node section or its fields are missing, they default to the CLI-provided values.
+    Raises SystemExit with error message if a placeholder is used but the corresponding
+    CLI arg is not provided.
     """
-    # Substitute ${THIS_NODE} in node.name
-    if interface_data["node"]["name"] == "${THIS_NODE}":
+    # Ensure node section exists
+    if "node" not in interface_data:
+        interface_data["node"] = {}
+
+    # Substitute or default node.name
+    current_name = interface_data["node"].get("name")
+    if current_name is None or current_name == "${THIS_NODE}":
         if node_name:
             interface_data["node"]["name"] = node_name
         else:
@@ -811,8 +819,9 @@ def substitute_template_variables(
             )
             sys.exit(1)
 
-    # Substitute ${THIS_PACKAGE} in node.package
-    if interface_data["node"].get("package", "") == "${THIS_PACKAGE}":
+    # Substitute or default node.package
+    current_package = interface_data["node"].get("package")
+    if current_package is None or current_package == "${THIS_PACKAGE}":
         if package_name:
             interface_data["node"]["package"] = package_name
         else:
@@ -906,6 +915,18 @@ def generate_interface_yaml(
 
     # Parse the YAML for consistent formatting
     yaml_data = yaml.safe_load(yaml_content)
+
+    # Handle empty YAML or missing node section
+    if yaml_data is None:
+        yaml_data = {}
+    if "node" not in yaml_data:
+        yaml_data["node"] = {}
+
+    # Populate node name/package from substituted interface_data
+    if "name" not in yaml_data["node"]:
+        yaml_data["node"]["name"] = interface_data["node"]["name"]
+    if "package" not in yaml_data["node"]:
+        yaml_data["node"]["package"] = interface_data["node"].get("package", "")
 
     # For C++ nodes, add plugin field under node section
     if is_cpp:
@@ -1183,6 +1204,14 @@ def main():
     with open(interface_path, "r") as f:
         interface_data = yaml.safe_load(f)
 
+    # Handle empty YAML files (yaml.safe_load returns None)
+    if interface_data is None:
+        interface_data = {}
+
+    # Substitute all template variables (${THIS_NODE}, ${THIS_PACKAGE}) in-place
+    # Must happen before validation so that the node section is populated
+    substitute_template_variables(interface_data, args.package, args.node_name)
+
     # Validate YAML structure before processing
     try:
         validate_interface_yaml(interface_data)
@@ -1190,9 +1219,6 @@ def main():
         print(f"Error: Validation failed for {interface_path}:", file=sys.stderr)
         print(f"  {e}", file=sys.stderr)
         sys.exit(1)
-
-    # Substitute all template variables (${THIS_NODE}, ${THIS_PACKAGE}) in-place
-    substitute_template_variables(interface_data, args.package, args.node_name)
 
     node_name = interface_data["node"]["name"]
     package_name = interface_data["node"].get("package", "")

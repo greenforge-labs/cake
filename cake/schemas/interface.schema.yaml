@@ -2,8 +2,6 @@ $schema: https://json-schema.org/draft/2020-12/schema
 title: Cake Node Interface
 description: Schema for Cake ROS2 node interface YAML files
 type: object
-required:
-  - node
 additionalProperties: false
 
 properties:
@@ -59,18 +57,16 @@ $defs:
 
   node:
     type: object
-    description: Node metadata
-    required:
-      - name
+    description: "Node metadata. Optional: name and package default to build-system-provided values when omitted."
     additionalProperties: false
     properties:
       name:
         type: string
-        description: Node name. Use ${THIS_NODE} to substitute from build system.
+        description: "Node name. Optional: defaults to the --node-name CLI arg provided by the build system. Use ${THIS_NODE} for backward compatibility."
         pattern: ^(\$\{THIS_NODE\}|[a-zA-Z][a-zA-Z0-9_]*)$
       package:
         type: string
-        description: Package name. Use ${THIS_PACKAGE} to substitute from build system.
+        description: "Package name. Optional: defaults to the --package CLI arg provided by the build system. Use ${THIS_PACKAGE} for backward compatibility."
         pattern: ^(\$\{THIS_PACKAGE\}|[a-zA-Z][a-zA-Z0-9_]*)$
 
   topicName:

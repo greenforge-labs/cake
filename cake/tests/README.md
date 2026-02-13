@@ -66,14 +66,12 @@ Located in `fixtures/`:
 
 2. Create `input.yaml`:
    ```yaml
-   node:
-       name: ${THIS_NODE}
-       package: ${THIS_PACKAGE}
-
    publishers:
        - topic: my_topic
          type: std_msgs/msg/String
-         qos: 10
+         qos:
+           history: 10
+           reliability: RELIABLE
    ```
 
 3. Create the expected output directories:

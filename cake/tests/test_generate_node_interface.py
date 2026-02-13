@@ -109,9 +109,9 @@ def test_generate_node_interface(test_name, input_file, expected_dir, generated_
 
 
 def test_missing_node_name(tmp_path):
-    """Test that missing node.name causes script to fail."""
-    # Create a YAML file with missing node.name
-    yaml_file = tmp_path / "invalid.yaml"
+    """Test that missing node.name defaults from --node-name CLI arg."""
+    # Create a YAML file with node section but no name
+    yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """node:
     package: ${THIS_PACKAGE}
@@ -137,15 +137,22 @@ def test_missing_node_name(tmp_path):
         text=True,
     )
 
-    # Should fail with non-zero exit code
-    assert result.returncode != 0, "Script should fail for missing node.name"
-    assert "'name' is a required property" in result.stderr
+    # Should succeed - node name defaults from --node-name arg
+    assert result.returncode == 0, f"Script should succeed with node name from CLI arg:\n{result.stderr}"
+
+    # Verify generated output uses the CLI-provided name
+    output_file = tmp_path / "test_node_interface.hpp"
+    with open(output_file, "r") as f:
+        output = f.read()
+
+    assert "namespace test_package::test_node" in output
+    assert "class TestNode" in output
 
 
 def test_missing_node_section(tmp_path):
-    """Test that missing node section causes script to fail."""
-    # Create a YAML file with missing node section
-    yaml_file = tmp_path / "invalid.yaml"
+    """Test that missing node section defaults from CLI args."""
+    # Create a YAML file with no node section
+    yaml_file = tmp_path / "test.yaml"
     yaml_file.write_text(
         """publishers: []
 """
@@ -170,9 +177,16 @@ def test_missing_node_section(tmp_path):
         text=True,
     )
 
-    # Should fail with non-zero exit code
-    assert result.returncode != 0, "Script should fail for missing node section"
-    assert "node" in result.stderr or "KeyError" in result.stderr
+    # Should succeed - both name and package default from CLI args
+    assert result.returncode == 0, f"Script should succeed with defaults from CLI args:\n{result.stderr}"
+
+    # Verify generated output uses the CLI-provided values
+    output_file = tmp_path / "test_node_interface.hpp"
+    with open(output_file, "r") as f:
+        output = f.read()
+
+    assert "namespace test_package::test_node" in output
+    assert "class TestNode" in output
 
 
 def test_empty_publishers_and_subscribers(tmp_path):
@@ -2038,6 +2052,165 @@ publishers:
 
     assert "cake::to_string(ctx->params.robot_name)" in content
     assert "#include <cake/to_string.hpp>" in content
+
+
+def test_node_name_defaults_from_cli_arg(tmp_path):
+    """Test that node.name defaults from --node-name when node section exists but name is missing."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+    package: test_package
+
+publishers: []
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "my_defaulted_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Script failed:\n{result.stderr}"
+
+    output_file = tmp_path / "my_defaulted_node_interface.hpp"
+    with open(output_file, "r") as f:
+        output = f.read()
+
+    assert "namespace test_package::my_defaulted_node" in output
+    assert "class MyDefaultedNode" in output
+
+
+def test_node_package_defaults_from_cli_arg(tmp_path):
+    """Test that node.package defaults from --package when node section exists but package is missing."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+    name: my_node
+
+publishers: []
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "my_default_pkg",
+            "--node-name",
+            "my_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Script failed:\n{result.stderr}"
+
+    output_file = tmp_path / "my_node_interface.hpp"
+    with open(output_file, "r") as f:
+        output = f.read()
+
+    assert "namespace my_default_pkg::my_node" in output
+
+
+def test_no_node_section_defaults_from_cli_args(tmp_path):
+    """Test that both name and package default from CLI args when no node section exists."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """publishers:
+    - topic: /status
+      type: std_msgs/msg/String
+      qos:
+        history: 10
+        reliability: RELIABLE
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "auto_pkg",
+            "--node-name",
+            "auto_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Script failed:\n{result.stderr}"
+
+    output_file = tmp_path / "auto_node_interface.hpp"
+    with open(output_file, "r") as f:
+        output = f.read()
+
+    assert "namespace auto_pkg::auto_node" in output
+    assert "class AutoNode" in output
+
+
+def test_explicit_name_overrides_cli_arg(tmp_path):
+    """Test that explicit name in YAML overrides --node-name CLI arg."""
+    yaml_file = tmp_path / "test.yaml"
+    yaml_file.write_text(
+        """node:
+    name: explicit_node
+    package: test_package
+
+publishers: []
+"""
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT_PATH),
+            str(yaml_file),
+            "--language",
+            "cpp",
+            "--package",
+            "test_package",
+            "--node-name",
+            "cli_node",
+            "--output",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"Script failed:\n{result.stderr}"
+
+    # Should use the YAML-specified name, not the CLI arg
+    output_file = tmp_path / "explicit_node_interface.hpp"
+    with open(output_file, "r") as f:
+        output = f.read()
+
+    assert "namespace test_package::explicit_node" in output
+    assert "class ExplicitNode" in output
 
 
 if __name__ == "__main__":

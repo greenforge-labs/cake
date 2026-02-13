@@ -1,7 +1,3 @@
-node:
-    name: ${THIS_NODE}
-    package: ${THIS_PACKAGE}
-
 parameters:
     special_number:
         type: int
