@@ -6,7 +6,7 @@ Replace `rclcpp::Node` with `rclcpp_lifecycle::LifecycleNode` throughout the cak
 
 ### Key decisions
 
-- **User callback API**: Template parameters. `on_configure` is required (replaces `init`), `on_activate` / `on_deactivate` / `on_cleanup` are optional with no-op defaults.
+- **User callback API**: Template parameters. All callbacks return `CallbackReturn`. `on_configure` is required (replaces `init`), `on_activate` / `on_deactivate` / `on_cleanup` are optional with default `SUCCESS`.
 - **Subscribers**: Auto-drop messages when node is not Active.
 - **Services**: Auto-reject (default-constructed response) when node is not Active.
 - **Action servers**: Auto-reject goals when node is not Active.
@@ -384,14 +384,18 @@ template <
 
 To:
 ```cpp
+using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
+
 template <
     typename ContextType,
     auto on_configure_func,
-    auto on_activate_func = [](std::shared_ptr<ContextType>) {},
-    auto on_deactivate_func = [](std::shared_ptr<ContextType>) {},
-    auto on_cleanup_func = [](std::shared_ptr<ContextType>) {},
+    auto on_activate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_deactivate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_cleanup_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
 ```
+
+The `using CallbackReturn` alias is emitted at namespace scope in the generated header, before the class definition, so it's available in the template parameter defaults.
 
 #### Includes
 
@@ -470,8 +474,11 @@ CallbackReturn on_configure(const rclcpp_lifecycle::State &) override {
     ctx_->action_clients.{{ client.field_name }} = rclcpp_action::create_client<{{ client.action_type }}>(ctx_->node, {{ client.name_expr }});
     {%- endfor %}
 
-    on_configure_func(ctx_);
-    return CallbackReturn::SUCCESS;
+    auto result = on_configure_func(ctx_);
+    if (result != CallbackReturn::SUCCESS) {
+        ctx_.reset();  // don't leave a half-built context
+    }
+    return result;
 }
 ```
 
@@ -481,6 +488,11 @@ Note: `for_each_param` loops remain the same, just moved from the constructor in
 
 ```cpp
 CallbackReturn on_activate(const rclcpp_lifecycle::State &) override {
+    auto result = on_activate_func(ctx_);
+    if (result != CallbackReturn::SUCCESS) {
+        return result;
+    }
+
     // activate lifecycle publishers
     {%- for pub in publishers %}
     {%- if pub.for_each_param %}
@@ -493,8 +505,7 @@ CallbackReturn on_activate(const rclcpp_lifecycle::State &) override {
     // reset all timers
     for (auto &t : ctx_->timers) { t->reset(); }
 
-    on_activate_func(ctx_);
-    return CallbackReturn::SUCCESS;
+    return result;
 }
 ```
 
@@ -502,7 +513,11 @@ CallbackReturn on_activate(const rclcpp_lifecycle::State &) override {
 
 ```cpp
 CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) override {
-    on_deactivate_func(ctx_);
+    auto result = on_deactivate_func(ctx_);
+    if (result != CallbackReturn::SUCCESS) {
+        // node stays Active — don't tear down anything
+        return result;
+    }
 
     // cancel all timers
     for (auto &t : ctx_->timers) { t->cancel(); }
@@ -516,7 +531,7 @@ CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) override {
     {%- endif %}
     {%- endfor %}
 
-    return CallbackReturn::SUCCESS;
+    return result;
 }
 ```
 
@@ -526,9 +541,11 @@ Destroy the context entirely. Because all wrappers and timer callbacks hold `wea
 
 ```cpp
 CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) override {
-    on_cleanup_func(ctx_);
-    ctx_.reset();
-    return CallbackReturn::SUCCESS;
+    auto result = on_cleanup_func(ctx_);
+    if (result == CallbackReturn::SUCCESS) {
+        ctx_.reset();  // only destroy context if cleanup succeeded
+    }
+    return result;
 }
 ```
 
@@ -590,10 +607,11 @@ Update `cake_example/nodes/my_node/`:
 using MyNode = MyNodeBase<Context, on_configure>;
 ```
 
-**`my_node.cpp`** — rename `init` to `on_configure`:
+**`my_node.cpp`** — rename `init` to `on_configure`, return `CallbackReturn`:
 ```cpp
-void on_configure(std::shared_ptr<Context> ctx) {
+CallbackReturn on_configure(std::shared_ptr<Context> ctx) {
     // ... same body as current init() ...
+    return CallbackReturn::SUCCESS;
 }
 ```
 
