@@ -6,7 +6,8 @@ Replace `rclcpp::Node` with `rclcpp_lifecycle::LifecycleNode` throughout the cak
 
 ### Key decisions
 
-- **User callback API**: Template parameters. All callbacks return `CallbackReturn`. `on_configure` is required (replaces `init`), `on_activate` / `on_deactivate` / `on_cleanup` are optional with default `SUCCESS`.
+- **User callback API**: Template parameters. All lifecycle callbacks return `CallbackReturn`. `on_configure` is required (replaces `init`), `on_activate` / `on_deactivate` / `on_cleanup` are optional with default `SUCCESS`. `on_shutdown` is optional with `void` return (cannot block shutdown).
+- **Shutdown & error**: Generated `on_shutdown` calls the user's `on_shutdown_func`, then does graceful teardown (deactivate entities if Active, destroy context). Teardown logic is shared with `on_deactivate` / `on_cleanup` via private helpers. Generated `on_error` resets context and returns `SUCCESS` (recovers to Unconfigured).
 - **Subscribers**: Auto-drop messages when node is not Active.
 - **Services**: Auto-reject (default-constructed response) when node is not Active.
 - **Action servers**: Auto-reject goals when node is not Active.
@@ -392,6 +393,7 @@ template <
     auto on_activate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
     auto on_deactivate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
     auto on_cleanup_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_shutdown_func = [](std::shared_ptr<ContextType>) {},
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
 ```
 
@@ -519,18 +521,7 @@ CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) override {
         return result;
     }
 
-    // cancel all timers
-    for (auto &t : ctx_->timers) { t->cancel(); }
-
-    // deactivate lifecycle publishers
-    {%- for pub in publishers %}
-    {%- if pub.for_each_param %}
-    for (auto &[key, pub] : ctx_->publishers.{{ pub.field_name }}) { pub->deactivate(); }
-    {%- else %}
-    ctx_->publishers.{{ pub.field_name }}->deactivate();
-    {%- endif %}
-    {%- endfor %}
-
+    deactivate_entities_();
     return result;
 }
 ```
@@ -543,13 +534,73 @@ Destroy the context entirely. Because all wrappers and timer callbacks hold `wea
 CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) override {
     auto result = on_cleanup_func(ctx_);
     if (result == CallbackReturn::SUCCESS) {
-        ctx_.reset();  // only destroy context if cleanup succeeded
+        destroy_context_();
     }
     return result;
 }
 ```
 
 After `ctx_` is reset, any in-flight callbacks that try to `lock()` their `weak_ptr` will get `nullptr` and gracefully no-op. A fresh context is created on the next `on_configure`.
+
+#### New: `on_shutdown` override
+
+Called when the node is shut down from any primary state (Unconfigured, Inactive, Active). This is a direct path to Finalized — it does **not** go through `on_deactivate` or `on_cleanup`. The generated override handles graceful teardown by reusing the same helpers. The user's `on_shutdown_func` has `void` return because shutdown cannot be blocked.
+
+```cpp
+CallbackReturn on_shutdown(const rclcpp_lifecycle::State &state) override {
+    if (ctx_) {
+        on_shutdown_func(ctx_);
+    }
+
+    if (ctx_ && state.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+        deactivate_entities_();
+    }
+
+    if (ctx_) {
+        destroy_context_();
+    }
+
+    return CallbackReturn::SUCCESS;
+}
+```
+
+Note: `on_deactivate_func` and `on_cleanup_func` are **not** called during shutdown — the user gets `on_shutdown_func` as their single hook for this path. Each transition calls exactly one user callback.
+
+#### New: `on_error` override
+
+Called when any transition callback returns `FAILURE` or `ERROR`. Resets to a clean state and returns `SUCCESS`, which transitions the node to Unconfigured (recoverable). No user callback — the context is gone.
+
+```cpp
+CallbackReturn on_error(const rclcpp_lifecycle::State &) override {
+    if (ctx_) {
+        destroy_context_();
+    }
+    return CallbackReturn::SUCCESS;
+}
+```
+
+#### Private helpers
+
+Shared teardown logic used by `on_deactivate`, `on_cleanup`, `on_shutdown`, and `on_error`:
+
+```cpp
+private:
+    void deactivate_entities_() {
+        for (auto &t : ctx_->timers) { t->cancel(); }
+
+        {%- for pub in publishers %}
+        {%- if pub.for_each_param %}
+        for (auto &[key, pub] : ctx_->publishers.{{ pub.field_name }}) { pub->deactivate(); }
+        {%- else %}
+        ctx_->publishers.{{ pub.field_name }}->deactivate();
+        {%- endif %}
+        {%- endfor %}
+    }
+
+    void destroy_context_() {
+        ctx_.reset();
+    }
+```
 
 ### 3b. Registration template: `node_registration.cpp.jinja2`
 
@@ -615,7 +666,7 @@ CallbackReturn on_configure(std::shared_ptr<Context> ctx) {
 }
 ```
 
-Optionally add `on_activate` / `on_deactivate` to demonstrate the full lifecycle.
+Optionally add `on_activate` / `on_deactivate` / `on_shutdown` to demonstrate the full lifecycle.
 
 ---
 
@@ -654,7 +705,8 @@ Start with package.xml since it's trivial and unblocks compilation of everything
 The lifecycle state machine supports `Inactive -> on_cleanup -> Unconfigured -> on_configure -> Inactive` (reconfigure cycle). The design supports this cleanly because:
 
 - All entity wrappers and callbacks hold `weak_ptr<Context>`, so there are no reference cycles.
-- `on_cleanup` calls the user's `on_cleanup_func`, then does `ctx_.reset()`. That single call frees the entire context and all its entities. This works for timers because rclcpp's `CallbackGroup` stores `weak_ptr<TimerBase>` (not `shared_ptr`), so `ctx_->timers` holds the only owning references. When the context is destroyed, the timers are destroyed, and the callback group's weak pointers expire naturally — no explicit removal needed.
+- `on_cleanup` calls the user's `on_cleanup_func`, then calls `destroy_context_()` (only if the user returned `SUCCESS`). That single call frees the entire context and all its entities. This works for timers because rclcpp's `CallbackGroup` stores `weak_ptr<TimerBase>` (not `shared_ptr`), so `ctx_->timers` holds the only owning references. When the context is destroyed, the timers are destroyed, and the callback group's weak pointers expire naturally — no explicit removal needed.
+- `on_shutdown` also calls `destroy_context_()`, reusing the same path. Shutdown always succeeds — it cannot be blocked.
 - Any in-flight callbacks (timers, subscribers) that fire after cleanup gracefully no-op — their `weak_ptr::lock()` returns `nullptr`.
 - `on_configure` creates a fresh `ctx_` via `std::make_shared<ContextType>()` and repopulates everything from scratch.
 - User state (e.g. `int counter = 0` on the derived context) is automatically reset to its default value on reconfigure — no user action needed.
