@@ -496,9 +496,10 @@ CallbackReturn on_configure(const rclcpp_lifecycle::State &) override {
     {%- endfor %}
 
     auto result = on_configure_func(ctx_);
-    if (result != CallbackReturn::SUCCESS) {
-        ctx_.reset();  // don't leave a half-built context
+    if (result == CallbackReturn::FAILURE) {
+        ctx_.reset();  // FAILURE: back to Unconfigured, clean slate
     }
+    // ERROR: leave ctx_ for on_error to clean up (consistent with all other transitions)
     return result;
 }
 ```
@@ -754,7 +755,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | | Call `on_configure_func(ctx_)` | |
 | **SUCCESS** | → **Inactive**. Entities exist but not activated. Publishers won't publish, timers not started | exists, inactive |
 | **FAILURE** | `ctx_.reset()` → **Unconfigured**. Rolled back to clean slate | null |
-| **ERROR** | `ctx_.reset()`, then `on_error` fires — `ctx_` already null, no-op → **Finalized** | null |
+| **ERROR** | `ctx_` left as-is. `on_error` fires, `destroy_context_()` → **Finalized** | null |
 
 ### Activate: Inactive → Active
 
