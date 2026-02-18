@@ -461,46 +461,51 @@ CallbackReturn on_configure(const rclcpp_lifecycle::State &) override {
     ctx_ = std::make_shared<ContextType>();
     ctx_->node = this->shared_from_this();
 
-    // init parameters
-    ctx_->param_listener = std::make_shared<ParamListener>(ctx_->node);
-    ctx_->params = ctx_->param_listener->get_params();
+    try {
+        // init parameters
+        ctx_->param_listener = std::make_shared<ParamListener>(ctx_->node);
+        ctx_->params = ctx_->param_listener->get_params();
 
-    // init publishers
-    {%- for pub in publishers %}
-    ctx_->publishers.{{ pub.field_name }} = cake::create_publisher<{{ pub.msg_type }}>(ctx_, {{ pub.name_expr }}, {{ pub.qos_code }});
-    {%- endfor %}
+        // init publishers
+        {%- for pub in publishers %}
+        ctx_->publishers.{{ pub.field_name }} = cake::create_publisher<{{ pub.msg_type }}>(ctx_, {{ pub.name_expr }}, {{ pub.qos_code }});
+        {%- endfor %}
 
-    // init subscribers
-    {%- for sub in subscribers %}
-    ctx_->subscribers.{{ sub.field_name }} = cake::create_subscriber<{{ sub.msg_type }}>(ctx_, {{ sub.name_expr }}, {{ sub.qos_code }});
-    {%- endfor %}
+        // init subscribers
+        {%- for sub in subscribers %}
+        ctx_->subscribers.{{ sub.field_name }} = cake::create_subscriber<{{ sub.msg_type }}>(ctx_, {{ sub.name_expr }}, {{ sub.qos_code }});
+        {%- endfor %}
 
-    // init services
-    {%- for srv in services %}
-    ctx_->services.{{ srv.field_name }} = cake::create_service<{{ srv.service_type }}>(ctx_, {{ srv.name_expr }});
-    {%- endfor %}
+        // init services
+        {%- for srv in services %}
+        ctx_->services.{{ srv.field_name }} = cake::create_service<{{ srv.service_type }}>(ctx_, {{ srv.name_expr }});
+        {%- endfor %}
 
-    // init service clients
-    {%- for client in service_clients %}
-    ctx_->service_clients.{{ client.field_name }} = ctx_->node->template create_client<{{ client.service_type }}>({{ client.name_expr }});
-    {%- endfor %}
+        // init service clients
+        {%- for client in service_clients %}
+        ctx_->service_clients.{{ client.field_name }} = ctx_->node->template create_client<{{ client.service_type }}>({{ client.name_expr }});
+        {%- endfor %}
 
-    // init actions
-    {%- for action in actions %}
-    ctx_->actions.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx_, {{ action.name_expr }});
-    {%- endfor %}
+        // init actions
+        {%- for action in actions %}
+        ctx_->actions.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx_, {{ action.name_expr }});
+        {%- endfor %}
 
-    // init action clients
-    {%- for client in action_clients %}
-    ctx_->action_clients.{{ client.field_name }} = rclcpp_action::create_client<{{ client.action_type }}>(ctx_->node, {{ client.name_expr }});
-    {%- endfor %}
+        // init action clients
+        {%- for client in action_clients %}
+        ctx_->action_clients.{{ client.field_name }} = rclcpp_action::create_client<{{ client.action_type }}>(ctx_->node, {{ client.name_expr }});
+        {%- endfor %}
 
-    auto result = on_configure_func(ctx_);
-    if (result == CallbackReturn::FAILURE) {
-        ctx_.reset();  // FAILURE: back to Unconfigured, clean slate
+        auto result = on_configure_func(ctx_);
+        if (result == CallbackReturn::FAILURE) {
+            ctx_.reset();  // FAILURE: back to Unconfigured, clean slate
+        }
+        // ERROR: leave ctx_ for on_error to clean up (consistent with all other transitions)
+        return result;
+    } catch (const std::exception &e) {
+        RCLCPP_ERROR(this->get_logger(), "on_configure failed: %s", e.what());
+        return CallbackReturn::ERROR;
     }
-    // ERROR: leave ctx_ for on_error to clean up (consistent with all other transitions)
-    return result;
 }
 ```
 
@@ -510,24 +515,29 @@ Note: `for_each_param` loops remain the same, just moved from the constructor in
 
 ```cpp
 CallbackReturn on_activate(const rclcpp_lifecycle::State &) override {
-    auto result = on_activate_func(ctx_);
-    if (result != CallbackReturn::SUCCESS) {
-        return result;  // nothing activated yet, nothing to roll back
+    try {
+        auto result = on_activate_func(ctx_);
+        if (result != CallbackReturn::SUCCESS) {
+            return result;  // nothing activated yet, nothing to roll back
+        }
+
+        // activate lifecycle publishers
+        {%- for pub in publishers %}
+        {%- if pub.for_each_param %}
+        for (auto &[key, pub] : ctx_->publishers.{{ pub.field_name }}) { pub->activate(); }
+        {%- else %}
+        ctx_->publishers.{{ pub.field_name }}->activate();
+        {%- endif %}
+        {%- endfor %}
+
+        // reset all timers
+        for (auto &t : ctx_->timers) { t->reset(); }
+
+        return result;
+    } catch (const std::exception &e) {
+        RCLCPP_ERROR(this->get_logger(), "on_activate failed: %s", e.what());
+        return CallbackReturn::ERROR;
     }
-
-    // activate lifecycle publishers
-    {%- for pub in publishers %}
-    {%- if pub.for_each_param %}
-    for (auto &[key, pub] : ctx_->publishers.{{ pub.field_name }}) { pub->activate(); }
-    {%- else %}
-    ctx_->publishers.{{ pub.field_name }}->activate();
-    {%- endif %}
-    {%- endfor %}
-
-    // reset all timers
-    for (auto &t : ctx_->timers) { t->reset(); }
-
-    return result;
 }
 ```
 
@@ -535,14 +545,19 @@ CallbackReturn on_activate(const rclcpp_lifecycle::State &) override {
 
 ```cpp
 CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) override {
-    auto result = on_deactivate_func(ctx_);
-    if (result != CallbackReturn::SUCCESS) {
-        // node stays Active — don't tear down anything
-        return result;
-    }
+    try {
+        auto result = on_deactivate_func(ctx_);
+        if (result != CallbackReturn::SUCCESS) {
+            // node stays Active — don't tear down anything
+            return result;
+        }
 
-    deactivate_entities_();
-    return result;
+        deactivate_entities_();
+        return result;
+    } catch (const std::exception &e) {
+        RCLCPP_ERROR(this->get_logger(), "on_deactivate failed: %s", e.what());
+        return CallbackReturn::ERROR;
+    }
 }
 ```
 
@@ -552,15 +567,28 @@ Destroy the context entirely. Because all wrappers and timer callbacks hold `wea
 
 ```cpp
 CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) override {
-    auto result = on_cleanup_func(ctx_);
-    if (result == CallbackReturn::SUCCESS) {
-        destroy_context_();
+    try {
+        auto result = on_cleanup_func(ctx_);
+        if (result == CallbackReturn::SUCCESS) {
+            destroy_context_();
+        }
+        return result;
+    } catch (const std::exception &e) {
+        RCLCPP_ERROR(this->get_logger(), "on_cleanup failed: %s", e.what());
+        return CallbackReturn::ERROR;
     }
-    return result;
 }
 ```
 
 After `ctx_` is reset, any in-flight callbacks that try to `lock()` their `weak_ptr` will get `nullptr` and gracefully no-op. A fresh context is created on the next `on_configure`.
+
+#### Exception handling
+
+Every generated lifecycle override wraps its entire body in `try/catch (const std::exception &e)`. If either the framework code (entity creation, activation, teardown) or the user callback throws, the exception is caught, logged via `RCLCPP_ERROR`, and `CallbackReturn::ERROR` is returned. This sends the node to ErrorProcessing → `on_error` → `destroy_context_()` → Finalized.
+
+This is deliberate: we don't rely on rclcpp's internal exception handling around transition callbacks (which is underdocumented and may vary between versions). The generated code handles it explicitly and predictably.
+
+In `on_configure`, an exception during entity creation naturally skips the user callback (it comes after). In the other overrides, the user callback runs first — if it throws, the framework teardown is skipped, but `on_error` handles full cleanup regardless.
 
 #### New: `on_shutdown` override
 
@@ -756,6 +784,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | **SUCCESS** | → **Inactive**. Entities exist but not activated. Publishers won't publish, timers not started | exists, inactive |
 | **FAILURE** | `ctx_.reset()` → **Unconfigured**. Rolled back to clean slate | null |
 | **ERROR** | `ctx_` left as-is. `on_error` fires, `destroy_context_()` → **Finalized** | null |
+| **exception** | Caught, logged. Returns ERROR — same path as above | null |
 
 ### Activate: Inactive → Active
 
@@ -766,6 +795,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | **SUCCESS** | Activate publishers, reset (start) all timers (including any created by the user callback) → **Active** | exists, active |
 | **FAILURE** | Nothing was activated, nothing to roll back → **Inactive** | exists, inactive |
 | **ERROR** | Nothing was activated. `on_error` fires, `destroy_context_()` → **Finalized** | null |
+| **exception** | Caught, logged. Returns ERROR — same path as above | null |
 
 ### Deactivate: Active → Inactive
 
@@ -776,6 +806,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | **SUCCESS** | `deactivate_entities_()`: cancel timers, deactivate publishers → **Inactive** | exists, inactive |
 | **FAILURE** | Return early, everything stays live → **Active** | exists, active |
 | **ERROR** | Return early, nothing torn down. `on_error` fires, `destroy_context_()` → **Finalized** | null |
+| **exception** | Caught, logged. Returns ERROR — same path as above | null |
 
 ### Cleanup: Inactive → Unconfigured
 
@@ -786,6 +817,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | **SUCCESS** | `destroy_context_()` → **Unconfigured**. Ready for fresh configure | null |
 | **FAILURE** | Context preserved → **Inactive** | exists, inactive |
 | **ERROR** | Context preserved. `on_error` fires, `destroy_context_()` → **Finalized** | null |
+| **exception** | Caught, logged. Returns ERROR — same path as above | null |
 
 ### Shutdown from Unconfigured: Unconfigured → Finalized
 
