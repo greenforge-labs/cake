@@ -24,9 +24,18 @@ Cake owns the ROS entity lifecycle — creating, activating, deactivating, and d
 - **`on_configure`** (required): The main user callback. Wire up subscriber/service callbacks, create timers, initialize custom context fields (load models, open files, set up algorithms). This replaces the old `init`.
 - **`on_activate`** / **`on_deactivate`** (optional): Most users leave these as defaults. Useful for connecting/disconnecting external systems, arming/disarming hardware, or managing custom state transitions. User callbacks always run first: `on_activate` runs before publishers are activated and timers started (so publishing is not yet available), `on_deactivate` runs before they are torn down (so publishing still works). This means `on_activate` failures require no rollback — nothing has been activated yet.
 - **`on_cleanup`** (optional): Release resources not covered by RAII. If everything on the context has proper destructors, this can be left as the default — `destroy_context_()` handles the rest.
-- **`on_shutdown`** (optional, void return): Called before the framework tears down on shutdown. From Active, all ROS resources are still live — publishers work, timers are running — so the user can publish a final status, send a last command to hardware, etc. From Inactive, the context exists but publishers won't publish; useful for non-ROS cleanup (close connections, release hardware). From Unconfigured, the callback is skipped (no context). Cannot block shutdown.
+- **`on_shutdown`** (optional, void return): Called before the framework tears down on shutdown. From Active, publishers are still activated — the user can publish a final status or send a last command to hardware. Timer callbacks will not fire (they guard on `PRIMARY_STATE_ACTIVE`, which is false during the shutdown transition). From Inactive, the context exists but publishers won't publish; useful for non-ROS cleanup (close connections, release hardware). From Unconfigured, the callback is skipped (no context). Cannot block shutdown.
 
 If all custom state lives on the context and uses RAII, only `on_configure` needs a user implementation.
+
+### Entity behavior during lifecycle transitions
+
+During transitional states (configuring, activating, deactivating, shutting down), the node's primary state is not `PRIMARY_STATE_ACTIVE`. Entity types differ in how they behave during these windows:
+
+- **Publishers**: Controlled by explicit `activate()` / `deactivate()` calls (via `LifecyclePublisher`), not by node state checks. They remain functional during transitions from Active until `deactivate_entities_()` runs. This means the user can publish from `on_deactivate` and `on_shutdown` callbacks.
+- **Timers, Subscribers, Services, Action servers**: Guarded by a `PRIMARY_STATE_ACTIVE` check in their callback wrappers. Callbacks are no-ops / requests are rejected during any transitional state, even if the transition started from Active.
+
+This is an intentional asymmetry. Publishers are outbound — the node decides when to publish, and being able to send a final message during `on_shutdown` or `on_deactivate` is valuable. Timers, subscribers, services, and action servers involve accepting inbound work or executing scheduled user logic; allowing them to fire during teardown risks running user code in a partially-torn-down state. Keeping them guarded on `PRIMARY_STATE_ACTIVE` is the safer default.
 
 ### `CallbackReturn` semantics
 
@@ -721,7 +730,7 @@ Optionally add `on_activate` / `on_deactivate` / `on_shutdown` to demonstrate th
 | `qos_helpers.hpp` | No change |
 | `node_interface.hpp.jinja2` | Major rewrite: constructor -> lifecycle callbacks |
 | `node_registration.cpp.jinja2` | No change |
-| `generate_node_interface.py` | No change (same template variables) |
+| `generate_node_interface.py` | Minor change to template invocation (same template variables) |
 | `package.xml` | Add `rclcpp_lifecycle`, `lifecycle_msgs` |
 | `old/` | Delete entirely |
 | All test fixtures | Regenerate golden files |
