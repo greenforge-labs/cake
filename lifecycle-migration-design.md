@@ -7,7 +7,7 @@ Replace `rclcpp::Node` with `rclcpp_lifecycle::LifecycleNode` throughout the cak
 ### Key decisions
 
 - **User callback API**: Template parameters. All lifecycle callbacks return `CallbackReturn`. `on_configure` is required (replaces `init`), `on_activate` / `on_deactivate` / `on_cleanup` are optional with default `SUCCESS`. `on_shutdown` is optional with `void` return (cannot block shutdown).
-- **Shutdown & error**: Generated `on_shutdown` calls the user's `on_shutdown_func`, then does graceful teardown (deactivate entities if Active, destroy context). Teardown logic is shared with `on_deactivate` / `on_cleanup` via private helpers. Generated `on_error` resets context and returns `SUCCESS` (recovers to Unconfigured).
+- **Shutdown & error**: Generated `on_shutdown` calls the user's `on_shutdown_func`, then does graceful teardown (deactivate entities if Active, destroy context). Teardown logic is shared with `on_deactivate` / `on_cleanup` via private helpers. Generated `on_error` cleans up and goes to Finalized — `ERROR` is treated as unrecoverable.
 - **Subscribers**: Auto-drop messages when node is not Active.
 - **Services**: Auto-reject (default-constructed response) when node is not Active.
 - **Action servers**: Auto-reject goals when node is not Active.
@@ -24,9 +24,17 @@ Cake owns the ROS entity lifecycle — creating, activating, deactivating, and d
 - **`on_configure`** (required): The main user callback. Wire up subscriber/service callbacks, create timers, initialize custom context fields (load models, open files, set up algorithms). This replaces the old `init`.
 - **`on_activate`** / **`on_deactivate`** (optional): Most users leave these as defaults. Useful for connecting/disconnecting external systems, arming/disarming hardware, or managing custom state transitions. User callbacks always run first: `on_activate` runs before publishers are activated and timers started (so publishing is not yet available), `on_deactivate` runs before they are torn down (so publishing still works). This means `on_activate` failures require no rollback — nothing has been activated yet.
 - **`on_cleanup`** (optional): Release resources not covered by RAII. If everything on the context has proper destructors, this can be left as the default — `destroy_context_()` handles the rest.
-- **`on_shutdown`** (optional): Final housekeeping before the node is destroyed (logging, flushing, sending a last status message).
+- **`on_shutdown`** (optional, void return): Called before the framework tears down on shutdown. From Active, all ROS resources are still live — publishers work, timers are running — so the user can publish a final status, send a last command to hardware, etc. From Inactive, the context exists but publishers won't publish; useful for non-ROS cleanup (close connections, release hardware). From Unconfigured, the callback is skipped (no context). Cannot block shutdown.
 
 If all custom state lives on the context and uses RAII, only `on_configure` needs a user implementation.
+
+### `CallbackReturn` semantics
+
+All user lifecycle callbacks (except `on_shutdown`) return `CallbackReturn`. The three values have distinct meanings:
+
+- **`SUCCESS`** — Transition proceeds normally to the target state.
+- **`FAILURE`** — Transition is rolled back to the previous primary state. The node can retry. Use this for transient problems: a config file isn't available yet, a hardware connection timed out, an external dependency isn't ready. The node stays in a valid state and a lifecycle manager (or user code) can attempt the transition again later.
+- **`ERROR`** — Unrecoverable error. The node enters ErrorProcessing, `on_error` fires (cleans up the context), and the node goes to **Finalized** (terminal). Use this when the node is in a state that cannot be recovered from: corrupted internal state, hardware fault, invariant violation. The node cannot be reconfigured — it must be destroyed and recreated.
 
 ---
 
@@ -579,14 +587,14 @@ Note: `on_deactivate_func` and `on_cleanup_func` are **not** called during shutd
 
 #### New: `on_error` override
 
-Called when any transition callback returns `CallbackReturn::ERROR` (not `FAILURE` — that simply bounces back to the previous primary state). Resets to a clean state and returns `SUCCESS`, which transitions the node to Unconfigured (recoverable). No user callback — the context is gone.
+Called when any transition callback returns `CallbackReturn::ERROR` (not `FAILURE` — that simply bounces back to the previous primary state). Cleans up the context and returns `FAILURE`, which transitions the node to **Finalized** (terminal). `ERROR` is unrecoverable — the node cannot be reconfigured. No user callback.
 
 ```cpp
 CallbackReturn on_error(const rclcpp_lifecycle::State &) override {
     if (ctx_) {
         destroy_context_();
     }
-    return CallbackReturn::SUCCESS;
+    return CallbackReturn::FAILURE;  // → Finalized
 }
 ```
 
@@ -746,7 +754,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | | Call `on_configure_func(ctx_)` | |
 | **SUCCESS** | → **Inactive**. Entities exist but not activated. Publishers won't publish, timers not started | exists, inactive |
 | **FAILURE** | `ctx_.reset()` → **Unconfigured**. Rolled back to clean slate | null |
-| **ERROR** | `ctx_.reset()`, then `on_error` fires — `ctx_` already null, no-op → **Unconfigured** | null |
+| **ERROR** | `ctx_.reset()`, then `on_error` fires — `ctx_` already null, no-op → **Finalized** | null |
 
 ### Activate: Inactive → Active
 
@@ -756,7 +764,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | `on_activate` | Call `on_activate_func(ctx_)` — node is activating, not yet Active. Publishers are not yet activated, timers not yet started. User callback is for custom state setup (connect to external systems, arm hardware, etc.). Timers created here are picked up by the reset loop that follows | exists, inactive |
 | **SUCCESS** | Activate publishers, reset (start) all timers (including any created by the user callback) → **Active** | exists, active |
 | **FAILURE** | Nothing was activated, nothing to roll back → **Inactive** | exists, inactive |
-| **ERROR** | Nothing was activated. `on_error` fires, `destroy_context_()` → **Unconfigured** | null |
+| **ERROR** | Nothing was activated. `on_error` fires, `destroy_context_()` → **Finalized** | null |
 
 ### Deactivate: Active → Inactive
 
@@ -766,7 +774,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | `on_deactivate` | Call `on_deactivate_func(ctx_)` first | |
 | **SUCCESS** | `deactivate_entities_()`: cancel timers, deactivate publishers → **Inactive** | exists, inactive |
 | **FAILURE** | Return early, everything stays live → **Active** | exists, active |
-| **ERROR** | Return early, nothing torn down. `on_error` fires, `destroy_context_()` → **Unconfigured** | null |
+| **ERROR** | Return early, nothing torn down. `on_error` fires, `destroy_context_()` → **Finalized** | null |
 
 ### Cleanup: Inactive → Unconfigured
 
@@ -776,7 +784,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | `on_cleanup` | Call `on_cleanup_func(ctx_)` first | |
 | **SUCCESS** | `destroy_context_()` → **Unconfigured**. Ready for fresh configure | null |
 | **FAILURE** | Context preserved → **Inactive** | exists, inactive |
-| **ERROR** | Context preserved. `on_error` fires, `destroy_context_()` → **Unconfigured** | null |
+| **ERROR** | Context preserved. `on_error` fires, `destroy_context_()` → **Finalized** | null |
 
 ### Shutdown from Unconfigured: Unconfigured → Finalized
 
@@ -801,12 +809,12 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 | | State IS Active — `deactivate_entities_()`: cancel timers, deactivate publishers | exists, inactive |
 | | `destroy_context_()` → **Finalized** | null |
 
-### Error recovery: ErrorProcessing → Unconfigured
+### Error recovery: ErrorProcessing → Finalized
 
 | Step | What happens | `ctx_` state |
 |---|---|---|
 | `on_error` | If `ctx_` exists: `destroy_context_()`. If already null (e.g. from `on_configure` rollback): no-op | null |
-| | Returns SUCCESS → **Unconfigured** | null |
+| | Returns FAILURE → **Finalized**. ERROR is unrecoverable — node must be destroyed and recreated | null |
 
 ### User callback summary
 
