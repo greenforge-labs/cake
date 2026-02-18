@@ -17,6 +17,17 @@ Replace `rclcpp::Node` with `rclcpp_lifecycle::LifecycleNode` throughout the cak
 - **Only lifecycle nodes**: No flag/option to use regular `rclcpp::Node`.
 - **Weak pointers in wrappers**: Entity wrappers (Publisher, Subscriber, Service) and timer/thread callbacks store `weak_ptr<Context>` instead of `shared_ptr<Context>`. This eliminates reference cycles between the context and its entities, making cleanup trivial (`ctx_.reset()` frees everything) and ensuring callbacks become graceful no-ops if the context is destroyed.
 
+### User callback model
+
+Cake owns the ROS entity lifecycle — creating, activating, deactivating, and destroying publishers, subscribers, services, timers, and action servers. The user callbacks are for managing custom state and external resources that cake doesn't know about.
+
+- **`on_configure`** (required): The main user callback. Wire up subscriber/service callbacks, create timers, initialize custom context fields (load models, open files, set up algorithms). This replaces the old `init`.
+- **`on_activate`** / **`on_deactivate`** (optional): Most users leave these as defaults. Useful for connecting/disconnecting external systems, arming/disarming hardware, or managing custom state transitions. User callbacks always run first: `on_activate` runs before publishers are activated and timers started (so publishing is not yet available), `on_deactivate` runs before they are torn down (so publishing still works). This means `on_activate` failures require no rollback — nothing has been activated yet.
+- **`on_cleanup`** (optional): Release resources not covered by RAII. If everything on the context has proper destructors, this can be left as the default — `destroy_context_()` handles the rest.
+- **`on_shutdown`** (optional): Final housekeeping before the node is destroyed (logging, flushing, sending a last status message).
+
+If all custom state lives on the context and uses RAII, only `on_configure` needs a user implementation.
+
 ---
 
 ## Phase 1: Core headers — `base_node.hpp` and `context.hpp`
@@ -492,7 +503,7 @@ Note: `for_each_param` loops remain the same, just moved from the constructor in
 CallbackReturn on_activate(const rclcpp_lifecycle::State &) override {
     auto result = on_activate_func(ctx_);
     if (result != CallbackReturn::SUCCESS) {
-        return result;
+        return result;  // nothing activated yet, nothing to roll back
     }
 
     // activate lifecycle publishers
@@ -568,7 +579,7 @@ Note: `on_deactivate_func` and `on_cleanup_func` are **not** called during shutd
 
 #### New: `on_error` override
 
-Called when any transition callback returns `FAILURE` or `ERROR`. Resets to a clean state and returns `SUCCESS`, which transitions the node to Unconfigured (recoverable). No user callback — the context is gone.
+Called when any transition callback returns `CallbackReturn::ERROR` (not `FAILURE` — that simply bounces back to the previous primary state). Resets to a clean state and returns `SUCCESS`, which transitions the node to Unconfigured (recoverable). No user callback — the context is gone.
 
 ```cpp
 CallbackReturn on_error(const rclcpp_lifecycle::State &) override {
@@ -712,3 +723,98 @@ The lifecycle state machine supports `Inactive -> on_cleanup -> Unconfigured -> 
 - User state (e.g. `int counter = 0` on the derived context) is automatically reset to its default value on reconfigure — no user action needed.
 
 This should be tested explicitly.
+
+## Self-triggered transitions
+
+User code can trigger lifecycle transitions from within callbacks (e.g. `ctx->node->deactivate()` from a timer or subscriber callback to take the node offline when an error is detected). The transition runs synchronously — the generated `on_deactivate` / `on_shutdown` fires inline. The design handles this gracefully:
+
+- The currently-executing callback is not interrupted — it runs to completion.
+- Timers are cancelled (no future firings) and publishers become no-ops for future publishes, but nothing crashes.
+- On shutdown, `destroy_context_()` resets `ctx_`, but the callback holds a local `shared_ptr` (from `weak_ptr::lock()`), so the context stays alive until the callback returns.
+- Code after the transition call continues in a degraded state (publishes silently dropped, etc.). This is expected — the caller asked to deactivate.
+
+There is no programmatic way to enter the ErrorProcessing state. `on_error` is only triggered when a transition callback returns `CallbackReturn::ERROR`.
+
+## Transition reference
+
+### Configure: Unconfigured → Inactive
+
+| Step | What happens | `ctx_` state |
+|---|---|---|
+| Entry | `ctx_` is null | null |
+| `on_configure` | Create `ctx_`, populate entities (params, pubs, subs, services, actions) | exists, entities created |
+| | Call `on_configure_func(ctx_)` | |
+| **SUCCESS** | → **Inactive**. Entities exist but not activated. Publishers won't publish, timers not started | exists, inactive |
+| **FAILURE** | `ctx_.reset()` → **Unconfigured**. Rolled back to clean slate | null |
+| **ERROR** | `ctx_.reset()`, then `on_error` fires — `ctx_` already null, no-op → **Unconfigured** | null |
+
+### Activate: Inactive → Active
+
+| Step | What happens | `ctx_` state |
+|---|---|---|
+| Entry | Entities exist but inactive | exists, inactive |
+| `on_activate` | Call `on_activate_func(ctx_)` — node is activating, not yet Active. Publishers are not yet activated, timers not yet started. User callback is for custom state setup (connect to external systems, arm hardware, etc.). Timers created here are picked up by the reset loop that follows | exists, inactive |
+| **SUCCESS** | Activate publishers, reset (start) all timers (including any created by the user callback) → **Active** | exists, active |
+| **FAILURE** | Nothing was activated, nothing to roll back → **Inactive** | exists, inactive |
+| **ERROR** | Nothing was activated. `on_error` fires, `destroy_context_()` → **Unconfigured** | null |
+
+### Deactivate: Active → Inactive
+
+| Step | What happens | `ctx_` state |
+|---|---|---|
+| Entry | Everything is live | exists, active |
+| `on_deactivate` | Call `on_deactivate_func(ctx_)` first | |
+| **SUCCESS** | `deactivate_entities_()`: cancel timers, deactivate publishers → **Inactive** | exists, inactive |
+| **FAILURE** | Return early, everything stays live → **Active** | exists, active |
+| **ERROR** | Return early, nothing torn down. `on_error` fires, `destroy_context_()` → **Unconfigured** | null |
+
+### Cleanup: Inactive → Unconfigured
+
+| Step | What happens | `ctx_` state |
+|---|---|---|
+| Entry | Entities exist but inactive | exists, inactive |
+| `on_cleanup` | Call `on_cleanup_func(ctx_)` first | |
+| **SUCCESS** | `destroy_context_()` → **Unconfigured**. Ready for fresh configure | null |
+| **FAILURE** | Context preserved → **Inactive** | exists, inactive |
+| **ERROR** | Context preserved. `on_error` fires, `destroy_context_()` → **Unconfigured** | null |
+
+### Shutdown from Unconfigured: Unconfigured → Finalized
+
+| Step | What happens | `ctx_` state |
+|---|---|---|
+| `on_shutdown` | `ctx_` is null — all `if (ctx_)` guards skip. No user callback called | null |
+| | → **Finalized** | null |
+
+### Shutdown from Inactive: Inactive → Finalized
+
+| Step | What happens | `ctx_` state |
+|---|---|---|
+| `on_shutdown` | `on_shutdown_func(ctx_)` called | exists |
+| | State is not Active — `deactivate_entities_()` skipped | exists |
+| | `destroy_context_()` → **Finalized** | null |
+
+### Shutdown from Active: Active → Finalized
+
+| Step | What happens | `ctx_` state |
+|---|---|---|
+| `on_shutdown` | `on_shutdown_func(ctx_)` called | exists, active |
+| | State IS Active — `deactivate_entities_()`: cancel timers, deactivate publishers | exists, inactive |
+| | `destroy_context_()` → **Finalized** | null |
+
+### Error recovery: ErrorProcessing → Unconfigured
+
+| Step | What happens | `ctx_` state |
+|---|---|---|
+| `on_error` | If `ctx_` exists: `destroy_context_()`. If already null (e.g. from `on_configure` rollback): no-op | null |
+| | Returns SUCCESS → **Unconfigured** | null |
+
+### User callback summary
+
+| Transition | User callback | Can block? |
+|---|---|---|
+| Configure | `on_configure_func` | Yes (FAILURE/ERROR) |
+| Activate | `on_activate_func` | Yes (FAILURE/ERROR) |
+| Deactivate | `on_deactivate_func` | Yes (FAILURE/ERROR) |
+| Cleanup | `on_cleanup_func` | Yes (FAILURE/ERROR) |
+| Shutdown | `on_shutdown_func` | No (void return) |
+| Error | *(none)* | No |
