@@ -243,11 +243,7 @@ The ordering of user callbacks vs cake's entity management is encoded in `BaseNo
 
 ---
 
-## Decisions (to be discussed)
-
-The following sections are placeholders for decisions that still need to be worked through and documented:
-
-### Entity behavior during lifecycle transitions
+## Entity behavior during lifecycle transitions
 
 There is an intentional asymmetry between publishers (outbound) and everything else (inbound/scheduled).
 
@@ -255,7 +251,7 @@ There is an intentional asymmetry between publishers (outbound) and everything e
 
 All entity wrappers store `weak_ptr<ContextType>` instead of `shared_ptr<ContextType>` to eliminate reference cycles. Callbacks lock before use; if the context is gone, the callback is a no-op.
 
-#### `publisher.hpp`
+### `publisher.hpp`
 
 Use `LifecyclePublisher` under the hood. Publishing is a silent no-op when deactivated. Controlled by explicit `activate()` / `deactivate()` calls in `activate_entities` / `deactivate_entities` — not by node state checks. This means they stay functional during transitions until `deactivate_entities()` actually runs. The user can publish from `on_deactivate` and `on_shutdown` callbacks.
 
@@ -301,7 +297,7 @@ Notes:
 - `activate()` / `deactivate()` are called by generated `activate_entities` / `deactivate_entities` — not by user code.
 - The `publisher()` accessor return type changes from `rclcpp::Publisher<MessageT>::SharedPtr` to `rclcpp_lifecycle::LifecyclePublisher<MessageT>::SharedPtr`. Breaking change for anyone calling `publisher()` directly.
 
-#### `subscriber.hpp`
+### `subscriber.hpp`
 
 Silently drop messages when not Active. `PRIMARY_STATE_ACTIVE` check in the subscription callback lambda:
 
@@ -330,7 +326,7 @@ template <typename MessageT, typename ContextType> class Subscriber {
 };
 ```
 
-#### `service.hpp`
+### `service.hpp`
 
 Log a warning and return a default-constructed response when not Active. (ROS2 services have no reject mechanism — the callback always runs and always produces a response. A default-constructed response + warning log is the best cake can do generically.)
 
@@ -371,7 +367,7 @@ template <typename ServiceT, typename ContextType> class Service {
 };
 ```
 
-#### `action_server.hpp`
+### `action_server.hpp`
 
 Reject goals when not Active. Unlike services, the action protocol has a real reject mechanism.
 
@@ -398,7 +394,7 @@ handle_goal(const rclcpp_action::GoalUUID &, std::shared_ptr<const typename Acti
 }
 ```
 
-#### `timer.hpp`
+### `timer.hpp`
 
 Three changes to both `create_timer` and `create_wall_timer`:
 
@@ -444,7 +440,9 @@ auto create_timer(
 
 `create_wall_timer` follows the same pattern using `rclcpp::create_wall_timer` with `get_node_base_interface()` and `get_node_timers_interface()`.
 
-### Error handling and `CallbackReturn` semantics
+---
+
+## Error handling and `CallbackReturn` semantics
 
 All user lifecycle callbacks (except `on_shutdown`) return `CallbackReturn`. The three values map to the rclcpp lifecycle state machine:
 
@@ -463,7 +461,7 @@ What cake does on each return value (encoded in `BaseNode::handle_*` methods):
 
 `handle_error` does `deactivate_entities(ctx); reset_context(ctx); return FAILURE;` — idempotent cleanup from any state, then Finalized. There is no user callback for `on_error` — ERROR is unrecoverable, there's nothing useful the user can do.
 
-#### Exception handling
+### Exception handling
 
 No try/catch in cake. rclcpp's `execute_callback` wraps every transition callback in `try/catch(const std::exception&)`. If a user callback throws:
 
@@ -475,13 +473,17 @@ This is sufficient because `handle_error` can tear down from any state — `deac
 
 Only `std::exception` subclasses are caught. A non-`std::exception` throw (e.g. `throw 42`) propagates uncaught and terminates the process.
 
-### Thread removal
+---
+
+## Thread removal
 
 `thread.hpp` is removed entirely. Threads don't fit the lifecycle model — they hold long-lived references to the context, preventing cleanup, and require explicit stop/join coordination that cake can't manage generically. Users who need threads can manage them outside of cake. Timers and callback groups cover most use cases that `create_thread` was used for.
 
 The `threads` vector is also removed from `context.hpp`.
 
-### Package configuration
+---
+
+## Package configuration
 
 Add dependencies to `cake/package.xml`:
 
@@ -496,9 +498,11 @@ Downstream packages that use cake also need `rclcpp_lifecycle` and `lifecycle_ms
 
 Note: `cake_auto_package.cmake` hardcodes `target_link_libraries(... INTERFACE rclcpp::rclcpp)` for generated interface libraries (line 255). This may need `rclcpp_lifecycle::rclcpp_lifecycle` added, or it may work transitively through cake's headers — verify during implementation.
 
-### Code generator changes
+---
 
-#### Jinja2 template: `node_interface.hpp.jinja2`
+## Code generator changes
+
+### Jinja2 template: `node_interface.hpp.jinja2`
 
 The generated `*Base` class changes from a monolithic constructor to virtual method overrides on `BaseNode`.
 
@@ -605,7 +609,7 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", ContextTyp
 
 **Entity struct definitions** (Publishers, Subscribers, Services, etc.) and the **Context struct definition** are unchanged.
 
-#### `static_assert` placement
+### `static_assert` placement
 
 Two levels of assertion:
 
@@ -628,19 +632,21 @@ Two levels of assertion:
    ```
    Currently only `timer.hpp` has this. Add to `publisher.hpp`, `subscriber.hpp`, `service.hpp`, and `action_server.hpp`.
 
-#### Registration template: `node_registration.cpp.jinja2`
+### Registration template: `node_registration.cpp.jinja2`
 
 No changes. `RCLCPP_COMPONENTS_REGISTER_NODE` works with lifecycle nodes.
 
-#### Python generator: `generate_node_interface.py`
+### Python generator: `generate_node_interface.py`
 
 No schema changes to `interface.yaml`. No new template variables needed. The generator itself only changes in how it renders the Jinja2 template — same `publishers`, `subscribers`, `services`, `actions`, etc. lists.
 
-#### Python node template: `node_interface.py.jinja2`
+### Python node template: `node_interface.py.jinja2`
 
 Out of scope for this migration.
 
-### Tests and examples
+---
+
+## Tests and examples
 
 Every fixture in `cake/tests/fixtures/` has an `expected_cpp/` directory with golden-file outputs. All need regeneration to match the new template output.
 
