@@ -251,16 +251,198 @@ The following sections are placeholders for decisions that still need to be work
 
 There is an intentional asymmetry between publishers (outbound) and everything else (inbound/scheduled).
 
-**Publishers** use `LifecyclePublisher` under the hood. Publishing is a silent no-op when deactivated. They are controlled by explicit `activate()` / `deactivate()` calls in `activate_entities` / `deactivate_entities` — not by node state checks. This means they stay functional during transitions until `deactivate_entities()` actually runs. The user can publish from `on_deactivate` and `on_shutdown` callbacks (useful for sending a final status or safe command to hardware).
-
-**Subscribers, Services, Action Servers, and Timers** are all guarded by a `PRIMARY_STATE_ACTIVE` check in their callback wrappers, inside the entity wrapper classes themselves (`subscriber.hpp`, `service.hpp`, etc.). This means the guard is always on — no generated code needed.
-
-- **Subscribers**: Silently drop messages when not Active.
-- **Services**: Log a warning and return a default-constructed response. (ROS2 services have no reject mechanism — the callback always runs and always produces a response. A default-constructed response + warning log is the best cake can do generically.)
-- **Action servers**: Reject goals with `GoalResponse::REJECT` and log a warning. (Unlike services, the action protocol has a real reject mechanism.)
-- **Timers**: Callback guard (no-op when not Active) + `cancel()` / `reset()` in `deactivate_entities` / `activate_entities`. Also `autostart=false` when created outside Active state. The callback guard is belt-and-suspenders — `cancel()` should prevent firing, but the guard catches edge cases like race conditions.
-
 **Rationale**: Publishers are outbound — the node decides when to publish, and sending a final message during teardown is valuable. Everything else involves accepting inbound work or executing scheduled logic; letting that fire during teardown risks running user code in a partially-torn-down state.
+
+All entity wrappers store `weak_ptr<ContextType>` instead of `shared_ptr<ContextType>` to eliminate reference cycles. Callbacks lock before use; if the context is gone, the callback is a no-op.
+
+#### `publisher.hpp`
+
+Use `LifecyclePublisher` under the hood. Publishing is a silent no-op when deactivated. Controlled by explicit `activate()` / `deactivate()` calls in `activate_entities` / `deactivate_entities` — not by node state checks. This means they stay functional during transitions until `deactivate_entities()` actually runs. The user can publish from `on_deactivate` and `on_shutdown` callbacks.
+
+```cpp
+template <typename MessageT, typename ContextType> class Publisher {
+  public:
+    explicit Publisher(std::shared_ptr<ContextType> context, const std::string &topic_name, const rclcpp::QoS &qos)
+        : context_(context) {
+        rclcpp::PublisherOptions options;
+        options.event_callbacks.deadline_callback = [this](rclcpp::QOSDeadlineOfferedInfo &event) {
+            if (auto ctx = context_.lock()) {
+                if (deadline_callback_) { deadline_callback_(ctx, event); }
+            }
+        };
+        options.event_callbacks.liveliness_callback = [this](rclcpp::QOSLivelinessLostInfo &event) {
+            if (auto ctx = context_.lock()) {
+                if (liveliness_callback_) { liveliness_callback_(ctx, event); }
+            }
+        };
+
+        publisher_ = context->node->template create_publisher<MessageT>(topic_name, qos, options);
+    }
+
+    void publish(const MessageT &msg) { publisher_->publish(msg); }
+    void publish(std::unique_ptr<MessageT> msg) { publisher_->publish(std::move(msg)); }
+
+    void activate() { publisher_->on_activate(); }
+    void deactivate() { publisher_->on_deactivate(); }
+
+    typename rclcpp_lifecycle::LifecyclePublisher<MessageT>::SharedPtr publisher() { return publisher_; }
+
+    // set_deadline_callback, set_liveliness_callback unchanged
+
+  private:
+    std::weak_ptr<ContextType> context_;
+    typename rclcpp_lifecycle::LifecyclePublisher<MessageT>::SharedPtr publisher_;
+    // ...
+};
+```
+
+Notes:
+- `LifecycleNode::create_publisher` returns `LifecyclePublisher`, which silently drops `publish()` calls when deactivated.
+- `activate()` / `deactivate()` are called by generated `activate_entities` / `deactivate_entities` — not by user code.
+- The `publisher()` accessor return type changes from `rclcpp::Publisher<MessageT>::SharedPtr` to `rclcpp_lifecycle::LifecyclePublisher<MessageT>::SharedPtr`. Breaking change for anyone calling `publisher()` directly.
+
+#### `subscriber.hpp`
+
+Silently drop messages when not Active. `PRIMARY_STATE_ACTIVE` check in the subscription callback lambda:
+
+```cpp
+template <typename MessageT, typename ContextType> class Subscriber {
+  public:
+    explicit Subscriber(std::shared_ptr<ContextType> context, const std::string &topic_name, const rclcpp::QoS &qos)
+        : context_(context) {
+        // ... default callback setup, QoS event callbacks unchanged ...
+
+        subscription_ = context->node->template create_subscription<MessageT>(
+            topic_name, qos,
+            [this](typename MessageT::ConstSharedPtr msg) {
+                auto ctx = context_.lock();
+                if (!ctx) return;
+                if (ctx->node->get_current_state().id() ==
+                    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+                    callback_(ctx, msg);
+                }
+            }, options);
+    }
+
+  private:
+    std::weak_ptr<ContextType> context_;
+    // ...
+};
+```
+
+#### `service.hpp`
+
+Log a warning and return a default-constructed response when not Active. (ROS2 services have no reject mechanism — the callback always runs and always produces a response. A default-constructed response + warning log is the best cake can do generically.)
+
+Also fixes an existing reference cycle — the old code captured `context` (a `shared_ptr`) in the service lambda. Now captures `weak_ptr`.
+
+```cpp
+template <typename ServiceT, typename ContextType> class Service {
+  public:
+    explicit Service(
+        std::shared_ptr<ContextType> context,
+        const std::string &service_name,
+        const rclcpp::QoS &qos = rclcpp::ServicesQoS()
+    ) {
+        // ... default handler setup unchanged ...
+
+        std::weak_ptr<ContextType> weak_ctx = context;
+        service_ = context->node->template create_service<ServiceT>(
+            service_name,
+            [weak_ctx, this, service_name](
+                const std::shared_ptr<typename ServiceT::Request> request,
+                std::shared_ptr<typename ServiceT::Response> response
+            ) {
+                auto ctx = weak_ctx.lock();
+                if (!ctx) return;
+                if (ctx->node->get_current_state().id() !=
+                    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+                    RCLCPP_WARN(
+                        ctx->node->get_logger(),
+                        "Service '%s': rejected, node not active",
+                        service_name.c_str()
+                    );
+                    return;
+                }
+                request_handler_(ctx, request, response);
+            },
+            qos);
+    }
+};
+```
+
+#### `action_server.hpp`
+
+Reject goals when not Active. Unlike services, the action protocol has a real reject mechanism.
+
+Two changes:
+
+1. Store `rclcpp_lifecycle::LifecycleNode *` instead of `rclcpp::Node *`. Update constructor, factory functions, and context-based factory overload accordingly.
+
+2. Reject goals at the top of `handle_goal`:
+
+```cpp
+rclcpp_action::GoalResponse
+handle_goal(const rclcpp_action::GoalUUID &, std::shared_ptr<const typename ActionT::Goal> goal) {
+    if (node_->get_current_state().id() !=
+        lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+        RCLCPP_WARN(
+            node_->get_logger(),
+            "Action server '%s': Rejecting goal, node not active",
+            server_name_.c_str()
+        );
+        return rclcpp_action::GoalResponse::REJECT;
+    }
+
+    // ... existing validation logic unchanged ...
+}
+```
+
+#### `timer.hpp`
+
+Three changes to both `create_timer` and `create_wall_timer`:
+
+1. **Callback guard**: Wrap user callback to only execute when Active (belt-and-suspenders — catches edge cases like race conditions).
+2. **Start inactive when not Active**: Use `autostart=false` via freestanding `rclcpp::create_timer` / `rclcpp::create_wall_timer` (the node member functions don't expose `autostart`, but the freestanding ones do).
+3. **Capture `weak_ptr`**: Timer callbacks capture `weak_ptr<ContextType>` to avoid reference cycles (timers are stored in `ctx->timers`).
+
+`activate_entities` calls `reset()` on all timers. `deactivate_entities` calls `cancel()`.
+
+```cpp
+template <typename DurationRepT, typename DurationT, typename ContextType, typename CallbackT>
+auto create_timer(
+    std::shared_ptr<ContextType> context,
+    std::chrono::duration<DurationRepT, DurationT> period,
+    CallbackT callback,
+    rclcpp::CallbackGroup::SharedPtr group = nullptr
+) {
+    static_assert(std::is_base_of_v<Context, ContextType>);
+
+    bool autostart = (context->node->get_current_state().id() ==
+        lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+
+    std::weak_ptr<ContextType> weak_ctx = context;
+    auto timer = rclcpp::create_timer(
+        context->node,
+        context->node->get_clock(),
+        rclcpp::Duration(period),
+        [weak_ctx, callback]() {
+            auto ctx = weak_ctx.lock();
+            if (!ctx) return;
+            if (ctx->node->get_current_state().id() ==
+                lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+                callback(ctx);
+            }
+        },
+        group,
+        autostart);
+
+    context->timers.push_back(timer);
+    return timer;
+}
+```
+
+`create_wall_timer` follows the same pattern using `rclcpp::create_wall_timer` with `get_node_base_interface()` and `get_node_timers_interface()`.
 
 ### Error handling and `CallbackReturn` semantics
 
