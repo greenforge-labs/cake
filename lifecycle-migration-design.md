@@ -12,7 +12,7 @@ The lifecycle implementation is split across three layers, each with a single re
 
 1. **`BaseNode`** (hand-written, in cake library) — Lifecycle orchestration. Creates the lifecycle node, creates the context, registers lifecycle callbacks, and defines the state transition logic (when to create/activate/deactivate/destroy entities, when to call user callbacks, how to handle failure/error/shutdown). Provides virtual hooks for the layers below.
 
-2. **Generated `*Base` class** (from Jinja2 template) — Entity plumbing. Overrides virtual methods to create/activate/deactivate/destroy the specific publishers, subscribers, services, timers, etc. defined in `interface.yaml`. Also wraps user callback template parameters into virtual method overrides that BaseNode calls.
+2. **Generated `*Base` class** (from Jinja2 template) — Entity plumbing. Overrides virtual methods to create/activate/deactivate the specific publishers, subscribers, services, timers, etc. defined in `interface.yaml`. Also wraps user callback template parameters into virtual method overrides that BaseNode calls.
 
 3. **User class** (hand-written by the user) — Business logic. Provides the actual callback implementations as free functions passed via template parameters on the generated class.
 
@@ -49,11 +49,18 @@ class BaseNode {
     }
 
   private:
+    // Reset context to default-constructed state, preserving only node reference.
+    // Resets ALL fields — entities AND user state.
+    void reset_context(std::shared_ptr<ContextType> ctx) {
+        *ctx = ContextType{};
+        ctx->node = node_;
+    }
+
     // Lifecycle orchestration — these define the transition logic
     CallbackReturn handle_configure(std::shared_ptr<ContextType> ctx) {
         create_entities(ctx);
         auto result = user_on_configure(ctx);
-        if (result == CallbackReturn::FAILURE) { destroy_entities(ctx); }
+        if (result == CallbackReturn::FAILURE) { reset_context(ctx); }
         return result;
     }
 
@@ -73,20 +80,20 @@ class BaseNode {
 
     CallbackReturn handle_cleanup(std::shared_ptr<ContextType> ctx) {
         auto result = user_on_cleanup(ctx);
-        if (result == CallbackReturn::SUCCESS) { destroy_entities(ctx); }
+        if (result == CallbackReturn::SUCCESS) { reset_context(ctx); }
         return result;
     }
 
     CallbackReturn handle_shutdown(std::shared_ptr<ContextType> ctx) {
         user_on_shutdown(ctx);
         deactivate_entities(ctx);  // idempotent — safe even if never activated
-        destroy_entities(ctx);
+        reset_context(ctx);
         return CallbackReturn::SUCCESS;
     }
 
     CallbackReturn handle_error(std::shared_ptr<ContextType> ctx) {
         deactivate_entities(ctx);
-        destroy_entities(ctx);
+        reset_context(ctx);
         return CallbackReturn::FAILURE;  // → Finalized
     }
 
@@ -95,7 +102,6 @@ class BaseNode {
     virtual void create_entities(std::shared_ptr<ContextType> ctx) {}
     virtual void activate_entities(std::shared_ptr<ContextType> ctx) {}
     virtual void deactivate_entities(std::shared_ptr<ContextType> ctx) {}
-    virtual void destroy_entities(std::shared_ptr<ContextType> ctx) {}
 
     // User callback hooks — generated class overrides to forward to template params
     virtual CallbackReturn user_on_configure(std::shared_ptr<ContextType> ctx) { return CallbackReturn::SUCCESS; }
@@ -109,7 +115,7 @@ class BaseNode {
 ```
 
 Key points:
-- `BaseNode` is templated on `node_name`, `ContextType`, and `extend_options` only — no user callback template parameters.
+- `BaseNode` is templated on `node_name`, `ContextType`, and `extend_options`
 - `ctx` is created as a local in the constructor and captured by the lambdas. It is not a member. The lambdas (and entity weak_ptrs) keep it alive.
 - Lambdas are pure routing — capture `this` + `ctx`, forward to a `handle_*` method.
 - `handle_*` methods encode the lifecycle orchestration: ordering of user callbacks vs entity management, failure/error handling.
@@ -150,13 +156,8 @@ class FooBase : public cake::BaseNode<"foo", ContextType, extend_options> {
         // ...
     }
 
-    void destroy_entities(std::shared_ptr<ContextType> ctx) override {
-        ctx->publishers.cmd_vel.reset();
-        ctx->subscribers.odom.reset();
-        ctx->param_listener.reset();
-        ctx->timers.clear();
-        // ...
-    }
+    // No destroy_entities — BaseNode::reset_context() handles full cleanup
+    // via *ctx = ContextType{}, which resets all fields (entities + user state).
 
     // User callback forwarding
     CallbackReturn user_on_configure(std::shared_ptr<ContextType> ctx) override { return on_configure_func(ctx); }
@@ -181,9 +182,11 @@ The context mirrors the lifecycle state machine:
 
 The context is never null. It is a long-lived shell that gets populated on configure and depopulated on cleanup.
 
-#### Reconfigurability
+#### Reconfigurability and `reset_context()`
 
-The lifecycle state machine supports `Inactive → cleanup → Unconfigured → configure → Inactive` (reconfigure cycle). On cleanup, `destroy_entities()` resets entity fields on the context (publishers, subscribers, etc. set to null). On the next configure, `create_entities()` recreates them from scratch. The context shell persists — user state on a derived context is **not** automatically reset. If users need state reset on reconfigure, they do it explicitly in `on_configure` or `on_cleanup`.
+The lifecycle state machine supports `Inactive → cleanup → Unconfigured → configure → Inactive` (reconfigure cycle). On cleanup (and on configure-failure, shutdown, and error), `reset_context()` resets the context via `*ctx = ContextType{}; ctx->node = node_`. This resets **all** fields — entities AND user state — back to their default-constructed values. Only `ctx->node` is re-assigned. On the next configure, `create_entities()` repopulates everything from scratch.
+
+This means user state on a derived context (e.g. `int counter = 0`) is automatically reset on reconfigure — no user action needed. The `shared_ptr` itself doesn't change (all lambdas still point to the same object), only its contents are reset.
 
 ### `context.hpp`
 
