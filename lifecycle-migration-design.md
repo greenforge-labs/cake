@@ -249,7 +249,18 @@ The following sections are placeholders for decisions that still need to be work
 
 ### Entity behavior during lifecycle transitions
 
-How each entity type (publishers, subscribers, services, action servers, timers) behaves in each lifecycle state and during transitions. The intentional asymmetry between publishers (outbound, controlled by explicit activate/deactivate) and everything else (inbound, guarded by state check).
+There is an intentional asymmetry between publishers (outbound) and everything else (inbound/scheduled).
+
+**Publishers** use `LifecyclePublisher` under the hood. Publishing is a silent no-op when deactivated. They are controlled by explicit `activate()` / `deactivate()` calls in `activate_entities` / `deactivate_entities` — not by node state checks. This means they stay functional during transitions until `deactivate_entities()` actually runs. The user can publish from `on_deactivate` and `on_shutdown` callbacks (useful for sending a final status or safe command to hardware).
+
+**Subscribers, Services, Action Servers, and Timers** are all guarded by a `PRIMARY_STATE_ACTIVE` check in their callback wrappers, inside the entity wrapper classes themselves (`subscriber.hpp`, `service.hpp`, etc.). This means the guard is always on — no generated code needed.
+
+- **Subscribers**: Silently drop messages when not Active.
+- **Services**: Log a warning and return a default-constructed response. (ROS2 services have no reject mechanism — the callback always runs and always produces a response. A default-constructed response + warning log is the best cake can do generically.)
+- **Action servers**: Reject goals with `GoalResponse::REJECT` and log a warning. (Unlike services, the action protocol has a real reject mechanism.)
+- **Timers**: Callback guard (no-op when not Active) + `cancel()` / `reset()` in `deactivate_entities` / `activate_entities`. Also `autostart=false` when created outside Active state. The callback guard is belt-and-suspenders — `cancel()` should prevent firing, but the guard catches edge cases like race conditions.
+
+**Rationale**: Publishers are outbound — the node decides when to publish, and sending a final message during teardown is valuable. Everything else involves accepting inbound work or executing scheduled logic; letting that fire during teardown risks running user code in a partially-torn-down state.
 
 ### Error handling and `CallbackReturn` semantics
 
