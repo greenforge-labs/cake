@@ -498,7 +498,147 @@ Note: `cake_auto_package.cmake` hardcodes `target_link_libraries(... INTERFACE r
 
 ### Code generator changes
 
-Jinja2 template rewrite. Python generator changes. Template parameter signature. *(To be discussed.)*
+#### Jinja2 template: `node_interface.hpp.jinja2`
+
+The generated `*Base` class changes from a monolithic constructor to virtual method overrides on `BaseNode`.
+
+**Template parameter signature** changes from:
+
+```cpp
+template <
+    typename ContextType,
+    auto init_func,
+    auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
+```
+
+To:
+
+```cpp
+using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
+
+template <
+    typename ContextType,
+    auto on_configure_func,
+    auto on_activate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_deactivate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_cleanup_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_shutdown_func = [](std::shared_ptr<ContextType>) {},
+    auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
+```
+
+The `using CallbackReturn` alias is emitted at namespace scope before the class definition, so it's available in the template parameter defaults.
+
+**Base class** changes from `cake::BaseNode<"{{ node_name }}", extend_options>` to `cake::BaseNode<"{{ node_name }}", ContextType, extend_options>`.
+
+**Constructor replaced by virtual overrides.** The current constructor creates ctx, creates all entities, and calls `init_func`. In the new design, the constructor just calls the BaseNode constructor. The generated class overrides:
+
+- `create_entities(ctx)` — params, publishers, subscribers, services, service clients, actions, action clients. Same code as the current constructor body, just moved into this method. `for_each_param` loops are identical.
+- `activate_entities(ctx)` — activate all publishers, reset all timers.
+- `deactivate_entities(ctx)` — cancel all timers, deactivate all publishers.
+- `user_on_configure(ctx)` → `on_configure_func(ctx)`
+- `user_on_activate(ctx)` → `on_activate_func(ctx)`
+- `user_on_deactivate(ctx)` → `on_deactivate_func(ctx)`
+- `user_on_cleanup(ctx)` → `on_cleanup_func(ctx)`
+- `user_on_shutdown(ctx)` → `on_shutdown_func(ctx)`
+
+**Includes** — add `rclcpp_lifecycle/lifecycle_node.hpp`. `lifecycle_msgs/msg/state.hpp` is not needed in generated code (it's in the entity wrappers).
+
+**`name_expr` compatibility** — The Python generator hardcodes `ctx->params.X` in `name_expr` values. This continues to work because the parameter to `create_entities` is named `ctx`.
+
+**Generated class sketch** (same as in Architecture section above, but for reference):
+
+```cpp
+using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
+
+template <
+    typename ContextType,
+    auto on_configure_func,
+    auto on_activate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_deactivate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_cleanup_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_shutdown_func = [](std::shared_ptr<ContextType>) {},
+    auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
+class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", ContextType, extend_options> {
+    static_assert(
+        std::is_base_of_v<{{ class_name }}Context<ContextType>, ContextType>,
+        "ContextType must derive from {{ class_name }}Context"
+    );
+
+  protected:
+    void create_entities(std::shared_ptr<ContextType> ctx) override {
+        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
+        ctx->params = ctx->param_listener->get_params();
+
+        // publishers, subscribers, services, service_clients, actions, action_clients
+        // (same Jinja2 loops as current template, referencing ctx->)
+    }
+
+    void activate_entities(std::shared_ptr<ContextType> ctx) override {
+        {%- for pub in publishers %}
+        {%- if pub.for_each_param %}
+        for (auto &[key, pub] : ctx->publishers.{{ pub.field_name }}) { pub->activate(); }
+        {%- else %}
+        ctx->publishers.{{ pub.field_name }}->activate();
+        {%- endif %}
+        {%- endfor %}
+        for (auto &t : ctx->timers) { t->reset(); }
+    }
+
+    void deactivate_entities(std::shared_ptr<ContextType> ctx) override {
+        for (auto &t : ctx->timers) { t->cancel(); }
+        {%- for pub in publishers %}
+        {%- if pub.for_each_param %}
+        for (auto &[key, pub] : ctx->publishers.{{ pub.field_name }}) { pub->deactivate(); }
+        {%- else %}
+        ctx->publishers.{{ pub.field_name }}->deactivate();
+        {%- endif %}
+        {%- endfor %}
+    }
+
+    CallbackReturn user_on_configure(std::shared_ptr<ContextType> ctx) override { return on_configure_func(ctx); }
+    CallbackReturn user_on_activate(std::shared_ptr<ContextType> ctx) override { return on_activate_func(ctx); }
+    CallbackReturn user_on_deactivate(std::shared_ptr<ContextType> ctx) override { return on_deactivate_func(ctx); }
+    CallbackReturn user_on_cleanup(std::shared_ptr<ContextType> ctx) override { return on_cleanup_func(ctx); }
+    void user_on_shutdown(std::shared_ptr<ContextType> ctx) override { on_shutdown_func(ctx); }
+};
+```
+
+**Entity struct definitions** (Publishers, Subscribers, Services, etc.) and the **Context struct definition** are unchanged.
+
+#### `static_assert` placement
+
+Two levels of assertion:
+
+1. **`BaseNode`** asserts `ContextType` derives from `cake::Context`:
+   ```cpp
+   static_assert(std::is_base_of_v<Context, ContextType>,
+       "ContextType must derive from cake::Context");
+   ```
+
+2. **Generated class** asserts `ContextType` derives from the specific generated context:
+   ```cpp
+   static_assert(std::is_base_of_v<{{ class_name }}Context<ContextType>, ContextType>,
+       "ContextType must derive from {{ class_name }}Context");
+   ```
+
+3. **Entity wrappers** (`publisher.hpp`, `subscriber.hpp`, `service.hpp`, `action_server.hpp`, `timer.hpp`) all assert `ContextType` derives from `cake::Context`:
+   ```cpp
+   static_assert(std::is_base_of_v<Context, ContextType>,
+       "ContextType must derive from cake::Context");
+   ```
+   Currently only `timer.hpp` has this. Add to `publisher.hpp`, `subscriber.hpp`, `service.hpp`, and `action_server.hpp`.
+
+#### Registration template: `node_registration.cpp.jinja2`
+
+No changes. `RCLCPP_COMPONENTS_REGISTER_NODE` works with lifecycle nodes.
+
+#### Python generator: `generate_node_interface.py`
+
+No schema changes to `interface.yaml`. No new template variables needed. The generator itself only changes in how it renders the Jinja2 template — same `publishers`, `subscribers`, `services`, `actions`, etc. lists.
+
+#### Python node template: `node_interface.py.jinja2`
+
+Out of scope for this migration.
 
 ### Tests and examples
 
