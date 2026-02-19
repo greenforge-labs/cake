@@ -580,9 +580,9 @@ rclcpp's `execute_callback` (in `lifecycle_node_interface_impl.cpp`) wraps every
 1. rclcpp catches it and logs the error.
 2. The return code is set to `CallbackReturn::ERROR`.
 3. The state machine enters ErrorProcessing, which invokes our `on_error`.
-4. `on_error` calls `destroy_context_()` → node goes to **Finalized**.
+4. `on_error` deactivates entities and destroys the context → node goes to **Finalized**.
 
-This is sufficient because destroying is a superset of deactivating — `destroy_context_()` cleans up regardless of what partial state the node was in when the exception fired. There is no case where we need our own catch to run intermediate teardown before `on_error`.
+This is sufficient because `on_error` handles teardown from any prior state — `deactivate_entities_()` is idempotent (safe to call even if entities were never activated), and `destroy_context_()` frees the rest. There is no case where we need our own catch to run intermediate teardown before `on_error`.
 
 Note: only `std::exception` (and subclasses) are caught. A non-`std::exception` throw (e.g. `throw 42`) propagates uncaught and terminates the process. This is standard C++ — don't do that.
 
@@ -612,11 +612,12 @@ Note: `on_deactivate_func` and `on_cleanup_func` are **not** called during shutd
 
 #### New: `on_error` override
 
-Called when any transition callback returns `CallbackReturn::ERROR` (not `FAILURE` — that simply bounces back to the previous primary state). Cleans up the context and returns `FAILURE`, which transitions the node to **Finalized** (terminal). `ERROR` is unrecoverable — the node cannot be reconfigured. No user callback.
+Called when any transition callback returns `CallbackReturn::ERROR` (not `FAILURE` — that simply bounces back to the previous primary state). Deactivates entities and destroys the context, then returns `FAILURE`, which transitions the node to **Finalized** (terminal). `ERROR` is unrecoverable — the node cannot be reconfigured. No user callback. `deactivate_entities_()` is idempotent — safe to call regardless of whether entities were ever activated.
 
 ```cpp
 CallbackReturn on_error(const rclcpp_lifecycle::State &) override {
     if (ctx_) {
+        deactivate_entities_();
         destroy_context_();
     }
     return CallbackReturn::FAILURE;  // → Finalized
@@ -842,7 +843,7 @@ There is no programmatic way to enter the ErrorProcessing state. `on_error` is o
 
 | Step | What happens | `ctx_` state |
 |---|---|---|
-| `on_error` | If `ctx_` exists: `destroy_context_()`. If already null: no-op (defensive guard — in practice `ctx_` should always exist here) | null |
+| `on_error` | If `ctx_` exists: `deactivate_entities_()` (idempotent), then `destroy_context_()`. If already null: no-op (defensive guard — in practice `ctx_` should always exist here) | null |
 | | Returns FAILURE → **Finalized**. ERROR is unrecoverable — node must be destroyed and recreated | null |
 
 ### User callback summary
