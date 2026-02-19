@@ -293,22 +293,39 @@ This is sufficient because `handle_error` can tear down from any state — `deac
 
 Only `std::exception` subclasses are caught. A non-`std::exception` throw (e.g. `throw 42`) propagates uncaught and terminates the process.
 
-### Shutdown
-
-`on_shutdown` behavior from each primary state. Void return (cannot block). Relationship to `on_deactivate` / `on_cleanup`.
-
-### Code generator changes
-
-Jinja2 template rewrite. Python generator changes. Template parameter signature.
-
 ### Thread removal
 
-`thread.hpp` removed. Rationale and alternatives.
+`thread.hpp` is removed entirely. Threads don't fit the lifecycle model — they hold long-lived references to the context, preventing cleanup, and require explicit stop/join coordination that cake can't manage generically. Users who need threads can manage them outside of cake. Timers and callback groups cover most use cases that `create_thread` was used for.
+
+The `threads` vector is also removed from `context.hpp`.
 
 ### Package configuration
 
-`rclcpp_lifecycle` and `lifecycle_msgs` dependencies. Downstream package impact.
+Add dependencies to `cake/package.xml`:
+
+```xml
+<depend>rclcpp_lifecycle</depend>
+<depend>lifecycle_msgs</depend>
+```
+
+`cake/CMakeLists.txt` uses `ament_auto_find_build_dependencies()`, so it picks these up from `package.xml` automatically — no CMake changes needed.
+
+Downstream packages that use cake also need `rclcpp_lifecycle` and `lifecycle_msgs` in their `package.xml`. `cake_auto_package()` uses `ament_auto_find_build_dependencies()` which reads the downstream package's own `package.xml`, so adding the deps there is sufficient.
+
+Note: `cake_auto_package.cmake` hardcodes `target_link_libraries(... INTERFACE rclcpp::rclcpp)` for generated interface libraries (line 255). This may need `rclcpp_lifecycle::rclcpp_lifecycle` added, or it may work transitively through cake's headers — verify during implementation.
+
+### Code generator changes
+
+Jinja2 template rewrite. Python generator changes. Template parameter signature. *(To be discussed.)*
 
 ### Tests and examples
 
-Golden file regeneration. `cake_example` migration.
+Every fixture in `cake/tests/fixtures/` has an `expected_cpp/` directory with golden-file outputs. All need regeneration to match the new template output.
+
+Workflow:
+1. Update the Jinja2 template and entity wrappers.
+2. Run the generator against each fixture's `input.yaml`.
+3. Use `accept_outputs.sh` to update golden files.
+4. Verify with `run_tests.sh`.
+
+`cake_example` needs updating: rename `init` → `on_configure`, return `CallbackReturn::SUCCESS`.
