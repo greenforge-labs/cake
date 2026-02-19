@@ -205,13 +205,47 @@ Entity wrappers (Publisher, Subscriber, Service) and timer callbacks store `weak
 
 ---
 
+## User callback API
+
+Cake owns the ROS entity lifecycle — creating, activating, deactivating, and destroying publishers, subscribers, services, timers, and action servers. The user callbacks are for managing custom state and external resources that cake doesn't know about.
+
+### Callbacks
+
+Five user callbacks, passed as template parameters on the generated class:
+
+| Callback | Required? | Return | Purpose |
+|---|---|---|---|
+| `on_configure` | **Yes** (no default) | `CallbackReturn` | Replaces `init`. Wire up subscriber/service callbacks, create timers, initialize custom context fields. |
+| `on_activate` | No | `CallbackReturn` | Connect external systems, arm hardware. Most users skip. |
+| `on_deactivate` | No | `CallbackReturn` | Disconnect external systems, disarm hardware. Most users skip. |
+| `on_cleanup` | No | `CallbackReturn` | Release non-RAII resources. Most users skip. |
+| `on_shutdown` | No | `void` | Final cleanup before teardown. Cannot block shutdown. |
+
+`on_configure` is required because it doesn't make sense to set up entities without providing handlers for them.
+
+If all custom state lives on the context and uses RAII, only `on_configure` needs a user implementation.
+
+### Ordering relative to entity management
+
+The ordering of user callbacks vs cake's entity management is encoded in `BaseNode::handle_*` methods:
+
+- **configure**: `create_entities` → `user_on_configure`. Entities exist when the user callback runs, so the user can wire up subscriber/service callbacks and create timers.
+- **activate**: `user_on_activate` → `activate_entities`. User runs first. If the user returns FAILURE, nothing was activated — no rollback needed.
+- **deactivate**: `user_on_deactivate` → `deactivate_entities`. User runs first. Publishers are still activated during the user callback — the user can publish a final status.
+- **cleanup**: `user_on_cleanup` → `reset_context`. User runs first, then the context is wiped.
+- **shutdown**: `user_on_shutdown` → `deactivate_entities` → `reset_context`. Always called, always succeeds.
+
+### `on_shutdown` details
+
+`on_shutdown` has `void` return — it cannot block shutdown. The lifecycle state machine does not allow failure on the shutdown transition, and throwing an exception is handled externally to cake (by rclcpp).
+
+`on_shutdown` is always called regardless of the node's current primary state (Active, Inactive, or Unconfigured). From Unconfigured the context exists but is in its default-constructed state (only `ctx->node` is set). This is simpler than guarding — principle of least surprise.
+
+---
+
 ## Decisions (to be discussed)
 
 The following sections are placeholders for decisions that still need to be worked through and documented:
-
-### User callback API
-
-`on_configure` required (replaces `init`), others optional. Return types and `CallbackReturn` semantics. Ordering of user callbacks relative to entity management (user runs first on activate, user runs first on deactivate, etc.).
 
 ### Entity behavior during lifecycle transitions
 
