@@ -33,7 +33,7 @@ class BaseNode {
         : node_(std::make_shared<rclcpp_lifecycle::LifecycleNode>(node_name.c_str(), extend_options(options)))
     {
         auto ctx = std::make_shared<ContextType>();
-        ctx->node = node_;
+        reset_context(ctx);
 
         // Lambdas capture ctx and route to methods
         node_->register_on_configure([this, ctx](const auto &) { return handle_configure(ctx); });
