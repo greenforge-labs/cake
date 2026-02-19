@@ -264,7 +264,34 @@ There is an intentional asymmetry between publishers (outbound) and everything e
 
 ### Error handling and `CallbackReturn` semantics
 
-`SUCCESS` / `FAILURE` / `ERROR` meanings. Exception handling (delegated to rclcpp). `on_error` behavior.
+All user lifecycle callbacks (except `on_shutdown`) return `CallbackReturn`. The three values map to the rclcpp lifecycle state machine:
+
+- **`SUCCESS`** — Transition proceeds normally to the target state.
+- **`FAILURE`** — Transition is rolled back to the previous primary state. The node can retry. Use this for transient problems: a config file isn't available yet, a hardware connection timed out, an external dependency isn't ready.
+- **`ERROR`** — Unrecoverable error. The node enters ErrorProcessing, `on_error` fires (cleans up), and the node goes to **Finalized** (terminal). The node cannot be reconfigured — it must be destroyed and recreated. Use this for corrupted internal state, hardware faults, invariant violations.
+
+What cake does on each return value (encoded in `BaseNode::handle_*` methods):
+
+| Transition | SUCCESS | FAILURE | ERROR |
+|---|---|---|---|
+| configure | → Inactive | `reset_context()` → Unconfigured | `handle_error` → Finalized |
+| activate | `activate_entities()` → Active | nothing to roll back → Inactive | `handle_error` → Finalized |
+| deactivate | `deactivate_entities()` → Inactive | stays Active (nothing torn down) | `handle_error` → Finalized |
+| cleanup | `reset_context()` → Unconfigured | stays Inactive (context preserved) | `handle_error` → Finalized |
+
+`handle_error` does `deactivate_entities(ctx); reset_context(ctx); return FAILURE;` — idempotent cleanup from any state, then Finalized. There is no user callback for `on_error` — ERROR is unrecoverable, there's nothing useful the user can do.
+
+#### Exception handling
+
+No try/catch in cake. rclcpp's `execute_callback` wraps every transition callback in `try/catch(const std::exception&)`. If a user callback throws:
+
+1. rclcpp catches it and logs the error.
+2. The return code is set to `CallbackReturn::ERROR`.
+3. The state machine enters ErrorProcessing → `handle_error` fires → Finalized.
+
+This is sufficient because `handle_error` can tear down from any state — `deactivate_entities` is idempotent and `reset_context` wipes everything. No intermediate catch needed.
+
+Only `std::exception` subclasses are caught. A non-`std::exception` throw (e.g. `throw 42`) propagates uncaught and terminates the process.
 
 ### Shutdown
 
