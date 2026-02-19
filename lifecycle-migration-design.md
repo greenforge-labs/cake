@@ -28,6 +28,9 @@ The lifecycle implementation is split across three layers, each with a single re
 template <fixed_string node_name, typename ContextType,
           auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
 class BaseNode {
+    static_assert(std::is_base_of_v<Context, ContextType>,
+        "ContextType must derive from cake::Context");
+
   public:
     explicit BaseNode(const rclcpp::NodeOptions &options)
         : node_(std::make_shared<rclcpp_lifecycle::LifecycleNode>(node_name.c_str(), extend_options(options)))
@@ -116,7 +119,7 @@ class BaseNode {
 
 Key points:
 - `BaseNode` is templated on `node_name`, `ContextType`, and `extend_options`
-- `ctx` is created as a local in the constructor and captured by the lambdas. It is not a member. The lambdas (and entity weak_ptrs) keep it alive.
+- `ctx` is created as a local in the constructor and captured by the lambdas. It is not a member. The lambdas keep it alive (entity wrappers store only `weak_ptr`s, which do not extend lifetime).
 - Lambdas are pure routing — capture `this` + `ctx`, forward to a `handle_*` method.
 - `handle_*` methods encode the lifecycle orchestration: ordering of user callbacks vs entity management, failure/error handling.
 - Virtual methods split into two groups: entity lifecycle (generated class fills in) and user callback hooks (generated class wraps template params).
@@ -152,8 +155,8 @@ class FooBase : public cake::BaseNode<"foo", ContextType, extend_options> {
 
     void deactivate_entities(std::shared_ptr<ContextType> ctx) override {
         for (auto &t : ctx->timers) { t->cancel(); }
-        ctx->publishers.cmd_vel->deactivate();
-        // ...
+        if (ctx->publishers.cmd_vel) { ctx->publishers.cmd_vel->deactivate(); }
+        // ... (null-check each entity)
     }
 
     // No destroy_entities — BaseNode::reset_context() handles full cleanup
@@ -369,9 +372,9 @@ template <typename ServiceT, typename ContextType> class Service {
 
 ### `action_server.hpp`
 
-Reject goals when not Active. Unlike services, the action protocol has a real reject mechanism.
+Reject goals when not Active and abort in-flight goals on deactivation. Unlike services, the action protocol has a real reject mechanism, and goal handles support explicit abort.
 
-Two changes:
+Three changes:
 
 1. Store `rclcpp_lifecycle::LifecycleNode *` instead of `rclcpp::Node *`. Update constructor, factory functions, and context-based factory overload accordingly.
 
@@ -393,6 +396,25 @@ handle_goal(const rclcpp_action::GoalUUID &, std::shared_ptr<const typename Acti
     // ... existing validation logic unchanged ...
 }
 ```
+
+3. **Abort the active goal on deactivation.** Add a `deactivate()` method — same pattern as the existing destructor, which already aborts and nulls the active goal handle:
+
+```cpp
+// Called by generated deactivate_entities
+void deactivate() {
+    if (active_goal_handle_) {
+        RCLCPP_WARN(
+            node_->get_logger(),
+            "Action server '%s': Aborting active goal, node deactivating",
+            server_name_.c_str()
+        );
+        active_goal_handle_->abort(std::make_shared<typename ActionT::Result>());
+        active_goal_handle_ = nullptr;
+    }
+}
+```
+
+No new data structures needed — `SingleGoalActionServer` already tracks the single active goal via `active_goal_handle_`. No mutex needed — consistent with the existing threading model (single-threaded executor). The `handle_goal` rejection (change 2) prevents new goals; `deactivate()` handles the goal already in progress.
 
 ### `timer.hpp`
 
@@ -439,6 +461,10 @@ auto create_timer(
 ```
 
 `create_wall_timer` follows the same pattern using `rclcpp::create_wall_timer` with `get_node_base_interface()` and `get_node_timers_interface()`.
+
+### Service clients and action clients
+
+Service clients and action clients are outbound — the user decides when to send requests or goals. They have no lifecycle guards and no `activate()`/`deactivate()` methods. They are created normally in `create_entities` and destroyed on context reset. It is the user's responsibility to only call them at appropriate times (typically from callbacks that already have lifecycle guards, or from user lifecycle callbacks).
 
 ---
 
@@ -592,9 +618,16 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", ContextTyp
         for (auto &t : ctx->timers) { t->cancel(); }
         {%- for pub in publishers %}
         {%- if pub.for_each_param %}
-        for (auto &[key, pub] : ctx->publishers.{{ pub.field_name }}) { pub->deactivate(); }
+        for (auto &[key, pub] : ctx->publishers.{{ pub.field_name }}) { if (pub) { pub->deactivate(); } }
         {%- else %}
-        ctx->publishers.{{ pub.field_name }}->deactivate();
+        if (ctx->publishers.{{ pub.field_name }}) { ctx->publishers.{{ pub.field_name }}->deactivate(); }
+        {%- endif %}
+        {%- endfor %}
+        {%- for action in actions %}
+        {%- if action.for_each_param %}
+        for (auto &[key, action] : ctx->actions.{{ action.field_name }}) { if (action) { action->deactivate(); } }
+        {%- else %}
+        if (ctx->actions.{{ action.field_name }}) { ctx->actions.{{ action.field_name }}->deactivate(); }
         {%- endif %}
         {%- endfor %}
     }
@@ -611,7 +644,7 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", ContextTyp
 
 ### `static_assert` placement
 
-Two levels of assertion:
+Three levels of assertion:
 
 1. **`BaseNode`** asserts `ContextType` derives from `cake::Context`:
    ```cpp
