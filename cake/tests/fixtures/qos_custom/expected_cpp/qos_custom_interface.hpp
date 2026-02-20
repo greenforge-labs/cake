@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
 #include <cake/context.hpp>
@@ -42,22 +43,27 @@ template <typename DerivedContextType> struct QosCustomContext : cake::Context {
     Params params;
 };
 
+using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 template <
     typename ContextType,
-    auto init_func,
+    auto on_configure_func,
+    auto on_activate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_deactivate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_cleanup_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
+    auto on_shutdown_func = [](std::shared_ptr<ContextType>) {},
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class QosCustomBase : public cake::BaseNode<"qos_custom", extend_options> {
+class QosCustomBase : public cake::BaseNode<"qos_custom", ContextType, extend_options> {
+    static_assert(
+        std::is_base_of_v<QosCustomContext<ContextType>, ContextType>, "ContextType must be a child of QosCustomContext"
+    );
+
   public:
-    explicit QosCustomBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"qos_custom", extend_options>(options) {
-        static_assert(
-            std::is_base_of_v<QosCustomContext<ContextType>, ContextType>, "ContextType must be a child of QosCustomContext"
-        );
+    explicit QosCustomBase(const rclcpp::NodeOptions &options)
+        : cake::BaseNode<"qos_custom", ContextType, extend_options>(options) {}
 
-        // init context
-        auto ctx = std::make_shared<ContextType>();
-        ctx->node = this->node_;
-
+  protected:
+    void create_entities(std::shared_ptr<ContextType> ctx) override {
         // init parameters (must be before publishers/subscribers for QoS param refs)
         ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
         ctx->params = ctx->param_listener->get_params();
@@ -68,8 +74,25 @@ class QosCustomBase : public cake::BaseNode<"qos_custom", extend_options> {
         // init subscribers
         ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(rclcpp::KeepAll()).reliable());
         ctx->subscribers.deadline_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "deadline_topic", rclcpp::QoS(20).reliable().deadline(rclcpp::Duration::from_nanoseconds(1000000000)).lifespan(rclcpp::Duration::from_nanoseconds(500000000)));
-        init_func(ctx);
     }
+
+    void activate_entities(std::shared_ptr<ContextType> ctx) override {
+        ctx->publishers.reliable_topic->activate();
+        ctx->publishers.best_effort_topic->activate();
+        for (auto &t : ctx->timers) { t->reset(); }
+    }
+
+    void deactivate_entities(std::shared_ptr<ContextType> ctx) override {
+        for (auto &t : ctx->timers) { t->cancel(); }
+        if (ctx->publishers.reliable_topic) { ctx->publishers.reliable_topic->deactivate(); }
+        if (ctx->publishers.best_effort_topic) { ctx->publishers.best_effort_topic->deactivate(); }
+    }
+
+    CallbackReturn user_on_configure(std::shared_ptr<ContextType> ctx) override { return on_configure_func(ctx); }
+    CallbackReturn user_on_activate(std::shared_ptr<ContextType> ctx) override { return on_activate_func(ctx); }
+    CallbackReturn user_on_deactivate(std::shared_ptr<ContextType> ctx) override { return on_deactivate_func(ctx); }
+    CallbackReturn user_on_cleanup(std::shared_ptr<ContextType> ctx) override { return on_cleanup_func(ctx); }
+    void user_on_shutdown(std::shared_ptr<ContextType> ctx) override { on_shutdown_func(ctx); }
 };
 
 } // namespace test_package::qos_custom

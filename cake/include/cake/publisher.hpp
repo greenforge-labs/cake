@@ -2,23 +2,34 @@
 
 #include <functional>
 #include <memory>
+#include <type_traits>
+
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+
+#include "context.hpp"
 
 namespace cake {
 
 template <typename MessageT, typename ContextType> class Publisher {
+    static_assert(std::is_base_of_v<Context, ContextType>, "ContextType must derive from cake::Context");
+
   public:
     explicit Publisher(std::shared_ptr<ContextType> context, const std::string &topic_name, const rclcpp::QoS &qos)
         : context_(context) {
         rclcpp::PublisherOptions options;
         options.event_callbacks.deadline_callback = [this](rclcpp::QOSDeadlineOfferedInfo &event) {
-            if (deadline_callback_) {
-                deadline_callback_(context_, event);
+            if (auto ctx = context_.lock()) {
+                if (deadline_callback_) {
+                    deadline_callback_(ctx, event);
+                }
             }
         };
         options.event_callbacks.liveliness_callback = [this](rclcpp::QOSLivelinessLostInfo &event) {
-            if (liveliness_callback_) {
-                liveliness_callback_(context_, event);
+            if (auto ctx = context_.lock()) {
+                if (liveliness_callback_) {
+                    liveliness_callback_(ctx, event);
+                }
             }
         };
 
@@ -28,8 +39,11 @@ template <typename MessageT, typename ContextType> class Publisher {
     void publish(const MessageT &msg) { publisher_->publish(msg); }
     void publish(std::unique_ptr<MessageT> msg) { publisher_->publish(std::move(msg)); }
 
+    void activate() { publisher_->on_activate(); }
+    void deactivate() { publisher_->on_deactivate(); }
+
     // Access underlying publisher for advanced use (wait_for_all_acked, get_subscription_count, etc.)
-    typename rclcpp::Publisher<MessageT>::SharedPtr publisher() { return publisher_; }
+    typename rclcpp_lifecycle::LifecyclePublisher<MessageT>::SharedPtr publisher() { return publisher_; }
 
     void
     set_deadline_callback(std::function<void(std::shared_ptr<ContextType>, rclcpp::QOSDeadlineOfferedInfo &)> callback
@@ -44,8 +58,8 @@ template <typename MessageT, typename ContextType> class Publisher {
     }
 
   private:
-    std::shared_ptr<ContextType> context_;
-    typename rclcpp::Publisher<MessageT>::SharedPtr publisher_;
+    std::weak_ptr<ContextType> context_;
+    typename rclcpp_lifecycle::LifecyclePublisher<MessageT>::SharedPtr publisher_;
 
     std::function<void(std::shared_ptr<ContextType>, rclcpp::QOSDeadlineOfferedInfo &)> deadline_callback_;
     std::function<void(std::shared_ptr<ContextType>, rclcpp::QOSLivelinessLostInfo &)> liveliness_callback_;

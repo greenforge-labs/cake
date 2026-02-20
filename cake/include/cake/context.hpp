@@ -1,16 +1,15 @@
 #pragma once
 
-#include <thread>
 #include <vector>
 
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 
 namespace cake {
 
 struct Context {
-    rclcpp::Node::SharedPtr node;
+    rclcpp_lifecycle::LifecycleNode::SharedPtr node;
     std::vector<rclcpp::TimerBase::SharedPtr> timers;
-    std::vector<std::thread> threads;
 };
 
 } // namespace cake

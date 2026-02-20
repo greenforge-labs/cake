@@ -72,7 +72,7 @@ void action_callback(std::shared_ptr<Context> ctx) {
     }
 }
 
-void init(std::shared_ptr<Context> ctx) {
+CallbackReturn on_configure(std::shared_ptr<Context> ctx) {
     RCLCPP_INFO(ctx->node->get_logger(), "Hello from the test range! This is **my_node**.");
     RCLCPP_INFO(ctx->node->get_logger(), "spicy_param value: %s", ctx->params.spicy_param.c_str());
 
@@ -91,6 +91,8 @@ void init(std::shared_ptr<Context> ctx) {
 
     ctx->actions.my_action->set_options({.new_goals_replace_current_goal = true}); // accept defaults
     cake::create_timer(ctx, 1000ms, action_callback);
+
+    return CallbackReturn::SUCCESS;
 }
 
 } // namespace cake_example::my_node
