@@ -40,6 +40,8 @@ class BaseNode {
 
   private:
     void reset_context(std::shared_ptr<ContextType> ctx) {
+        // TODO: this only works when using a single-threaded executor assumption (otherwise ctx->node
+        // access can data race). At the moment, we are happy with just using single threading.
         *ctx = ContextType{};
         ctx->node = node_;
     }
@@ -55,16 +57,18 @@ class BaseNode {
 
     CallbackReturn handle_activate(std::shared_ptr<ContextType> ctx) {
         auto result = user_on_activate(ctx);
-        if (result != CallbackReturn::SUCCESS)
+        if (result != CallbackReturn::SUCCESS) {
             return result;
+        }
         activate_entities(ctx);
         return result;
     }
 
     CallbackReturn handle_deactivate(std::shared_ptr<ContextType> ctx) {
         auto result = user_on_deactivate(ctx);
-        if (result != CallbackReturn::SUCCESS)
+        if (result != CallbackReturn::SUCCESS) {
             return result;
+        }
         deactivate_entities(ctx);
         return result;
     }
@@ -87,19 +91,20 @@ class BaseNode {
     CallbackReturn handle_error(std::shared_ptr<ContextType> ctx) {
         deactivate_entities(ctx);
         reset_context(ctx);
+        // always return failure so that we end in Finalized (our assertion is errors are unrecoverable)
         return CallbackReturn::FAILURE;
     }
 
   protected:
-    virtual void create_entities(std::shared_ptr<ContextType> ctx) {}
-    virtual void activate_entities(std::shared_ptr<ContextType> ctx) {}
-    virtual void deactivate_entities(std::shared_ptr<ContextType> ctx) {}
+    virtual void create_entities(std::shared_ptr<ContextType> /*ctx*/) {}
+    virtual void activate_entities(std::shared_ptr<ContextType> /*ctx*/) {}
+    virtual void deactivate_entities(std::shared_ptr<ContextType> /*ctx*/) {}
 
-    virtual CallbackReturn user_on_configure(std::shared_ptr<ContextType> ctx) { return CallbackReturn::SUCCESS; }
-    virtual CallbackReturn user_on_activate(std::shared_ptr<ContextType> ctx) { return CallbackReturn::SUCCESS; }
-    virtual CallbackReturn user_on_deactivate(std::shared_ptr<ContextType> ctx) { return CallbackReturn::SUCCESS; }
-    virtual CallbackReturn user_on_cleanup(std::shared_ptr<ContextType> ctx) { return CallbackReturn::SUCCESS; }
-    virtual void user_on_shutdown(std::shared_ptr<ContextType> ctx) {}
+    virtual CallbackReturn user_on_configure(std::shared_ptr<ContextType> /*ctx*/) { return CallbackReturn::SUCCESS; }
+    virtual CallbackReturn user_on_activate(std::shared_ptr<ContextType> /*ctx*/) { return CallbackReturn::SUCCESS; }
+    virtual CallbackReturn user_on_deactivate(std::shared_ptr<ContextType> /*ctx*/) { return CallbackReturn::SUCCESS; }
+    virtual CallbackReturn user_on_cleanup(std::shared_ptr<ContextType> /*ctx*/) { return CallbackReturn::SUCCESS; }
+    virtual void user_on_shutdown(std::shared_ptr<ContextType> /*ctx*/) {}
 
     rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
 };
