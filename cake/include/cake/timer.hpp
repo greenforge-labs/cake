@@ -10,6 +10,14 @@
 
 namespace cake {
 
+/// Create a timer that fires a session-aware callback at the given period.
+///
+/// The timer is created in a **cancelled** state and will be started automatically
+/// by the lifecycle activate transition. To start it manually, call `timer->reset()`.
+///
+/// The callback only fires while the node is in the ACTIVE lifecycle state.
+/// The timer is automatically registered with the session for lifecycle management
+/// (cancelled on deactivate, reset on activate).
 template <typename DurationRepT, typename DurationT, typename SessionType, typename CallbackT>
 auto create_timer(
     std::shared_ptr<SessionType> sn,
@@ -18,8 +26,6 @@ auto create_timer(
     rclcpp::CallbackGroup::SharedPtr group = nullptr
 ) {
     static_assert(std::is_base_of_v<Session, SessionType>, "SessionType must derive from cake::Session");
-
-    bool autostart = (sn->node.get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
 
     std::weak_ptr<SessionType> weak_sn = sn;
     auto timer = rclcpp::create_timer(
@@ -35,25 +41,29 @@ auto create_timer(
             }
         },
         group,
-        autostart
+        /* autostart = */ false
     );
 
     sn->timers.push_back(timer);
     return timer;
 }
 
+/// Create a wall timer that fires a session-aware callback at the given period.
+///
+/// The timer is created in a **cancelled** state and will be started automatically
+/// by the lifecycle activate transition. To start it manually, call `timer->reset()`.
+///
+/// The callback only fires while the node is in the ACTIVE lifecycle state.
+/// The timer is automatically registered with the session for lifecycle management
+/// (cancelled on deactivate, reset on activate).
 template <typename DurationRepT, typename DurationT, typename SessionType, typename CallbackT>
 auto create_wall_timer(
     std::shared_ptr<SessionType> sn,
     std::chrono::duration<DurationRepT, DurationT> period,
     CallbackT callback,
-    rclcpp::CallbackGroup::SharedPtr group = nullptr,
-    bool autostart = true
+    rclcpp::CallbackGroup::SharedPtr group = nullptr
 ) {
     static_assert(std::is_base_of_v<Session, SessionType>, "SessionType must derive from cake::Session");
-
-    bool effective_autostart =
-        autostart && (sn->node.get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
 
     std::weak_ptr<SessionType> weak_sn = sn;
     auto timer = rclcpp::create_wall_timer(
@@ -69,7 +79,7 @@ auto create_wall_timer(
         group,
         sn->node.get_node_base_interface().get(),
         sn->node.get_node_timers_interface().get(),
-        effective_autostart
+        /* autostart = */ false
     );
 
     sn->timers.push_back(timer);
