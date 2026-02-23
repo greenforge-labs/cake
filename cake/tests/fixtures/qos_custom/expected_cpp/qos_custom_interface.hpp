@@ -7,38 +7,39 @@
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
-#include <cake/context.hpp>
+#include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
 #include <test_package/qos_custom_parameters.hpp>
 
 namespace test_package::qos_custom {
 
-template <typename ContextType> struct QosCustomPublishers {
-    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> reliable_topic;
-    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> best_effort_topic;
+template <typename SessionType> struct QosCustomPublishers {
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, SessionType>> reliable_topic;
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, SessionType>> best_effort_topic;
 };
 
-template <typename ContextType> struct QosCustomSubscribers {
-    std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> keep_all_topic;
-    std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>> deadline_topic;
+template <typename SessionType> struct QosCustomSubscribers {
+    std::shared_ptr<cake::Subscriber<std_msgs::msg::String, SessionType>> keep_all_topic;
+    std::shared_ptr<cake::Subscriber<std_msgs::msg::String, SessionType>> deadline_topic;
 };
 
-template <typename ContextType> struct QosCustomServices {};
+template <typename SessionType> struct QosCustomServices {};
 
-template <typename ContextType> struct QosCustomServiceClients {};
+template <typename SessionType> struct QosCustomServiceClients {};
 
-template <typename ContextType> struct QosCustomActions {};
+template <typename SessionType> struct QosCustomActions {};
 
-template <typename ContextType> struct QosCustomActionClients {};
+template <typename SessionType> struct QosCustomActionClients {};
 
-template <typename DerivedContextType> struct QosCustomContext : cake::Context {
-    QosCustomPublishers<DerivedContextType> publishers;
-    QosCustomSubscribers<DerivedContextType> subscribers;
-    QosCustomServices<DerivedContextType> services;
-    QosCustomServiceClients<DerivedContextType> service_clients;
-    QosCustomActions<DerivedContextType> actions;
-    QosCustomActionClients<DerivedContextType> action_clients;
+template <typename DerivedSessionType> struct QosCustomSession : cake::Session {
+    using cake::Session::Session;
+    QosCustomPublishers<DerivedSessionType> publishers;
+    QosCustomSubscribers<DerivedSessionType> subscribers;
+    QosCustomServices<DerivedSessionType> services;
+    QosCustomServiceClients<DerivedSessionType> service_clients;
+    QosCustomActions<DerivedSessionType> actions;
+    QosCustomActionClients<DerivedSessionType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
@@ -46,53 +47,55 @@ template <typename DerivedContextType> struct QosCustomContext : cake::Context {
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 template <
-    typename ContextType,
+    typename SessionType,
     auto on_configure_func,
-    auto on_activate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
-    auto on_deactivate_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
-    auto on_cleanup_func = [](std::shared_ptr<ContextType>) { return CallbackReturn::SUCCESS; },
-    auto on_shutdown_func = [](std::shared_ptr<ContextType>) {},
+    auto on_activate_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_deactivate_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_cleanup_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_shutdown_func = [](std::shared_ptr<SessionType>) {},
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class QosCustomBase : public cake::BaseNode<"qos_custom", ContextType, extend_options> {
+class QosCustomBase : public cake::BaseNode<"qos_custom", SessionType, extend_options> {
     static_assert(
-        std::is_base_of_v<QosCustomContext<ContextType>, ContextType>, "ContextType must be a child of QosCustomContext"
+        std::is_base_of_v<QosCustomSession<SessionType>, SessionType>, "SessionType must be a child of QosCustomSession"
     );
 
   public:
     explicit QosCustomBase(const rclcpp::NodeOptions &options)
-        : cake::BaseNode<"qos_custom", ContextType, extend_options>(options) {}
+        : cake::BaseNode<"qos_custom", SessionType, extend_options>(options) {}
 
   protected:
-    void create_entities(std::shared_ptr<ContextType> ctx) override {
+    std::shared_ptr<SessionType> create_session(rclcpp_lifecycle::LifecycleNode& node) override {
+        auto sn = std::make_shared<SessionType>(node);
         // init parameters (must be before publishers/subscribers for QoS param refs)
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
+        sn->param_listener = std::make_shared<ParamListener>(sn->node.shared_from_this());
+        sn->params = sn->param_listener->get_params();
 
         // init publishers
-        ctx->publishers.reliable_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "reliable_topic", rclcpp::QoS(10).reliable().durability_volatile());
-        ctx->publishers.best_effort_topic = cake::create_publisher<std_msgs::msg::String>(ctx, "best_effort_topic", rclcpp::QoS(5).best_effort().transient_local());
+        sn->publishers.reliable_topic = cake::create_publisher<std_msgs::msg::String>(sn, "reliable_topic", rclcpp::QoS(10).reliable().durability_volatile());
+        sn->publishers.best_effort_topic = cake::create_publisher<std_msgs::msg::String>(sn, "best_effort_topic", rclcpp::QoS(5).best_effort().transient_local());
         // init subscribers
-        ctx->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "keep_all_topic", rclcpp::QoS(rclcpp::KeepAll()).reliable());
-        ctx->subscribers.deadline_topic = cake::create_subscriber<std_msgs::msg::String>(ctx, "deadline_topic", rclcpp::QoS(20).reliable().deadline(rclcpp::Duration::from_nanoseconds(1000000000)).lifespan(rclcpp::Duration::from_nanoseconds(500000000)));
+        sn->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(sn, "keep_all_topic", rclcpp::QoS(rclcpp::KeepAll()).reliable());
+        sn->subscribers.deadline_topic = cake::create_subscriber<std_msgs::msg::String>(sn, "deadline_topic", rclcpp::QoS(20).reliable().deadline(rclcpp::Duration::from_nanoseconds(1000000000)).lifespan(rclcpp::Duration::from_nanoseconds(500000000)));
+        return sn;
     }
 
-    void activate_entities(std::shared_ptr<ContextType> ctx) override {
-        ctx->publishers.reliable_topic->activate();
-        ctx->publishers.best_effort_topic->activate();
-        for (auto &t : ctx->timers) { t->reset(); }
+    void activate_entities(std::shared_ptr<SessionType> sn) override {
+        sn->publishers.reliable_topic->activate();
+        sn->publishers.best_effort_topic->activate();
+        for (auto &t : sn->timers) { t->reset(); }
     }
 
-    void deactivate_entities(std::shared_ptr<ContextType> ctx) override {
-        for (auto &t : ctx->timers) { t->cancel(); }
-        if (ctx->publishers.reliable_topic) { ctx->publishers.reliable_topic->deactivate(); }
-        if (ctx->publishers.best_effort_topic) { ctx->publishers.best_effort_topic->deactivate(); }
+    void deactivate_entities(std::shared_ptr<SessionType> sn) override {
+        for (auto &t : sn->timers) { t->cancel(); }
+        if (sn->publishers.reliable_topic) { sn->publishers.reliable_topic->deactivate(); }
+        if (sn->publishers.best_effort_topic) { sn->publishers.best_effort_topic->deactivate(); }
     }
 
-    CallbackReturn user_on_configure(std::shared_ptr<ContextType> ctx) override { return on_configure_func(ctx); }
-    CallbackReturn user_on_activate(std::shared_ptr<ContextType> ctx) override { return on_activate_func(ctx); }
-    CallbackReturn user_on_deactivate(std::shared_ptr<ContextType> ctx) override { return on_deactivate_func(ctx); }
-    CallbackReturn user_on_cleanup(std::shared_ptr<ContextType> ctx) override { return on_cleanup_func(ctx); }
-    void user_on_shutdown(std::shared_ptr<ContextType> ctx) override { on_shutdown_func(ctx); }
+    CallbackReturn user_on_configure(std::shared_ptr<SessionType> sn) override { return on_configure_func(sn); }
+    CallbackReturn user_on_activate(std::shared_ptr<SessionType> sn) override { return on_activate_func(sn); }
+    CallbackReturn user_on_deactivate(std::shared_ptr<SessionType> sn) override { return on_deactivate_func(sn); }
+    CallbackReturn user_on_cleanup(std::shared_ptr<SessionType> sn) override { return on_cleanup_func(sn); }
+    void user_on_shutdown(std::shared_ptr<SessionType> sn) override { on_shutdown_func(sn); }
 };
 
 } // namespace test_package::qos_custom

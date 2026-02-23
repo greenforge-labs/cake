@@ -2,14 +2,14 @@
 
 #include <vector>
 
-#include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 
 namespace cake {
 
-struct Context {
-    rclcpp_lifecycle::LifecycleNode::SharedPtr node;
+struct Session {
+    rclcpp_lifecycle::LifecycleNode &node;
     std::vector<rclcpp::TimerBase::SharedPtr> timers;
+    explicit Session(rclcpp_lifecycle::LifecycleNode &node) : node(node) {}
 };
 
 } // namespace cake

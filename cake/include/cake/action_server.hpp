@@ -11,7 +11,7 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 
-#include "context.hpp"
+#include "session.hpp"
 
 namespace cake {
 
@@ -181,14 +181,14 @@ std::shared_ptr<SingleGoalActionServer<ActionT>> create_single_goal_action_serve
     return std::make_shared<SingleGoalActionServer<ActionT>>(node, server_name, options);
 }
 
-template <typename ActionT, typename ContextType>
+template <typename ActionT, typename SessionType>
 std::shared_ptr<SingleGoalActionServer<ActionT>> create_single_goal_action_server(
-    std::shared_ptr<ContextType> context,
+    std::shared_ptr<SessionType> sn,
     const std::string &server_name,
     const std::optional<SingleGoalActionServerOptions<ActionT>> &options = std::nullopt
 ) {
-    static_assert(std::is_base_of_v<Context, ContextType>, "ContextType must derive from cake::Context");
-    return create_single_goal_action_server<ActionT>(context->node.get(), server_name, options);
+    static_assert(std::is_base_of_v<Session, SessionType>, "SessionType must derive from cake::Session");
+    return create_single_goal_action_server<ActionT>(&sn->node, server_name, options);
 }
 
 } // namespace cake
