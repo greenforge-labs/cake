@@ -169,6 +169,8 @@ find_package(cake REQUIRED)
 cake_auto_package()
 ```
 
+**Note:** Cake assumes a single-threaded executor. See [Threading Model](#threading-model) for details.
+
 That's it! `cake_auto_package()` automatically:
 - Detects C++ and Python nodes in the `nodes/` folder
 - Generates interfaces and parameter libraries
@@ -1025,6 +1027,10 @@ publishers:
         liveliness: AUTOMATIC
         lease_duration_ms: 1000  # 1 second
 ```
+
+## Threading Model
+
+Cake assumes a **single-threaded executor**. Context state (publishers, subscribers, parameters, timers, etc.) is not protected by any synchronization primitives, so concurrent access from multiple executor threads would be a data race. Multi-threading executors is out of scope for cake at the moment. External concurrent execution of work is still available to the user via standard threading, but synchronisation is the users responsibility.
 
 ## Development
 
