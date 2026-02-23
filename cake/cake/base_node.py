@@ -48,6 +48,17 @@ class _CakeLifecycleNode(LifecycleNode):
         """Returns state ID int, e.g. State.PRIMARY_STATE_ACTIVE."""
         return self._state_machine.current_state[0]
 
+    # rclpy bug workaround (https://github.com/ros2/rclpy/issues/1209):
+    # LifecycleNodeMixin.__on_change_state doesn't catch RCLError from
+    # trigger_transition_by_id, so invalid transition requests crash the node.
+    # Fixed upstream in https://github.com/ros2/rclpy/pull/1319 but not in jazzy.
+    def _LifecycleNodeMixin__on_change_state(self, req, resp):
+        try:
+            return super()._LifecycleNodeMixin__on_change_state(req, resp)
+        except Exception:
+            resp.success = False
+            return resp
+
     def on_configure(self, state: LifecycleState) -> _RclpyTCR:
         return _to_rclpy(self._on_configure_cb())
 
