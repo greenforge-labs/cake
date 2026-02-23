@@ -52,7 +52,7 @@ class ActionClients:
 
 
 @dataclass
-class ForEachParamContext(cake.Context):
+class ForEachParamSession(cake.Session):
     publishers: Publishers
     subscribers: Subscribers
     services: Services
@@ -64,75 +64,132 @@ class ForEachParamContext(cake.Context):
     params: Params
 
 
-T = TypeVar("T", bound=ForEachParamContext)
+T = TypeVar("T", bound=ForEachParamSession)
 
 
-def run(context_type: type[T], init_func: Callable[[T], None]):
+class _ForEachParamNode(cake.BaseNode[T]):
+
+    def __init__(
+        self,
+        session_type: type[T],
+        on_configure: Callable[[T], cake.TransitionCallbackReturn],
+        *,
+        on_activate: Callable[[T], cake.TransitionCallbackReturn] | None = None,
+        on_deactivate: Callable[[T], cake.TransitionCallbackReturn] | None = None,
+        on_cleanup: Callable[[T], cake.TransitionCallbackReturn] | None = None,
+        on_shutdown: Callable[[T], None] | None = None,
+    ) -> None:
+        super().__init__(
+            "for_each_param",
+            session_type,
+            on_configure,
+            on_activate=on_activate,
+            on_deactivate=on_deactivate,
+            on_cleanup=on_cleanup,
+            on_shutdown=on_shutdown,
+        )
+
+    def _create_session(self, node) -> T:
+        # init parameters (must be before publishers/subscribers for param refs in names)
+        param_listener = ParamListener(node)
+        params = param_listener.get_params()
+
+        # create publishers - using default constructors
+        publishers = Publishers()
+
+        # create subscribers - using default constructors
+        subscribers = Subscribers()
+
+        # create services - using default constructors
+        services = Services()
+
+        # initialise service clients
+        service_clients = ServiceClients()
+
+        # initialise actions
+        actions = Actions()
+
+        # initialise action clients
+        action_clients = ActionClients()
+
+        sn = self._session_type(
+            node=node,
+            publishers=publishers,
+            subscribers=subscribers,
+            services=services,
+            service_clients=service_clients,
+            actions=actions,
+            action_clients=action_clients,
+            param_listener=param_listener,
+            params=params,
+        )
+
+        # initialise publishers
+        sn.publishers.status._initialise(sn, String, f"/robot/{params.robot_id}/status", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
+
+        # initialise subscribers
+        for key in params.managed_nodes:
+            sn.subscribers.node_states[key] = cake.Subscriber[String]()
+            sn.subscribers.node_states[key]._initialise(sn, String, f"/{key}/state", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
+
+        # initialise services
+
+        # initialise for_each_param service clients: change_state_clients
+        for key in params.managed_nodes:
+            sn.service_clients.change_state_clients[key] = node.create_client(ChangeState, f"/{key}/change_state")
+
+        return sn
+
+    def _activate_entities(self, sn: T) -> None:
+        sn.publishers.status.activate()
+        for timer in sn.timers:
+            timer.reset()
+
+    def _deactivate_entities(self, sn: T) -> None:
+        for timer in sn.timers:
+            timer.cancel()
+        sn.publishers.status.deactivate()
+
+    def _destroy_entities(self, sn: T) -> None:
+        for timer in sn.timers:
+            sn.node.destroy_timer(timer)
+        sn.timers.clear()
+        sn.publishers.status._destroy(sn.node)
+        for _key, sub in sn.subscribers.node_states.items():
+            sub._destroy(sn.node)
+        for _key, cli in sn.service_clients.change_state_clients.items():
+            sn.node.destroy_client(cli)
+
+
+def run(
+    session_type: type[T],
+    on_configure: Callable[[T], cake.TransitionCallbackReturn],
+    *,
+    on_activate: Callable[[T], cake.TransitionCallbackReturn] | None = None,
+    on_deactivate: Callable[[T], cake.TransitionCallbackReturn] | None = None,
+    on_cleanup: Callable[[T], cake.TransitionCallbackReturn] | None = None,
+    on_shutdown: Callable[[T], None] | None = None,
+):
 
     rclpy.init()
 
-    node = rclpy.create_node("for_each_param")
-
-    # init parameters (must be before publishers/subscribers for param refs in names)
-    param_listener = ParamListener(node)
-    params = param_listener.get_params()
-
-    # create publishers - using default constructors
-    publishers = Publishers()
-
-    # create subscribers - using default constructors
-    subscribers = Subscribers()
-
-    # create services - using default constructors
-    services = Services()
-
-    # initialise service clients
-    service_clients = ServiceClients()
-
-    # initialise actions
-    actions = Actions()
-
-    # initialise action clients
-    action_clients = ActionClients()
-
-    ctx = context_type(
-        node=node,
-        publishers=publishers,
-        subscribers=subscribers,
-        services=services,
-        service_clients=service_clients,
-        actions=actions,
-        action_clients=action_clients,
-        param_listener=param_listener,
-        params=params,
+    wrapper = _ForEachParamNode(
+        session_type,
+        on_configure,
+        on_activate=on_activate,
+        on_deactivate=on_deactivate,
+        on_cleanup=on_cleanup,
+        on_shutdown=on_shutdown,
     )
 
-    # initialise publishers
-    ctx.publishers.status._initialise(ctx, String, f"/robot/{params.robot_id}/status", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
-
-    # initialise subscribers
-    for key in params.managed_nodes:
-        ctx.subscribers.node_states[key] = cake.Subscriber[String]()
-        ctx.subscribers.node_states[key]._initialise(ctx, String, f"/{key}/state", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
-
-    # initialise services
-
-    # initialise for_each_param service clients: change_state_clients
-    for key in params.managed_nodes:
-        ctx.service_clients.change_state_clients[key] = node.create_client(ChangeState, f"/{key}/change_state")
-
-    init_func(ctx)
-
     try:
-        rclpy.spin(node)
+        rclpy.spin(wrapper.node)
     except KeyboardInterrupt:
         # note rclpy installs signal handlers during rclpy.init() that respond to SIGINT (Ctrl+C) and shutdown the
         # context so no logging or anything should be done here.
         pass
     finally:
-        for thread in ctx.threads:
-            thread.join(timeout=2.0)  # give each thread 2 seconds to finish gracefully
-        node.destroy_node()
+        wrapper.node.destroy_node()
         if rclpy.ok():
             # since the context is _probably_ shutdown already here, we are doing this just to be certain
             rclpy.shutdown()

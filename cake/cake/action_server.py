@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 import threading
 
-from rclpy.node import Node
+from rclpy.lifecycle import LifecycleNode, State
 
 from rclpy.action.server import ActionServer, CancelResponse, GoalResponse, ServerGoalHandle
 
@@ -43,14 +43,14 @@ class SingleGoalActionServer(Generic[ActionT, GoalT, ResultT, FeedbackT]):
     _result_event: threading.Event | None = None
     _result_storage: dict[threading.Event, Any]  # Maps event to result for that goal
     _lock: threading.Lock
-    _node: Node
+    _node: LifecycleNode
     _action_type: Type[ActionT]
     _action_name: str
     _options: SingleGoalActionServerOptions[GoalT] | None
 
     def __init__(
         self,
-        node: Node,
+        node: LifecycleNode,
         action_type: Type[ActionT],
         action_name: str,
         options: SingleGoalActionServerOptions[GoalT] | None = None,
@@ -59,7 +59,7 @@ class SingleGoalActionServer(Generic[ActionT, GoalT, ResultT, FeedbackT]):
         """
         Create a single-goal action server with external execution control.
 
-        :param node: The ROS node
+        :param node: The ROS lifecycle node
         :param action_type: Type of the action
         :param action_name: Name of the action
         :param options: Optional configuration for the action server
@@ -106,10 +106,16 @@ class SingleGoalActionServer(Generic[ActionT, GoalT, ResultT, FeedbackT]):
         Default goal callback that uses options to decide acceptance.
 
         This callback checks:
-        1. If options are configured
-        2. If the goal passes validation
-        3. If there's an active goal and whether to replace it
+        1. If the node is in active state
+        2. If options are configured
+        3. If the goal passes validation
+        4. If there's an active goal and whether to replace it
         """
+        # Reject goals when not active
+        if self._node.current_state != State.PRIMARY_STATE_ACTIVE:
+            self._node.get_logger().warn(f"Action server '{self._action_name}': Rejecting goal, node is not active")
+            return GoalResponse.REJECT
+
         # Check if options are configured
         if self._options is None:
             self._node.get_logger().warn(
@@ -267,6 +273,17 @@ class SingleGoalActionServer(Generic[ActionT, GoalT, ResultT, FeedbackT]):
             if self._result_event is not None:
                 self._signal_result(self._result_event, result if result is not None else self._action_type.Result())
 
+    def deactivate(self) -> None:
+        """Abort the active goal on deactivation (matches C++ SingleGoalActionServer::deactivate)."""
+        with self._lock:
+            if self._active_goal_handle is not None and self._active_goal_handle.is_active:
+                self._node.get_logger().warn(
+                    f"Action server '{self._action_name}': Aborting active goal due to deactivation"
+                )
+                self._active_goal_handle.abort()
+                if self._result_event is not None:
+                    self._signal_result(self._result_event, self._action_type.Result())
+
     def publish_feedback(self, feedback: FeedbackT) -> None:
         """Publish feedback for the active goal."""
         with self._lock:
@@ -285,3 +302,7 @@ class SingleGoalActionServer(Generic[ActionT, GoalT, ResultT, FeedbackT]):
     def destroy(self) -> None:
         """Destroy the underlying action server."""
         self._action_server.destroy()
+
+    def _destroy(self, node) -> None:
+        """Destroy the underlying action server (called by generated code)."""
+        self.destroy()
