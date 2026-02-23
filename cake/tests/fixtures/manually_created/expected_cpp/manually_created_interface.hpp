@@ -79,13 +79,11 @@ class ManuallyCreatedBase : public cake::BaseNode<"manually_created", SessionTyp
     }
 
     void activate_entities(std::shared_ptr<SessionType> sn) override {
-        sn->publishers.auto_topic->activate();
         for (auto &t : sn->timers) { t->reset(); }
     }
 
     void deactivate_entities(std::shared_ptr<SessionType> sn) override {
         for (auto &t : sn->timers) { t->cancel(); }
-        if (sn->publishers.auto_topic) { sn->publishers.auto_topic->deactivate(); }
     }
 
     CallbackReturn user_on_configure(std::shared_ptr<SessionType> sn) override { return on_configure_func(sn); }

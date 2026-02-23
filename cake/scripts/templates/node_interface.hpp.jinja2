@@ -243,25 +243,11 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", SessionTyp
     }
 
     void activate_entities(std::shared_ptr<SessionType> sn) override {
-{%- for pub in publishers %}
-{%- if pub.for_each_param %}
-        for (auto &[key, pub] : sn->publishers.{{ pub.field_name }}) { pub->activate(); }
-{%- else %}
-        sn->publishers.{{ pub.field_name }}->activate();
-{%- endif %}
-{%- endfor %}
         for (auto &t : sn->timers) { t->reset(); }
     }
 
     void deactivate_entities(std::shared_ptr<SessionType> sn) override {
         for (auto &t : sn->timers) { t->cancel(); }
-{%- for pub in publishers %}
-{%- if pub.for_each_param %}
-        for (auto &[key, pub] : sn->publishers.{{ pub.field_name }}) { if (pub) { pub->deactivate(); } }
-{%- else %}
-        if (sn->publishers.{{ pub.field_name }}) { sn->publishers.{{ pub.field_name }}->deactivate(); }
-{%- endif %}
-{%- endfor %}
 {%- for action in actions %}
 {%- if action.for_each_param %}
         for (auto &[key, action] : sn->actions.{{ action.field_name }}) { if (action) { action->deactivate(); } }

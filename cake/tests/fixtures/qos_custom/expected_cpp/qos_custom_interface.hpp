@@ -80,15 +80,11 @@ class QosCustomBase : public cake::BaseNode<"qos_custom", SessionType, extend_op
     }
 
     void activate_entities(std::shared_ptr<SessionType> sn) override {
-        sn->publishers.reliable_topic->activate();
-        sn->publishers.best_effort_topic->activate();
         for (auto &t : sn->timers) { t->reset(); }
     }
 
     void deactivate_entities(std::shared_ptr<SessionType> sn) override {
         for (auto &t : sn->timers) { t->cancel(); }
-        if (sn->publishers.reliable_topic) { sn->publishers.reliable_topic->deactivate(); }
-        if (sn->publishers.best_effort_topic) { sn->publishers.best_effort_topic->deactivate(); }
     }
 
     CallbackReturn user_on_configure(std::shared_ptr<SessionType> sn) override { return on_configure_func(sn); }

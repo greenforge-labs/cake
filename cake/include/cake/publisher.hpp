@@ -5,7 +5,6 @@
 #include <type_traits>
 
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
 
 #include "session.hpp"
 
@@ -33,17 +32,14 @@ template <typename MessageT, typename SessionType> class Publisher {
             }
         };
 
-        publisher_ = sn->node.template create_publisher<MessageT>(topic_name, qos, options);
+        publisher_ = rclcpp::create_publisher<MessageT>(sn->node, topic_name, qos, options);
     }
 
     void publish(const MessageT &msg) { publisher_->publish(msg); }
     void publish(std::unique_ptr<MessageT> msg) { publisher_->publish(std::move(msg)); }
 
-    void activate() { publisher_->on_activate(); }
-    void deactivate() { publisher_->on_deactivate(); }
-
     // Access underlying publisher for advanced use (wait_for_all_acked, get_subscription_count, etc.)
-    typename rclcpp_lifecycle::LifecyclePublisher<MessageT>::SharedPtr publisher() { return publisher_; }
+    typename rclcpp::Publisher<MessageT>::SharedPtr publisher() { return publisher_; }
 
     void
     set_deadline_callback(std::function<void(std::shared_ptr<SessionType>, rclcpp::QOSDeadlineOfferedInfo &)> callback
@@ -59,7 +55,7 @@ template <typename MessageT, typename SessionType> class Publisher {
 
   private:
     std::weak_ptr<SessionType> session_;
-    typename rclcpp_lifecycle::LifecyclePublisher<MessageT>::SharedPtr publisher_;
+    typename rclcpp::Publisher<MessageT>::SharedPtr publisher_;
 
     std::function<void(std::shared_ptr<SessionType>, rclcpp::QOSDeadlineOfferedInfo &)> deadline_callback_;
     std::function<void(std::shared_ptr<SessionType>, rclcpp::QOSLivelinessLostInfo &)> liveliness_callback_;

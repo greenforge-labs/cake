@@ -102,13 +102,11 @@ class ActionClientsMixedBase : public cake::BaseNode<"action_clients_mixed", Ses
     }
 
     void activate_entities(std::shared_ptr<SessionType> sn) override {
-        sn->publishers.status->activate();
         for (auto &t : sn->timers) { t->reset(); }
     }
 
     void deactivate_entities(std::shared_ptr<SessionType> sn) override {
         for (auto &t : sn->timers) { t->cancel(); }
-        if (sn->publishers.status) { sn->publishers.status->deactivate(); }
         if (sn->actions.fibonacci_server) { sn->actions.fibonacci_server->deactivate(); }
     }
 

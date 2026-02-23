@@ -89,13 +89,11 @@ class ActionServersMixedBase : public cake::BaseNode<"action_servers_mixed", Ses
     }
 
     void activate_entities(std::shared_ptr<SessionType> sn) override {
-        sn->publishers.status->activate();
         for (auto &t : sn->timers) { t->reset(); }
     }
 
     void deactivate_entities(std::shared_ptr<SessionType> sn) override {
         for (auto &t : sn->timers) { t->cancel(); }
-        if (sn->publishers.status) { sn->publishers.status->deactivate(); }
         if (sn->actions.navigate) { sn->actions.navigate->deactivate(); }
     }
 

@@ -90,13 +90,11 @@ class ServiceClientsMixedBase : public cake::BaseNode<"service_clients_mixed", S
     }
 
     void activate_entities(std::shared_ptr<SessionType> sn) override {
-        sn->publishers.status->activate();
         for (auto &t : sn->timers) { t->reset(); }
     }
 
     void deactivate_entities(std::shared_ptr<SessionType> sn) override {
         for (auto &t : sn->timers) { t->cancel(); }
-        if (sn->publishers.status) { sn->publishers.status->deactivate(); }
     }
 
     CallbackReturn user_on_configure(std::shared_ptr<SessionType> sn) override { return on_configure_func(sn); }

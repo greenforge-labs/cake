@@ -88,13 +88,11 @@ class NameParamSubstitutionBase : public cake::BaseNode<"name_param_substitution
     }
 
     void activate_entities(std::shared_ptr<SessionType> sn) override {
-        sn->publishers.cmd_vel->activate();
         for (auto &t : sn->timers) { t->reset(); }
     }
 
     void deactivate_entities(std::shared_ptr<SessionType> sn) override {
         for (auto &t : sn->timers) { t->cancel(); }
-        if (sn->publishers.cmd_vel) { sn->publishers.cmd_vel->deactivate(); }
     }
 
     CallbackReturn user_on_configure(std::shared_ptr<SessionType> sn) override { return on_configure_func(sn); }
