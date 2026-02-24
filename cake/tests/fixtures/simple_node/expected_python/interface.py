@@ -134,14 +134,12 @@ class _SimpleNodeNode(cake.BaseNode[T]):
         return sn
 
     def _activate_entities(self, sn: T) -> None:
-        sn.publishers.cmd_vel.activate()
         for timer in sn.timers:
             timer.reset()
 
     def _deactivate_entities(self, sn: T) -> None:
         for timer in sn.timers:
             timer.cancel()
-        sn.publishers.cmd_vel.deactivate()
 
     def _destroy_entities(self, sn: T) -> None:
         for timer in sn.timers:

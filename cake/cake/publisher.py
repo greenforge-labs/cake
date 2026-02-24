@@ -1,5 +1,5 @@
 from rclpy.event_handler import PublisherEventCallbacks, QoSLivelinessLostInfo, QoSOfferedDeadlineMissedInfo
-from rclpy.lifecycle import LifecyclePublisher
+from rclpy.publisher import Publisher as RclpyPublisher
 from rclpy.qos import QoSProfile
 
 from .session import Session
@@ -10,7 +10,7 @@ MessageT = TypeVar("MessageT")
 
 
 class Publisher(Generic[MessageT]):
-    _publisher: LifecyclePublisher | None = None
+    _publisher: RclpyPublisher | None = None
     _deadline_callback: Optional[Callable[[Any, QoSOfferedDeadlineMissedInfo], None]] = None
     _liveliness_callback: Optional[Callable[[Any, QoSLivelinessLostInfo], None]] = None
 
@@ -26,24 +26,16 @@ class Publisher(Generic[MessageT]):
             liveliness=lambda info: self._liveliness_callback(session, info) if self._liveliness_callback else None,
         )
 
-        self._publisher = session.node.create_lifecycle_publisher(
+        self._publisher = session.node.create_publisher(
             msg_type=msg_type,
             topic=topic_name,
             qos_profile=qos,
             event_callbacks=event_callbacks,
         )
 
-    def activate(self) -> None:
-        if self._publisher is not None:
-            self._publisher.on_activate(None)
-
-    def deactivate(self) -> None:
-        if self._publisher is not None:
-            self._publisher.on_deactivate(None)
-
     def _destroy(self, node) -> None:
         if self._publisher is not None:
-            node.destroy_lifecycle_publisher(self._publisher)
+            node.destroy_publisher(self._publisher)
             self._publisher = None
 
     def publish(self, msg: MessageT) -> None:
@@ -51,8 +43,8 @@ class Publisher(Generic[MessageT]):
             raise RuntimeError("Can't publish. Publisher has not been initialised! This is an error in cake.")
         self._publisher.publish(msg)
 
-    def publisher(self) -> LifecyclePublisher:
-        """Access underlying rclpy LifecyclePublisher for advanced use."""
+    def publisher(self) -> RclpyPublisher:
+        """Access underlying rclpy Publisher for advanced use."""
         if self._publisher is None:
             raise RuntimeError("Publisher has not been initialised! This is an error in cake.")
         return self._publisher

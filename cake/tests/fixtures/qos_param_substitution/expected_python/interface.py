@@ -136,14 +136,12 @@ class _QosParamSubstitutionNode(cake.BaseNode[T]):
         return sn
 
     def _activate_entities(self, sn: T) -> None:
-        sn.publishers.processed_data.activate()
         for timer in sn.timers:
             timer.reset()
 
     def _deactivate_entities(self, sn: T) -> None:
         for timer in sn.timers:
             timer.cancel()
-        sn.publishers.processed_data.deactivate()
 
     def _destroy_entities(self, sn: T) -> None:
         for timer in sn.timers:

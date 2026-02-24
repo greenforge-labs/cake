@@ -280,34 +280,15 @@ class _{{ class_name }}Node(cake.BaseNode[T]):
         return sn
 
     def _activate_entities(self, sn: T) -> None:
-{%- set has_activate = publishers|length > 0 or has_timers %}
-{%- if publishers %}
-{%- for pub in publishers %}
-{%- if pub.for_each_param %}
-        for _key, pub in sn.publishers.{{ pub.field_name }}.items():
-            pub.activate()
-{%- else %}
-        sn.publishers.{{ pub.field_name }}.activate()
-{%- endif %}
-{%- endfor %}
-{%- endif %}
         for timer in sn.timers:
             timer.reset()
-{%- if not publishers and not has_timers %}
+{%- if not has_timers %}
         pass
 {%- endif %}
 
     def _deactivate_entities(self, sn: T) -> None:
         for timer in sn.timers:
             timer.cancel()
-{%- for pub in publishers %}
-{%- if pub.for_each_param %}
-        for _key, pub in sn.publishers.{{ pub.field_name }}.items():
-            pub.deactivate()
-{%- else %}
-        sn.publishers.{{ pub.field_name }}.deactivate()
-{%- endif %}
-{%- endfor %}
 {%- for action in actions %}
 {%- if action.for_each_param %}
         for _key, action_srv in sn.actions.{{ action.field_name }}.items():

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from rclpy.lifecycle import LifecycleNode, LifecycleState
 from rclpy.lifecycle import TransitionCallbackReturn as _RclpyTCR
 
@@ -54,7 +52,7 @@ class _CakeLifecycleNode(LifecycleNode):
     # Fixed upstream in https://github.com/ros2/rclpy/pull/1319 but not in jazzy.
     def _LifecycleNodeMixin__on_change_state(self, req, resp):
         try:
-            return super()._LifecycleNodeMixin__on_change_state(req, resp)
+            return super()._LifecycleNodeMixin__on_change_state(req, resp)  # type: ignore
         except Exception:
             resp.success = False
             return resp
