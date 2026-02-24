@@ -7,6 +7,7 @@ from .transition import TransitionCallbackReturn
 from typing import Callable, Generic, TypeVar
 
 _SUCCESS = int(_RclpyTCR.SUCCESS)
+_FAILURE = int(_RclpyTCR.FAILURE)
 
 _SessionT = TypeVar("_SessionT", bound=Session)
 
@@ -117,12 +118,16 @@ class BaseNode(Generic[_SessionT]):
     def node(self) -> _CakeLifecycleNode:
         return self._node
 
+    def _reset_session(self) -> None:
+        if self._session is not None:
+            self._destroy_entities(self._session)
+            self._session = None
+
     def _handle_configure(self) -> TransitionCallbackReturn:
         self._session = self._create_session(self._node)
         result = self._on_configure_cb(self._session)
-        if int(result) != _SUCCESS:
-            self._destroy_entities(self._session)
-            self._session = None
+        if int(result) == _FAILURE:
+            self._reset_session()
         return result
 
     def _handle_activate(self) -> TransitionCallbackReturn:
@@ -149,22 +154,18 @@ class BaseNode(Generic[_SessionT]):
             result = self._on_cleanup_cb(self._session)
             if int(result) != _SUCCESS:
                 return result
-        self._destroy_entities(self._session)
-        self._session = None
+        self._reset_session()
         return TransitionCallbackReturn.SUCCESS
 
     def _handle_shutdown(self) -> TransitionCallbackReturn:
         if self._session is not None:
             if self._on_shutdown_cb is not None:
                 self._on_shutdown_cb(self._session)
-            self._destroy_entities(self._session)
-            self._session = None
+            self._reset_session()
         return TransitionCallbackReturn.SUCCESS
 
     def _handle_error(self) -> TransitionCallbackReturn:
-        if self._session is not None:
-            self._destroy_entities(self._session)
-            self._session = None
+        self._reset_session()
         return TransitionCallbackReturn.FAILURE
 
     def _create_session(self, node: _CakeLifecycleNode) -> _SessionT:
