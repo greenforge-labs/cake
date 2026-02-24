@@ -1,6 +1,7 @@
-from rclpy.lifecycle import State
 from rclpy.qos import QoSProfile, qos_profile_services_default
 from rclpy.service import Service as RclpyService
+
+from lifecycle_msgs.msg import State
 
 from .session import Session
 
