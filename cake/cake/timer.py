@@ -1,5 +1,6 @@
 from rclpy.callback_groups import CallbackGroup
 from rclpy.clock import Clock
+from rclpy.clock_type import ClockType
 from rclpy.lifecycle import State
 
 from .session import Session
@@ -32,4 +33,26 @@ def create_timer(
     session.timers.append(timer)
 
 
-__all__ = ["create_timer"]
+def create_wall_timer(
+    session: SessionT,
+    timer_period_sec: float,
+    callback: Callable[[SessionT], None],
+    callback_group: CallbackGroup | None = None,
+    autostart: bool = False,
+):
+    def guarded_callback():
+        if session.node.current_state != State.PRIMARY_STATE_ACTIVE:
+            return
+        callback(session)
+
+    timer = session.node.create_timer(
+        timer_period_sec,
+        callback=guarded_callback,
+        callback_group=callback_group,
+        clock=Clock(clock_type=ClockType.STEADY_TIME),
+        autostart=autostart,
+    )
+    session.timers.append(timer)
+
+
+__all__ = ["create_timer", "create_wall_timer"]

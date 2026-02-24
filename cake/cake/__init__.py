@@ -4,5 +4,5 @@ from .publisher import Publisher
 from .service import Service
 from .session import Session
 from .subscriber import Subscriber
-from .timer import create_timer
+from .timer import create_timer, create_wall_timer
 from .transition import TransitionCallbackReturn
