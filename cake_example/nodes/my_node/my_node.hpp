@@ -4,8 +4,6 @@
 
 namespace cake_example::my_node {
 
-using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
-
 struct Session : MyNodeSession<Session> {
     using MyNodeSession::MyNodeSession; // required — inherited constructors aren't transitive in C++
     int very_important_number = 5;
