@@ -3,6 +3,7 @@
 #include <memory>
 #include <type_traits>
 
+#include <lifecycle_msgs/msg/state.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 
@@ -29,6 +30,21 @@ class BaseNode {
         node_->register_on_cleanup([this](const auto &) { return handle_cleanup(); });
         node_->register_on_shutdown([this](const auto &) { return handle_shutdown(); });
         node_->register_on_error([this](const auto &) { return handle_error(); });
+
+        node_->declare_parameter("autostart", true);
+        if (node_->get_parameter("autostart").as_bool()) {
+            using lifecycle_msgs::msg::State;
+            autostart_timer_ = node_->create_wall_timer(std::chrono::seconds(0), [this]() {
+                autostart_timer_->cancel();
+                if (node_->configure().id() != State::PRIMARY_STATE_INACTIVE) {
+                    RCLCPP_ERROR(node_->get_logger(), "Autostart failed to configure");
+                    return;
+                }
+                if (node_->activate().id() != State::PRIMARY_STATE_ACTIVE) {
+                    RCLCPP_ERROR(node_->get_logger(), "Autostart failed to activate");
+                }
+            });
+        }
     }
 
     rclcpp::node_interfaces::NodeBaseInterface::SharedPtr get_node_base_interface() const {
@@ -102,6 +118,7 @@ class BaseNode {
 
     rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
     std::shared_ptr<SessionType> session_;
+    rclcpp::TimerBase::SharedPtr autostart_timer_;
 };
 
 } // namespace cake

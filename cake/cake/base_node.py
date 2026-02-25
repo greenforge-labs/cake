@@ -114,6 +114,20 @@ class BaseNode(Generic[_SessionT]):
         self._on_cleanup_cb = on_cleanup
         self._on_shutdown_cb = on_shutdown
 
+        self._node.declare_parameter("autostart", True)
+        if self._node.get_parameter("autostart").value:
+
+            def _autostart_callback():
+                self._autostart_timer.cancel()
+                self._node.get_logger().info(f"Autostarting node: {self._node.get_name()}")
+                if self._node.trigger_configure() != _RclpyTCR.SUCCESS:
+                    self._node.get_logger().error("Autostart failed to configure")
+                    return
+                if self._node.trigger_activate() != _RclpyTCR.SUCCESS:
+                    self._node.get_logger().error("Autostart failed to activate")
+
+            self._autostart_timer = self._node.create_timer(0.0, _autostart_callback)
+
     @property
     def node(self) -> _CakeLifecycleNode:
         return self._node
