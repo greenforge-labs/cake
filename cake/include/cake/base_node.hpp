@@ -23,7 +23,9 @@ class BaseNode {
 
   public:
     explicit BaseNode(const rclcpp::NodeOptions &options)
-        : node_(std::make_shared<rclcpp_lifecycle::LifecycleNode>(node_name.c_str(), extend_options(options))) {
+        : node_(std::make_shared<rclcpp_lifecycle::LifecycleNode>(
+              node_name.c_str(), extend_options(rclcpp::NodeOptions(options).use_intra_process_comms(true))
+          )) {
         node_->register_on_configure([this](const auto &) { return handle_configure(); });
         node_->register_on_activate([this](const auto &) { return handle_activate(); });
         node_->register_on_deactivate([this](const auto &) { return handle_deactivate(); });
@@ -41,11 +43,11 @@ class BaseNode {
             if (state_pub_->get_subscription_count() == 0) {
                 return;
             }
-            lifecycle_msgs::msg::State msg;
+            auto msg = std::make_unique<lifecycle_msgs::msg::State>();
             auto state = node_->get_current_state();
-            msg.id = state.id();
-            msg.label = state.label();
-            state_pub_->publish(msg);
+            msg->id = state.id();
+            msg->label = state.label();
+            state_pub_->publish(std::move(msg));
         });
 
         node_->declare_parameter("autostart", true);
