@@ -31,6 +31,23 @@ class BaseNode {
         node_->register_on_shutdown([this](const auto &) { return handle_shutdown(); });
         node_->register_on_error([this](const auto &) { return handle_error(); });
 
+        // State heartbeat publisher + timer (always active, not lifecycle-managed).
+        auto state_qos = rclcpp::QoS(1).reliable().transient_local().deadline(std::chrono::milliseconds(100));
+        auto node_params = node_->get_node_parameters_interface();
+        auto node_topics = node_->get_node_topics_interface();
+        state_pub_ =
+            rclcpp::create_publisher<lifecycle_msgs::msg::State>(node_params, node_topics, "~/state", state_qos);
+        state_timer_ = node_->create_wall_timer(std::chrono::milliseconds(100), [this]() {
+            if (state_pub_->get_subscription_count() == 0) {
+                return;
+            }
+            lifecycle_msgs::msg::State msg;
+            auto state = node_->get_current_state();
+            msg.id = state.id();
+            msg.label = state.label();
+            state_pub_->publish(msg);
+        });
+
         node_->declare_parameter("autostart", true);
         if (node_->get_parameter("autostart").as_bool()) {
             using lifecycle_msgs::msg::State;
@@ -119,6 +136,8 @@ class BaseNode {
     rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
     std::shared_ptr<SessionType> session_;
     rclcpp::TimerBase::SharedPtr autostart_timer_;
+    rclcpp::Publisher<lifecycle_msgs::msg::State>::SharedPtr state_pub_;
+    rclcpp::TimerBase::SharedPtr state_timer_;
 };
 
 } // namespace cake

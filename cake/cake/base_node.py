@@ -1,5 +1,9 @@
+from rclpy.duration import Duration
 from rclpy.lifecycle import LifecycleNode, LifecycleState
 from rclpy.lifecycle import TransitionCallbackReturn as _RclpyTCR
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+
+import lifecycle_msgs.msg
 
 from .session import Session
 from .transition import TransitionCallbackReturn
@@ -114,6 +118,16 @@ class BaseNode(Generic[_SessionT]):
         self._on_cleanup_cb = on_cleanup
         self._on_shutdown_cb = on_shutdown
 
+        # State heartbeat publisher + timer (always active, not lifecycle-managed).
+        state_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            deadline=Duration(nanoseconds=100_000_000),
+        )
+        self._state_pub = self._node.create_publisher(lifecycle_msgs.msg.State, "~/state", state_qos)
+        self._state_timer = self._node.create_timer(0.1, self._publish_state)
+
         self._node.declare_parameter("autostart", True)
         if self._node.get_parameter("autostart").value:
 
@@ -181,6 +195,13 @@ class BaseNode(Generic[_SessionT]):
     def _handle_error(self) -> TransitionCallbackReturn:
         self._reset_session()
         return TransitionCallbackReturn.FAILURE
+
+    def _publish_state(self):
+        if self._state_pub.get_subscription_count() == 0:
+            return
+        state_id, state_label = self._node._state_machine.current_state
+        msg = lifecycle_msgs.msg.State(id=state_id, label=state_label)
+        self._state_pub.publish(msg)
 
     def _create_session(self, node: _CakeLifecycleNode) -> _SessionT:
         raise NotImplementedError
