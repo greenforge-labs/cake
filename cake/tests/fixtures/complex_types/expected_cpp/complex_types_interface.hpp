@@ -13,6 +13,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <test_package/complex_types_parameters.hpp>
 
 namespace test_package::complex_types {
@@ -78,7 +79,9 @@ class ComplexTypesBase : public cake::BaseNode<"complex_types", SessionType, ext
         sn->publishers.path = cake::create_publisher<nav_msgs::msg::Path>(sn, "path", rclcpp::QoS(5).reliable());
         // init subscribers
         sn->subscribers.joint_states = cake::create_subscriber<sensor_msgs::msg::JointState>(sn, "joint_states", rclcpp::QoS(10).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.joint_states);
         sn->subscribers.point_cloud = cake::create_subscriber<sensor_msgs::msg::PointCloud2>(sn, "point_cloud", rclcpp::QoS(1).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.point_cloud);
         return sn;
     }
 

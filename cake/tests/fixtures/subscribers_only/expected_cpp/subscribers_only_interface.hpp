@@ -10,6 +10,7 @@
 #include <cake/base_node.hpp>
 #include <cake/session.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <test_package/subscribers_only_parameters.hpp>
 
 namespace test_package::subscribers_only {
@@ -68,7 +69,9 @@ class SubscribersOnlyBase : public cake::BaseNode<"subscribers_only", SessionTyp
         sn->params = sn->param_listener->get_params();
         // init subscribers
         sn->subscribers.sensor_data = cake::create_subscriber<sensor_msgs::msg::LaserScan>(sn, "sensor_data", rclcpp::QoS(10).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.sensor_data);
         sn->subscribers.camera_image = cake::create_subscriber<sensor_msgs::msg::Image>(sn, "camera_image", rclcpp::QoS(1).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.camera_image);
         return sn;
     }
 

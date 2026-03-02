@@ -11,6 +11,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <test_package/no_node_section_parameters.hpp>
 
 namespace test_package::no_node_section {
@@ -73,6 +74,7 @@ class NoNodeSectionBase : public cake::BaseNode<"no_node_section", SessionType, 
         sn->publishers.status = cake::create_publisher<std_msgs::msg::String>(sn, "/status", rclcpp::QoS(10).reliable());
         // init subscribers
         sn->subscribers.input = cake::create_subscriber<std_msgs::msg::Bool>(sn, "/input", rclcpp::QoS(5).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.input);
         return sn;
     }
 

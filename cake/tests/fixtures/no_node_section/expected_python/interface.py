@@ -128,6 +128,7 @@ class _NoNodeSectionNode(cake.BaseNode[T]):
 
         # initialise subscribers
         sn.subscribers.input._initialise(sn, Bool, "/input", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5, reliability=ReliabilityPolicy.BEST_EFFORT))
+        cake.attach_default_qos_handlers(sn.subscribers.input)
 
         # initialise services
 

@@ -13,6 +13,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <cake/service.hpp>
 #include <test_package/name_param_substitution_parameters.hpp>
 
@@ -80,6 +81,7 @@ class NameParamSubstitutionBase : public cake::BaseNode<"name_param_substitution
         sn->publishers.cmd_vel = cake::create_publisher<geometry_msgs::msg::Twist>(sn, "/robot/" + sn->params.robot_id + "/cmd_vel", rclcpp::QoS(10).reliable());
         // init subscribers
         sn->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(sn, "/" + sn->params.namespace + "/" + sn->params.robot_id + "/odom", rclcpp::QoS(5).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.odom);
         // init services
         sn->services.get_state = cake::create_service<std_srvs::srv::Trigger>(sn, "/robot/" + sn->params.robot_id + "/get_state");
         // init service clients

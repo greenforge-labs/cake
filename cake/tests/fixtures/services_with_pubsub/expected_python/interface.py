@@ -130,6 +130,7 @@ class _ServicesWithPubsubNode(cake.BaseNode[T]):
 
         # initialise subscribers
         sn.subscribers.command._initialise(sn, String, "/command", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5, reliability=ReliabilityPolicy.BEST_EFFORT))
+        cake.attach_default_qos_handlers(sn.subscribers.command)
 
         # initialise services
         sn.services.reset._initialise(sn, Trigger, "/reset")

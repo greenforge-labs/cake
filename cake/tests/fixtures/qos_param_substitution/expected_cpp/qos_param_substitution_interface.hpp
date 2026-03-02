@@ -11,6 +11,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <cake/qos_helpers.hpp>
 #include <test_package/qos_param_substitution_parameters.hpp>
 
@@ -74,6 +75,7 @@ class QosParamSubstitutionBase : public cake::BaseNode<"qos_param_substitution",
         sn->publishers.processed_data = cake::create_publisher<std_msgs::msg::String>(sn, "/processed_data", rclcpp::QoS(sn->params.output_queue_depth).reliable());
         // init subscribers
         sn->subscribers.sensor_data = cake::create_subscriber<sensor_msgs::msg::LaserScan>(sn, "/sensor_data", rclcpp::QoS(sn->params.sensor_queue_depth).reliability(cake::to_reliability(sn->params.sensor_reliability)).durability(cake::to_durability(sn->params.sensor_durability)).deadline(rclcpp::Duration::from_nanoseconds(sn->params.sensor_deadline_ms * 1000000LL)).liveliness(cake::to_liveliness(sn->params.sensor_liveliness)));
+        cake::attach_default_qos_handlers(sn->subscribers.sensor_data);
         return sn;
     }
 

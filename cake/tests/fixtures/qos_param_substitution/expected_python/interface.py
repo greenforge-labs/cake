@@ -130,6 +130,7 @@ class _QosParamSubstitutionNode(cake.BaseNode[T]):
 
         # initialise subscribers
         sn.subscribers.sensor_data._initialise(sn, LaserScan, "/sensor_data", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=params.sensor_queue_depth, reliability=_to_reliability(params.sensor_reliability), durability=_to_durability(params.sensor_durability), deadline=Duration(nanoseconds=params.sensor_deadline_ms * 1000000), liveliness=_to_liveliness(params.sensor_liveliness)))
+        cake.attach_default_qos_handlers(sn.subscribers.sensor_data)
 
         # initialise services
 

@@ -131,6 +131,7 @@ class _ForEachParamNode(cake.BaseNode[T]):
         for key in params.managed_nodes:
             sn.subscribers.node_states[key] = cake.Subscriber[String]()
             sn.subscribers.node_states[key]._initialise(sn, String, f"/{key}/state", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
+            cake.attach_default_qos_handlers(sn.subscribers.node_states[key])
 
         # initialise services
 

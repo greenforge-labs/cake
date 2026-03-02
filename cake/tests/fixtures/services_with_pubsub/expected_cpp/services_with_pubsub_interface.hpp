@@ -12,6 +12,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <cake/service.hpp>
 #include <test_package/services_with_pubsub_parameters.hpp>
 
@@ -78,6 +79,7 @@ class ServicesWithPubsubBase : public cake::BaseNode<"services_with_pubsub", Ses
         sn->publishers.status = cake::create_publisher<std_msgs::msg::String>(sn, "/status", rclcpp::QoS(10).reliable());
         // init subscribers
         sn->subscribers.command = cake::create_subscriber<std_msgs::msg::String>(sn, "/command", rclcpp::QoS(5).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.command);
         // init services
         sn->services.reset = cake::create_service<std_srvs::srv::Trigger>(sn, "/reset");
         sn->services.compute = cake::create_service<example_interfaces::srv::AddTwoInts>(sn, "compute");

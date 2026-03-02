@@ -15,6 +15,7 @@
 {%- endif %}
 {%- if subscribers %}
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 {%- endif %}
 {%- if services %}
 #include <cake/service.hpp>
@@ -180,9 +181,11 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", SessionTyp
 {%- if sub.for_each_param %}
         for (const auto& key : sn->params.{{ sub.for_each_param }}) {
             sn->subscribers.{{ sub.field_name }}[key] = cake::create_subscriber<{{ sub.msg_type }}>(sn, {{ sub.name_expr }}, {{ sub.qos_code }});
+            cake::attach_default_qos_handlers(sn->subscribers.{{ sub.field_name }}[key]);
         }
 {%- else %}
         sn->subscribers.{{ sub.field_name }} = cake::create_subscriber<{{ sub.msg_type }}>(sn, {{ sub.name_expr }}, {{ sub.qos_code }});
+        cake::attach_default_qos_handlers(sn->subscribers.{{ sub.field_name }});
 {%- endif %}
 {%- endfor %}
 

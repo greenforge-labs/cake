@@ -13,6 +13,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <test_package/manually_created_parameters.hpp>
 
 namespace test_package::manually_created {
@@ -75,6 +76,7 @@ class ManuallyCreatedBase : public cake::BaseNode<"manually_created", SessionTyp
         sn->publishers.auto_topic = cake::create_publisher<std_msgs::msg::String>(sn, "auto_topic", rclcpp::QoS(10).reliable());
         // init subscribers
         sn->subscribers.auto_sub = cake::create_subscriber<std_msgs::msg::Bool>(sn, "auto_sub", rclcpp::QoS(10).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.auto_sub);
         return sn;
     }
 

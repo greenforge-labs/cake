@@ -133,6 +133,7 @@ class _NameParamSubstitutionNode(cake.BaseNode[T]):
 
         # initialise subscribers
         sn.subscribers.odom._initialise(sn, Odometry, f"/{params.namespace}/{params.robot_id}/odom", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5, reliability=ReliabilityPolicy.BEST_EFFORT))
+        cake.attach_default_qos_handlers(sn.subscribers.odom)
 
         # initialise services
         sn.services.get_state._initialise(sn, Trigger, f"/robot/{params.robot_id}/get_state")

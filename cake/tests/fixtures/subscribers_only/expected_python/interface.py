@@ -128,7 +128,9 @@ class _SubscribersOnlyNode(cake.BaseNode[T]):
 
         # initialise subscribers
         sn.subscribers.sensor_data._initialise(sn, LaserScan, "sensor_data", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
+        cake.attach_default_qos_handlers(sn.subscribers.sensor_data)
         sn.subscribers.camera_image._initialise(sn, Image, "camera_image", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+        cake.attach_default_qos_handlers(sn.subscribers.camera_image)
 
         # initialise services
 

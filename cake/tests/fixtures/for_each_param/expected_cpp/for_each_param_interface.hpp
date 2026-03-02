@@ -11,6 +11,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <string>
 #include <unordered_map>
 #include <test_package/for_each_param_parameters.hpp>
@@ -78,6 +79,7 @@ class ForEachParamBase : public cake::BaseNode<"for_each_param", SessionType, ex
         // init subscribers
         for (const auto& key : sn->params.managed_nodes) {
             sn->subscribers.node_states[key] = cake::create_subscriber<std_msgs::msg::String>(sn, "/" + key + "/state", rclcpp::QoS(10).reliable());
+            cake::attach_default_qos_handlers(sn->subscribers.node_states[key]);
         }
         // init service clients
         for (const auto& key : sn->params.managed_nodes) {

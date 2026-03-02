@@ -11,6 +11,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <test_package/simple_node_parameters.hpp>
 
 namespace test_package::simple_node {
@@ -73,6 +74,7 @@ class SimpleNodeBase : public cake::BaseNode<"simple_node", SessionType, extend_
         sn->publishers.cmd_vel = cake::create_publisher<geometry_msgs::msg::Twist>(sn, "/cmd_vel", rclcpp::QoS(10).reliable());
         // init subscribers
         sn->subscribers.odom = cake::create_subscriber<nav_msgs::msg::Odometry>(sn, "/odom", rclcpp::QoS(10).reliable());
+        cake::attach_default_qos_handlers(sn->subscribers.odom);
         return sn;
     }
 

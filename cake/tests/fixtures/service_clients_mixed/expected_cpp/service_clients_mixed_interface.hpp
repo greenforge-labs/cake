@@ -13,6 +13,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <cake/service.hpp>
 #include <test_package/service_clients_mixed_parameters.hpp>
 
@@ -81,6 +82,7 @@ class ServiceClientsMixedBase : public cake::BaseNode<"service_clients_mixed", S
         sn->publishers.status = cake::create_publisher<std_msgs::msg::String>(sn, "/status", rclcpp::QoS(10).reliable());
         // init subscribers
         sn->subscribers.command = cake::create_subscriber<std_msgs::msg::Bool>(sn, "/command", rclcpp::QoS(5).best_effort());
+        cake::attach_default_qos_handlers(sn->subscribers.command);
         // init services
         sn->services.reset = cake::create_service<std_srvs::srv::Trigger>(sn, "/reset");
         // init service clients

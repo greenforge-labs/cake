@@ -10,6 +10,7 @@
 #include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <test_package/qos_custom_parameters.hpp>
 
 namespace test_package::qos_custom {
@@ -75,7 +76,9 @@ class QosCustomBase : public cake::BaseNode<"qos_custom", SessionType, extend_op
         sn->publishers.best_effort_topic = cake::create_publisher<std_msgs::msg::String>(sn, "best_effort_topic", rclcpp::QoS(5).best_effort().transient_local());
         // init subscribers
         sn->subscribers.keep_all_topic = cake::create_subscriber<std_msgs::msg::String>(sn, "keep_all_topic", rclcpp::QoS(rclcpp::KeepAll()).reliable());
+        cake::attach_default_qos_handlers(sn->subscribers.keep_all_topic);
         sn->subscribers.deadline_topic = cake::create_subscriber<std_msgs::msg::String>(sn, "deadline_topic", rclcpp::QoS(20).reliable().deadline(rclcpp::Duration::from_nanoseconds(1000000000)).lifespan(rclcpp::Duration::from_nanoseconds(500000000)));
+        cake::attach_default_qos_handlers(sn->subscribers.deadline_topic);
         return sn;
     }
 

@@ -128,6 +128,7 @@ class _SimpleNodeNode(cake.BaseNode[T]):
 
         # initialise subscribers
         sn.subscribers.odom._initialise(sn, Odometry, "/odom", QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=10, reliability=ReliabilityPolicy.RELIABLE))
+        cake.attach_default_qos_handlers(sn.subscribers.odom)
 
         # initialise services
 
