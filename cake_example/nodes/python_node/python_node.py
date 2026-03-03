@@ -40,10 +40,17 @@ def action_func(sn: MySession):
         sn.actions.my_action_two.succeed(result)
 
 
+def heartbeat_callback(sn: MySession, msg: Bool):
+    sn.logger.info("Heartbeat received")
+
+
 def on_configure(sn: MySession) -> TransitionCallbackReturn:
     sn.logger.info("Hello from python cake!")
     sn.logger.info(f"The parameter is: {sn.params.special_number}. The session value is: {sn.important_number}")
     sn.subscribers.another_topic.set_callback(topic_callback)
+    # Subscribes to heartbeat with a 1s deadline — if my_node stops publishing,
+    # the default QoS handler will deactivate this node.
+    sn.subscribers.heartbeat.set_callback(heartbeat_callback)
     sn.actions.my_action_two.set_options(cake.SingleGoalActionServerOptions(new_goals_replace_current_goal=True))
     cake.create_timer(sn, 1, action_func)
     return TransitionCallbackReturn.SUCCESS

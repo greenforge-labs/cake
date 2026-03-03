@@ -31,6 +31,14 @@ publishers:
       qos:
         history: 5
         reliability: RELIABLE
+    - topic: heartbeat
+      type: std_msgs/msg/Bool
+      qos:
+        history: 1
+        reliability: RELIABLE
+        deadline_ms: 1000
+        liveliness: AUTOMATIC
+        lease_duration_ms: 1000
 
 
 subscribers:

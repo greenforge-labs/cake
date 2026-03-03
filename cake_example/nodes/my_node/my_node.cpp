@@ -92,6 +92,14 @@ CallbackReturn on_configure(std::shared_ptr<Session> sn) {
     sn->actions.my_action->set_options({.new_goals_replace_current_goal = true}); // accept defaults
     cake::create_timer(sn, 1000ms, action_callback);
 
+    // Publish heartbeat every 200ms — python_node subscribes with a 1s deadline,
+    // so if this node deactivates the subscriber will miss its deadline and also deactivate.
+    cake::create_timer(sn, 200ms, [](std::shared_ptr<Session> sn) {
+        auto msg = std_msgs::msg::Bool();
+        msg.data = true;
+        sn->publishers.heartbeat->publish(msg);
+    });
+
     return CallbackReturn::SUCCESS;
 }
 

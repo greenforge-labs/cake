@@ -23,14 +23,15 @@ void attach_default_qos_handlers(std::shared_ptr<Subscriber<MessageT, SessionTyp
     });
 
     sub->set_liveliness_callback([topic](std::shared_ptr<SessionType> sn, rclcpp::QOSLivelinessChangedInfo &event) {
-        if (event.not_alive_count_change <= 0) {
+        // Deactivate if there are no alive publishers remaining — covers both lease expiry and publisher removal.
+        if (event.alive_count > 0) {
             return;
         }
         if (sn->node.get_current_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
             return;
         }
         RCLCPP_ERROR(
-            sn->node.get_logger(), "Subscriber '%s': publisher liveliness lost — deactivating node", topic.c_str()
+            sn->node.get_logger(), "Subscriber '%s': topic has no alive publishers — deactivating node", topic.c_str()
         );
         sn->node.deactivate();
     });
