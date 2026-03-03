@@ -34,7 +34,12 @@ class BaseNode {
         node_->register_on_error([this](const auto &) { return handle_error(); });
 
         // State heartbeat publisher + timer (always active, not lifecycle-managed).
-        auto state_qos = rclcpp::QoS(1).reliable().transient_local().deadline(std::chrono::milliseconds(100));
+        auto state_qos = rclcpp::QoS(1)
+                             .reliable()
+                             .transient_local()
+                             .deadline(std::chrono::milliseconds(100))
+                             .liveliness(rclcpp::LivelinessPolicy::Automatic)
+                             .liveliness_lease_duration(std::chrono::milliseconds(100));
         auto node_params = node_->get_node_parameters_interface();
         auto node_topics = node_->get_node_topics_interface();
         state_pub_ =

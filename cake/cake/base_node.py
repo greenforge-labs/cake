@@ -1,7 +1,7 @@
 from rclpy.duration import Duration
 from rclpy.lifecycle import LifecycleNode, LifecycleState
 from rclpy.lifecycle import TransitionCallbackReturn as _RclpyTCR
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, LivelinessPolicy, QoSProfile, ReliabilityPolicy
 
 import lifecycle_msgs.msg
 
@@ -124,6 +124,8 @@ class BaseNode(Generic[_SessionT]):
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
             deadline=Duration(nanoseconds=100_000_000),
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            liveliness_lease_duration=Duration(nanoseconds=100_000_000),
         )
         self._state_pub = self._node.create_publisher(lifecycle_msgs.msg.State, "~/state", state_qos)
         self._state_timer = self._node.create_timer(0.1, self._publish_state)

@@ -1182,6 +1182,129 @@ publishers:
         lease_duration_ms: 1000  # 1 second
 ```
 
+## Autostart
+
+By default, Cake nodes **automatically transition through configure → activate** on startup, so they begin processing immediately without requiring an external lifecycle manager.
+
+This is controlled by the `autostart` parameter (default: `true`). A zero-delay timer fires once on construction to call `trigger_configure()` followed by `trigger_activate()`. If either transition fails, an error is logged and the sequence stops.
+
+To disable autostart (e.g., when using a lifecycle manager):
+
+```bash
+ros2 run my_package my_node --ros-args -p autostart:=false
+```
+
+Or in a launch file:
+
+```python
+Node(
+    package='my_package',
+    executable='my_node',
+    parameters=[{'autostart': False}]
+)
+```
+
+When `autostart` is disabled, you must trigger lifecycle transitions externally:
+
+```bash
+ros2 lifecycle set /my_node configure
+ros2 lifecycle set /my_node activate
+```
+
+## State Heartbeat
+
+Every Cake node publishes its current lifecycle state on `~/state` at 10 Hz. This provides a lightweight monitoring and watchdog interface without polling the lifecycle service.
+
+| Property | Value |
+|----------|-------|
+| Topic | `~/state` |
+| Type | `lifecycle_msgs/msg/State` |
+| Rate | 100 ms |
+| QoS | Reliable, transient-local, 100 ms deadline, automatic liveliness (100 ms lease) |
+
+The publisher only serialises messages when there are active subscribers, so there is zero overhead when nobody is listening.
+
+**Watchdog usage:** External monitors can subscribe with a matching deadline QoS. If the node hangs or crashes and stops publishing, the subscriber's deadline-missed or liveliness change callback fires, enabling automatic fault detection.
+
+```bash
+# Monitor a node's state from the command line
+ros2 topic echo /my_node/state
+```
+
+## Intra-Process Communication
+
+C++ Cake nodes enable **intra-process communication (IPC)** by default. When multiple Cake nodes run in the same process (e.g., via component composition), messages are passed by pointer rather than serialised, providing zero-copy performance.
+
+This is set automatically in the `BaseNode` constructor — no configuration is needed.
+
+> **Note:** IPC is a C++ feature. Python nodes are unaffected.
+
+## Default QoS Handlers
+
+Cake automatically attaches **default QoS event handlers** to every generated subscriber. These handlers provide a safety net that deactivates the node when QoS contracts are violated:
+
+| Event | Behaviour |
+|-------|-----------|
+| **Deadline missed** | Logs an error and deactivates the node |
+| **Liveliness changed** (alive publishers drops to 0) | Logs an error and deactivates the node |
+
+Both handlers are no-ops when the node is not in the `ACTIVE` state, preventing spurious triggers during transitions.
+
+This gives you **cascading shutdown** for free: if an upstream node deactivates and stops publishing, downstream subscribers miss their deadline (or lose liveliness) and automatically deactivate too.
+
+### How It Works
+
+For every subscriber defined in `interface.yaml`, the generated code calls `attach_default_qos_handlers()` immediately after creation. No user code is needed — the handlers are always present.
+
+To make the handlers trigger, configure a `deadline_ms` and/or `liveliness` + `lease_duration_ms` in your subscriber's QoS:
+
+```yaml
+subscribers:
+    - topic: heartbeat
+      type: std_msgs/msg/Bool
+      qos:
+        history: 1
+        reliability: RELIABLE
+        deadline_ms: 1000           # deactivate if no message for 1s
+        liveliness: AUTOMATIC
+        lease_duration_ms: 1000     # deactivate if publisher disappears
+```
+
+Without deadline or liveliness QoS settings, the handlers are attached but will never fire.
+
+### Overriding Default Handlers
+
+The default handlers call `set_deadline_callback()` and `set_liveliness_callback()` on the subscriber. If you set your own callbacks in `on_configure`, they will **replace** the defaults:
+
+```cpp
+// Override the default deadline handler with custom logic
+sn->subscribers.heartbeat->set_deadline_callback(
+    [](std::shared_ptr<Session> sn, rclcpp::QOSDeadlineRequestedInfo& event) {
+        RCLCPP_WARN(sn->node.get_logger(), "Custom deadline handling");
+        // your logic here
+    }
+);
+```
+
+### Using Default Handlers Manually
+
+You can also attach the default handlers to manually-created subscribers:
+
+**C++:**
+```cpp
+#include <cake/default_qos_handlers.hpp>
+
+// After creating a subscriber manually
+cake::attach_default_qos_handlers(sn->subscribers.my_sub);
+```
+
+**Python:**
+```python
+import cake
+
+cake.attach_default_qos_handlers(sn.subscribers.my_sub)
+```
+
 ## Threading Model
 
 Cake assumes a **single-threaded executor**. Session state (publishers, subscribers, parameters, timers, etc.) is not protected by any synchronization primitives, so concurrent access from multiple executor threads would be a data race. Multi-threading executors is out of scope for cake at the moment. External concurrent execution of work is still available to the user via standard threading, but synchronisation is the users responsibility.
@@ -1211,6 +1334,7 @@ cd cake/tests
 The `cake_example` package demonstrates usage with:
 - **Multiple nodes**: C++ node (`my_node`) and Python node (`python_node`)
 - **Interface examples**: Publishers, subscribers, services, actions, and parameters
+- **Cascading deactivation**: `my_node` publishes a heartbeat; `python_node` subscribes with a 1 s deadline — if `my_node` deactivates, the default QoS handler automatically deactivates `python_node` too
 - **Minimal CMakeLists.txt**: Just 3 lines using `cake_auto_package()`
 - **Component registration**: Automatic component plugin setup
 - **Package-level interfaces**: Optional `interfaces/` directory for shared definitions
