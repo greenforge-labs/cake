@@ -66,6 +66,8 @@ services:
 service_clients:
     - name: bing_bong
       type: example_interfaces/srv/Trigger
+    - name: my_other_service
+      type: example_interfaces/srv/AddTwoInts
 
 actions:
     - name: my_action
@@ -76,4 +78,6 @@ actions:
 
 action_clients:
     - name: my_action
+      type: example_interfaces/action/Fibonacci
+    - name: my_action_two
       type: example_interfaces/action/Fibonacci

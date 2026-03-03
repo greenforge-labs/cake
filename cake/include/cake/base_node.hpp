@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <thread>
 #include <type_traits>
 
 #include <lifecycle_msgs/msg/state.hpp>
@@ -26,6 +27,11 @@ class BaseNode {
         : node_(std::make_shared<rclcpp_lifecycle::LifecycleNode>(
               node_name.c_str(), extend_options(rclcpp::NodeOptions(options).use_intra_process_comms(true))
           )) {
+        client_cb_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
+        client_executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+        client_executor_->add_callback_group(client_cb_group_, node_->get_node_base_interface());
+        client_executor_thread_ = std::thread([this]() { client_executor_->spin(); });
+
         node_->register_on_configure([this](const auto &) { return handle_configure(); });
         node_->register_on_activate([this](const auto &) { return handle_activate(); });
         node_->register_on_deactivate([this](const auto &) { return handle_deactivate(); });
@@ -68,6 +74,13 @@ class BaseNode {
                     RCLCPP_ERROR(node_->get_logger(), "Autostart failed to activate");
                 }
             });
+        }
+    }
+
+    virtual ~BaseNode() {
+        client_executor_->cancel();
+        if (client_executor_thread_.joinable()) {
+            client_executor_thread_.join();
         }
     }
 
@@ -140,11 +153,16 @@ class BaseNode {
     virtual CallbackReturn user_on_cleanup(std::shared_ptr<SessionType> /*sn*/) { return CallbackReturn::SUCCESS; }
     virtual void user_on_shutdown(std::shared_ptr<SessionType> /*sn*/) {}
 
+    rclcpp::CallbackGroup::SharedPtr client_callback_group() const { return client_cb_group_; }
+
     rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
     std::shared_ptr<SessionType> session_;
     rclcpp::TimerBase::SharedPtr autostart_timer_;
     rclcpp::Publisher<lifecycle_msgs::msg::State>::SharedPtr state_pub_;
     rclcpp::TimerBase::SharedPtr state_timer_;
+    rclcpp::CallbackGroup::SharedPtr client_cb_group_;
+    std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> client_executor_;
+    std::thread client_executor_thread_;
 };
 
 } // namespace cake

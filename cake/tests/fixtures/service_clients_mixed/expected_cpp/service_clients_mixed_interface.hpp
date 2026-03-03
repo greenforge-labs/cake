@@ -86,8 +86,8 @@ class ServiceClientsMixedBase : public cake::BaseNode<"service_clients_mixed", S
         // init services
         sn->services.reset = cake::create_service<std_srvs::srv::Trigger>(sn, "/reset");
         // init service clients
-        sn->service_clients.add_two_ints = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints");
-        sn->service_clients.compute = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("compute");
+        sn->service_clients.add_two_ints = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints", rclcpp::ServicesQoS(), this->client_callback_group());
+        sn->service_clients.compute = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("compute", rclcpp::ServicesQoS(), this->client_callback_group());
         return sn;
     }
 

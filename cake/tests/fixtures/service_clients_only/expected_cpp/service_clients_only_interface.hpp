@@ -66,8 +66,8 @@ class ServiceClientsOnlyBase : public cake::BaseNode<"service_clients_only", Ses
         sn->param_listener = std::make_shared<ParamListener>(sn->node.shared_from_this());
         sn->params = sn->param_listener->get_params();
         // init service clients
-        sn->service_clients.add_two_ints = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints");
-        sn->service_clients.trigger_service = sn->node.template create_client<std_srvs::srv::Trigger>("trigger_service");
+        sn->service_clients.add_two_ints = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints", rclcpp::ServicesQoS(), this->client_callback_group());
+        sn->service_clients.trigger_service = sn->node.template create_client<std_srvs::srv::Trigger>("trigger_service", rclcpp::ServicesQoS(), this->client_callback_group());
         return sn;
     }
 

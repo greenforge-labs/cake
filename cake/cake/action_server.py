@@ -2,7 +2,9 @@ from dataclasses import dataclass
 from enum import Enum
 import threading
 
-from rclpy.lifecycle import LifecycleNode, State
+from rclpy.lifecycle import LifecycleNode
+
+from lifecycle_msgs.msg import State
 
 from rclpy.action.server import ActionServer, CancelResponse, GoalResponse, ServerGoalHandle
 

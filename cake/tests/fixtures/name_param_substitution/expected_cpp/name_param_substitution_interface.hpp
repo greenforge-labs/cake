@@ -85,7 +85,7 @@ class NameParamSubstitutionBase : public cake::BaseNode<"name_param_substitution
         // init services
         sn->services.get_state = cake::create_service<std_srvs::srv::Trigger>(sn, "/robot/" + sn->params.robot_id + "/get_state");
         // init service clients
-        sn->service_clients.external_service = sn->node.template create_client<std_srvs::srv::SetBool>("/" + sn->params.namespace + "/service");
+        sn->service_clients.external_service = sn->node.template create_client<std_srvs::srv::SetBool>("/" + sn->params.namespace + "/service", rclcpp::ServicesQoS(), this->client_callback_group());
         return sn;
     }
 

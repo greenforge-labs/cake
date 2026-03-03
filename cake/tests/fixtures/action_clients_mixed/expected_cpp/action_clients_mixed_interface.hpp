@@ -94,12 +94,12 @@ class ActionClientsMixedBase : public cake::BaseNode<"action_clients_mixed", Ses
         // init services
         sn->services.reset = cake::create_service<std_srvs::srv::Trigger>(sn, "/reset");
         // init service clients
-        sn->service_clients.compute = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("/compute");
+        sn->service_clients.compute = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("/compute", rclcpp::ServicesQoS(), this->client_callback_group());
         // init actions
         sn->actions.fibonacci_server = cake::create_single_goal_action_server<example_interfaces::action::Fibonacci>(sn, "fibonacci_server");
         // init action clients
-        sn->action_clients.navigate = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(sn->node.shared_from_this(), "/navigate");
-        sn->action_clients.compute_path = rclcpp_action::create_client<nav2_msgs::action::ComputePathToPose>(sn->node.shared_from_this(), "compute_path");
+        sn->action_clients.navigate = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(sn->node.shared_from_this(), "/navigate", this->client_callback_group());
+        sn->action_clients.compute_path = rclcpp_action::create_client<nav2_msgs::action::ComputePathToPose>(sn->node.shared_from_this(), "compute_path", this->client_callback_group());
         return sn;
     }
 

@@ -66,8 +66,8 @@ class ActionClientsOnlyBase : public cake::BaseNode<"action_clients_only", Sessi
         sn->param_listener = std::make_shared<ParamListener>(sn->node.shared_from_this());
         sn->params = sn->param_listener->get_params();
         // init action clients
-        sn->action_clients.fibonacci = rclcpp_action::create_client<example_interfaces::action::Fibonacci>(sn->node.shared_from_this(), "/fibonacci");
-        sn->action_clients.navigate_to_pose = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(sn->node.shared_from_this(), "navigate_to_pose");
+        sn->action_clients.fibonacci = rclcpp_action::create_client<example_interfaces::action::Fibonacci>(sn->node.shared_from_this(), "/fibonacci", this->client_callback_group());
+        sn->action_clients.navigate_to_pose = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(sn->node.shared_from_this(), "navigate_to_pose", this->client_callback_group());
         return sn;
     }
 

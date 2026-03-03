@@ -83,7 +83,7 @@ class ForEachParamBase : public cake::BaseNode<"for_each_param", SessionType, ex
         }
         // init service clients
         for (const auto& key : sn->params.managed_nodes) {
-            sn->service_clients.change_state_clients[key] = sn->node.template create_client<lifecycle_msgs::srv::ChangeState>("/" + key + "/change_state");
+            sn->service_clients.change_state_clients[key] = sn->node.template create_client<lifecycle_msgs::srv::ChangeState>("/" + key + "/change_state", rclcpp::ServicesQoS(), this->client_callback_group());
         }
         return sn;
     }

@@ -1307,7 +1307,80 @@ cake.attach_default_qos_handlers(sn.subscribers.my_sub)
 
 ## Threading Model
 
-Cake assumes a **single-threaded executor**. Session state (publishers, subscribers, parameters, timers, etc.) is not protected by any synchronization primitives, so concurrent access from multiple executor threads would be a data race. Multi-threading executors is out of scope for cake at the moment. External concurrent execution of work is still available to the user via standard threading, but synchronisation is the users responsibility.
+Cake assumes a **single-threaded executor** for most callbacks. Session state (publishers, subscribers, parameters, timers, etc.) is not protected by any synchronization primitives, so concurrent access from multiple executor threads would be a data race. Multi-threading executors is out of scope for cake at the moment. External concurrent execution of work is still available to the user via standard threading, but synchronisation is the users responsibility.
+
+### Isolated Callback Group for Service/Action Clients
+
+Service clients and action clients are placed on a **dedicated callback group** with its own background `SingleThreadedExecutor` thread. This means their response callbacks are processed independently of the main executor — preventing deadlocks when calling services synchronously from lifecycle callbacks (e.g., `on_configure`).
+
+Without this, calling a service synchronously from `on_configure` would deadlock: the main executor thread is blocked waiting for the response, but that same thread is the only one that can process the response.
+
+The background executor is created in the `BaseNode` constructor and torn down in the destructor. Generated code automatically passes the isolated callback group when creating service and action clients — no user configuration is needed.
+
+## Synchronous Service & Action Helpers (C++)
+
+Cake provides `<cake/call_sync.hpp>` with blocking wrappers for service and action clients. These are safe to call from lifecycle callbacks because the isolated background executor processes the responses.
+
+### `cake::call_sync` — Synchronous Service Call
+
+```cpp
+#include <cake/call_sync.hpp>
+
+CallbackReturn on_configure(std::shared_ptr<Session> sn) {
+    if (sn->service_clients.my_service->wait_for_service(2s)) {
+        auto req = std::make_shared<MyService::Request>();
+        req->data = 42;
+        auto resp = cake::call_sync<MyService>(sn->service_clients.my_service, req, 5s);
+        if (resp) {
+            RCLCPP_INFO(sn->node.get_logger(), "Got response: %d", resp->result);
+        } else {
+            RCLCPP_WARN(sn->node.get_logger(), "Service call timed out");
+        }
+    }
+    return CallbackReturn::SUCCESS;
+}
+```
+
+Returns `nullptr` on timeout. Default timeout is 5 seconds.
+
+### `cake::send_goal_sync` — Synchronous Action Goal
+
+```cpp
+#include <cake/call_sync.hpp>
+
+auto goal = MyAction::Goal();
+goal.order = 5;
+auto goal_handle = cake::send_goal_sync<MyAction>(
+    sn->action_clients.my_action, goal, {}, 5s);
+if (goal_handle) {
+    RCLCPP_INFO(sn->node.get_logger(), "Goal accepted");
+}
+```
+
+Returns `nullptr` if the goal is rejected or the request times out.
+
+### `cake::get_result_sync` — Wait for Action Result
+
+```cpp
+auto result = cake::get_result_sync<MyAction>(
+    sn->action_clients.my_action, goal_handle, 5min);
+if (result) {
+    RCLCPP_INFO(sn->node.get_logger(), "Result: %d", result->sequence.size());
+}
+```
+
+Returns `std::nullopt` on timeout. Default timeout is 5 minutes.
+
+### `cake::cancel_goal_sync` — Synchronous Goal Cancel
+
+```cpp
+auto cancel_resp = cake::cancel_goal_sync<MyAction>(
+    sn->action_clients.my_action, goal_handle, 5s);
+```
+
+Returns `nullptr` on timeout.
+
+> **Important:** These helpers are designed for calling services/actions on **other nodes**. Calling a service hosted on the same node from a callback on the main executor will still deadlock, because the service handler also needs the main executor thread to run.
 
 ## Development
 
@@ -1334,6 +1407,7 @@ cd cake/tests
 The `cake_example` package demonstrates usage with:
 - **Multiple nodes**: C++ node (`my_node`) and Python node (`python_node`)
 - **Interface examples**: Publishers, subscribers, services, actions, and parameters
+- **Synchronous calls**: `my_node` uses `cake::call_sync` and `cake::send_goal_sync` in `on_configure` to call `python_node`'s service and action synchronously — demonstrating deadlock-free sync calls from lifecycle callbacks
 - **Cascading deactivation**: `my_node` publishes a heartbeat; `python_node` subscribes with a 1 s deadline — if `my_node` deactivates, the default QoS handler automatically deactivates `python_node` too
 - **Minimal CMakeLists.txt**: Just 3 lines using `cake_auto_package()`
 - **Component registration**: Automatic component plugin setup

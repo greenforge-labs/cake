@@ -9,6 +9,7 @@
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/string.hpp"
 
+#include <cake/call_sync.hpp>
 #include <cake/timer.hpp>
 
 using namespace std::chrono_literals;
@@ -99,6 +100,38 @@ CallbackReturn on_configure(std::shared_ptr<Session> sn) {
         msg.data = true;
         sn->publishers.heartbeat->publish(msg);
     });
+
+    // Sync service call — calls python_node's my_other_service from on_configure without
+    // deadlocking, because cake puts service client responses on an isolated background executor.
+    if (sn->service_clients.my_other_service->wait_for_service(2s)) {
+        auto req = std::make_shared<example_interfaces::srv::AddTwoInts::Request>();
+        req->a = 3;
+        req->b = 4;
+        auto resp = cake::call_sync<example_interfaces::srv::AddTwoInts>(sn->service_clients.my_other_service, req, 5s);
+        if (resp) {
+            RCLCPP_INFO(sn->node.get_logger(), "Sync service call: 3 + 4 = %ld", resp->sum);
+        } else {
+            RCLCPP_WARN(sn->node.get_logger(), "Sync service call timed out");
+        }
+    } else {
+        RCLCPP_INFO(sn->node.get_logger(), "my_other_service not available yet, skipping sync call");
+    }
+
+    // Sync action goal — calls python_node's my_action_two. send_goal_sync blocks until the
+    // goal is accepted (or times out), which is safe from on_configure for the same reason.
+    if (sn->action_clients.my_action_two->wait_for_action_server(2s)) {
+        example_interfaces::action::Fibonacci::Goal goal;
+        goal.order = 5;
+        auto goal_handle =
+            cake::send_goal_sync<example_interfaces::action::Fibonacci>(sn->action_clients.my_action_two, goal, {}, 5s);
+        if (goal_handle) {
+            RCLCPP_INFO(sn->node.get_logger(), "Sync action goal accepted");
+        } else {
+            RCLCPP_WARN(sn->node.get_logger(), "Sync action goal rejected or timed out");
+        }
+    } else {
+        RCLCPP_INFO(sn->node.get_logger(), "my_action_two not available yet, skipping sync goal");
+    }
 
     return CallbackReturn::SUCCESS;
 }
