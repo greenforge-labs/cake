@@ -252,7 +252,7 @@ macro(_cake_generate_cpp_node NODE_NAME INTERFACE_YAML)
                                                    $<INSTALL_INTERFACE:include>
     )
     set_target_properties(${_cake_node_INTERFACE_LIB_NAME} PROPERTIES LINKER_LANGUAGE CXX)
-    target_link_libraries(${_cake_node_INTERFACE_LIB_NAME} INTERFACE rclcpp::rclcpp)
+    target_link_libraries(${_cake_node_INTERFACE_LIB_NAME} INTERFACE rclcpp::rclcpp rclcpp_lifecycle::rclcpp_lifecycle)
 
     # Install the generated headers
     install(DIRECTORY ${_cake_node_LIB_INCLUDE_DIR} DESTINATION include)

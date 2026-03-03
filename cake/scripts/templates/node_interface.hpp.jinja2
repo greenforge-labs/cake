@@ -4,16 +4,18 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 {% for include in message_includes -%}
 #include <{{ include }}>
 {% endfor -%}
 #include <cake/base_node.hpp>
-#include <cake/context.hpp>
+#include <cake/session.hpp>
 {%- if publishers %}
 #include <cake/publisher.hpp>
 {%- endif %}
 {%- if subscribers %}
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 {%- endif %}
 {%- if services %}
 #include <cake/service.hpp>
@@ -33,52 +35,52 @@
 namespace {{ implementation_namespace }} {
 {%- if publishers %}
 
-template <typename ContextType> struct {{ class_name }}Publishers {
+template <typename SessionType> struct {{ class_name }}Publishers {
 {%- for pub in publishers %}
 {%- if pub.for_each_param %}
-    std::unordered_map<std::string, std::shared_ptr<cake::Publisher<{{ pub.msg_type }}, ContextType>>> {{ pub.field_name }};
+    std::unordered_map<std::string, std::shared_ptr<cake::Publisher<{{ pub.msg_type }}, SessionType>>> {{ pub.field_name }};
 {%- else %}
-    std::shared_ptr<cake::Publisher<{{ pub.msg_type }}, ContextType>> {{ pub.field_name }};
+    std::shared_ptr<cake::Publisher<{{ pub.msg_type }}, SessionType>> {{ pub.field_name }};
 {%- endif %}
 {%- endfor %}
 };
 {%- else %}
 
-template <typename ContextType> struct {{ class_name }}Publishers {};
+template <typename SessionType> struct {{ class_name }}Publishers {};
 {%- endif %}
 {%- if subscribers %}
 
-template <typename ContextType> struct {{ class_name }}Subscribers {
+template <typename SessionType> struct {{ class_name }}Subscribers {
 {%- for sub in subscribers %}
 {%- if sub.for_each_param %}
-    std::unordered_map<std::string, std::shared_ptr<cake::Subscriber<{{ sub.msg_type }}, ContextType>>> {{ sub.field_name }};
+    std::unordered_map<std::string, std::shared_ptr<cake::Subscriber<{{ sub.msg_type }}, SessionType>>> {{ sub.field_name }};
 {%- else %}
-    std::shared_ptr<cake::Subscriber<{{ sub.msg_type }}, ContextType>> {{ sub.field_name }};
+    std::shared_ptr<cake::Subscriber<{{ sub.msg_type }}, SessionType>> {{ sub.field_name }};
 {%- endif %}
 {%- endfor %}
 };
 {%- else %}
 
-template <typename ContextType> struct {{ class_name }}Subscribers {};
+template <typename SessionType> struct {{ class_name }}Subscribers {};
 {%- endif %}
 {%- if services %}
 
-template <typename ContextType> struct {{ class_name }}Services {
+template <typename SessionType> struct {{ class_name }}Services {
 {%- for srv in services %}
 {%- if srv.for_each_param %}
-    std::unordered_map<std::string, std::shared_ptr<cake::Service<{{ srv.service_type }}, ContextType>>> {{ srv.field_name }};
+    std::unordered_map<std::string, std::shared_ptr<cake::Service<{{ srv.service_type }}, SessionType>>> {{ srv.field_name }};
 {%- else %}
-    std::shared_ptr<cake::Service<{{ srv.service_type }}, ContextType>> {{ srv.field_name }};
+    std::shared_ptr<cake::Service<{{ srv.service_type }}, SessionType>> {{ srv.field_name }};
 {%- endif %}
 {%- endfor %}
 };
 {%- else %}
 
-template <typename ContextType> struct {{ class_name }}Services {};
+template <typename SessionType> struct {{ class_name }}Services {};
 {%- endif %}
 {%- if service_clients %}
 
-template <typename ContextType> struct {{ class_name }}ServiceClients {
+template <typename SessionType> struct {{ class_name }}ServiceClients {
 {%- for client in service_clients %}
 {%- if client.for_each_param %}
     std::unordered_map<std::string, rclcpp::Client<{{ client.service_type }}>::SharedPtr> {{ client.field_name }};
@@ -89,11 +91,11 @@ template <typename ContextType> struct {{ class_name }}ServiceClients {
 };
 {%- else %}
 
-template <typename ContextType> struct {{ class_name }}ServiceClients {};
+template <typename SessionType> struct {{ class_name }}ServiceClients {};
 {%- endif %}
 {%- if actions %}
 
-template <typename ContextType> struct {{ class_name }}Actions {
+template <typename SessionType> struct {{ class_name }}Actions {
 {%- for action in actions %}
 {%- if action.for_each_param %}
     std::unordered_map<std::string, std::shared_ptr<cake::SingleGoalActionServer<{{ action.action_type }}>>> {{ action.field_name }};
@@ -104,11 +106,11 @@ template <typename ContextType> struct {{ class_name }}Actions {
 };
 {%- else %}
 
-template <typename ContextType> struct {{ class_name }}Actions {};
+template <typename SessionType> struct {{ class_name }}Actions {};
 {%- endif %}
 {%- if action_clients %}
 
-template <typename ContextType> struct {{ class_name }}ActionClients {
+template <typename SessionType> struct {{ class_name }}ActionClients {
 {%- for client in action_clients %}
 {%- if client.for_each_param %}
     std::unordered_map<std::string, rclcpp_action::Client<{{ client.action_type }}>::SharedPtr> {{ client.field_name }};
@@ -119,49 +121,56 @@ template <typename ContextType> struct {{ class_name }}ActionClients {
 };
 {%- else %}
 
-template <typename ContextType> struct {{ class_name }}ActionClients {};
+template <typename SessionType> struct {{ class_name }}ActionClients {};
 {%- endif %}
 
-template <typename DerivedContextType> struct {{ class_name }}Context : cake::Context {
-    {{ class_name }}Publishers<DerivedContextType> publishers;
-    {{ class_name }}Subscribers<DerivedContextType> subscribers;
-    {{ class_name }}Services<DerivedContextType> services;
-    {{ class_name }}ServiceClients<DerivedContextType> service_clients;
-    {{ class_name }}Actions<DerivedContextType> actions;
-    {{ class_name }}ActionClients<DerivedContextType> action_clients;
+template <typename DerivedSessionType> struct {{ session_class }} : cake::Session {
+    using cake::Session::Session;
+    {{ class_name }}Publishers<DerivedSessionType> publishers;
+    {{ class_name }}Subscribers<DerivedSessionType> subscribers;
+    {{ class_name }}Services<DerivedSessionType> services;
+    {{ class_name }}ServiceClients<DerivedSessionType> service_clients;
+    {{ class_name }}Actions<DerivedSessionType> actions;
+    {{ class_name }}ActionClients<DerivedSessionType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
 
+using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 template <
-    typename ContextType,
-    auto init_func,
+    typename SessionType,
+    auto on_configure_func,
+    auto on_activate_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_deactivate_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_cleanup_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_shutdown_func = [](std::shared_ptr<SessionType>) {},
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_options> {
+class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", SessionType, extend_options> {
+    static_assert(
+        std::is_base_of_v<{{ session_class }}<SessionType>, SessionType>, "SessionType must be a child of {{ session_class }}"
+    );
+
   public:
-    explicit {{ class_name }}Base(const rclcpp::NodeOptions &options) : cake::BaseNode<"{{ node_name }}", extend_options>(options) {
-        static_assert(
-            std::is_base_of_v<{{ class_name }}Context<ContextType>, ContextType>, "ContextType must be a child of {{ class_name }}Context"
-        );
+    explicit {{ class_name }}Base(const rclcpp::NodeOptions &options)
+        : cake::BaseNode<"{{ node_name }}", SessionType, extend_options>(options) {}
 
-        // init context
-        auto ctx = std::make_shared<ContextType>();
-        ctx->node = this->node_;
-
+  protected:
+    std::shared_ptr<SessionType> create_session(rclcpp_lifecycle::LifecycleNode& node) override {
+        auto sn = std::make_shared<SessionType>(node);
         // init parameters (must be before publishers/subscribers for QoS param refs)
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
+        sn->param_listener = std::make_shared<ParamListener>(sn->node.shared_from_this());
+        sn->params = sn->param_listener->get_params();
 {%- if publishers %}
 
         // init publishers
 {%- for pub in publishers %}
 {%- if pub.for_each_param %}
-        for (const auto& key : ctx->params.{{ pub.for_each_param }}) {
-            ctx->publishers.{{ pub.field_name }}[key] = cake::create_publisher<{{ pub.msg_type }}>(ctx, {{ pub.name_expr }}, {{ pub.qos_code }});
+        for (const auto& key : sn->params.{{ pub.for_each_param }}) {
+            sn->publishers.{{ pub.field_name }}[key] = cake::create_publisher<{{ pub.msg_type }}>(sn, {{ pub.name_expr }}, {{ pub.qos_code }});
         }
 {%- else %}
-        ctx->publishers.{{ pub.field_name }} = cake::create_publisher<{{ pub.msg_type }}>(ctx, {{ pub.name_expr }}, {{ pub.qos_code }});
+        sn->publishers.{{ pub.field_name }} = cake::create_publisher<{{ pub.msg_type }}>(sn, {{ pub.name_expr }}, {{ pub.qos_code }});
 {%- endif %}
 {%- endfor %}
 
@@ -170,11 +179,13 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
         // init subscribers
 {%- for sub in subscribers %}
 {%- if sub.for_each_param %}
-        for (const auto& key : ctx->params.{{ sub.for_each_param }}) {
-            ctx->subscribers.{{ sub.field_name }}[key] = cake::create_subscriber<{{ sub.msg_type }}>(ctx, {{ sub.name_expr }}, {{ sub.qos_code }});
+        for (const auto& key : sn->params.{{ sub.for_each_param }}) {
+            sn->subscribers.{{ sub.field_name }}[key] = cake::create_subscriber<{{ sub.msg_type }}>(sn, {{ sub.name_expr }}, {{ sub.qos_code }});
+            cake::attach_default_qos_handlers(sn->subscribers.{{ sub.field_name }}[key]);
         }
 {%- else %}
-        ctx->subscribers.{{ sub.field_name }} = cake::create_subscriber<{{ sub.msg_type }}>(ctx, {{ sub.name_expr }}, {{ sub.qos_code }});
+        sn->subscribers.{{ sub.field_name }} = cake::create_subscriber<{{ sub.msg_type }}>(sn, {{ sub.name_expr }}, {{ sub.qos_code }});
+        cake::attach_default_qos_handlers(sn->subscribers.{{ sub.field_name }});
 {%- endif %}
 {%- endfor %}
 
@@ -183,11 +194,11 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
         // init services
 {%- for srv in services %}
 {%- if srv.for_each_param %}
-        for (const auto& key : ctx->params.{{ srv.for_each_param }}) {
-            ctx->services.{{ srv.field_name }}[key] = cake::create_service<{{ srv.service_type }}>(ctx, {{ srv.name_expr }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %});
+        for (const auto& key : sn->params.{{ srv.for_each_param }}) {
+            sn->services.{{ srv.field_name }}[key] = cake::create_service<{{ srv.service_type }}>(sn, {{ srv.name_expr }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %});
         }
 {%- else %}
-        ctx->services.{{ srv.field_name }} = cake::create_service<{{ srv.service_type }}>(ctx, {{ srv.name_expr }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %});
+        sn->services.{{ srv.field_name }} = cake::create_service<{{ srv.service_type }}>(sn, {{ srv.name_expr }}{% if srv.qos_code %}, {{ srv.qos_code }}{% endif %});
 {%- endif %}
 {%- endfor %}
 
@@ -196,11 +207,11 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
         // init service clients
 {%- for client in service_clients %}
 {%- if client.for_each_param %}
-        for (const auto& key : ctx->params.{{ client.for_each_param }}) {
-            ctx->service_clients.{{ client.field_name }}[key] = ctx->node->template create_client<{{ client.service_type }}>({{ client.name_expr }}{% if client.qos_code %}, {{ client.qos_code }}{% endif %});
+        for (const auto& key : sn->params.{{ client.for_each_param }}) {
+            sn->service_clients.{{ client.field_name }}[key] = sn->node.template create_client<{{ client.service_type }}>({{ client.name_expr }}{% if client.qos_code %}, {{ client.qos_code }}{% endif %});
         }
 {%- else %}
-        ctx->service_clients.{{ client.field_name }} = ctx->node->template create_client<{{ client.service_type }}>({{ client.name_expr }}{% if client.qos_code %}, {{ client.qos_code }}{% endif %});
+        sn->service_clients.{{ client.field_name }} = sn->node.template create_client<{{ client.service_type }}>({{ client.name_expr }}{% if client.qos_code %}, {{ client.qos_code }}{% endif %});
 {%- endif %}
 {%- endfor %}
 
@@ -209,11 +220,11 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
         // init actions
 {%- for action in actions %}
 {%- if action.for_each_param %}
-        for (const auto& key : ctx->params.{{ action.for_each_param }}) {
-            ctx->actions.{{ action.field_name }}[key] = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx, {{ action.name_expr }});
+        for (const auto& key : sn->params.{{ action.for_each_param }}) {
+            sn->actions.{{ action.field_name }}[key] = cake::create_single_goal_action_server<{{ action.action_type }}>(sn, {{ action.name_expr }});
         }
 {%- else %}
-        ctx->actions.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(ctx, {{ action.name_expr }});
+        sn->actions.{{ action.field_name }} = cake::create_single_goal_action_server<{{ action.action_type }}>(sn, {{ action.name_expr }});
 {%- endif %}
 {%- endfor %}
 
@@ -222,17 +233,38 @@ class {{ class_name }}Base : public cake::BaseNode<"{{ node_name }}", extend_opt
         // init action clients
 {%- for client in action_clients %}
 {%- if client.for_each_param %}
-        for (const auto& key : ctx->params.{{ client.for_each_param }}) {
-            ctx->action_clients.{{ client.field_name }}[key] = rclcpp_action::create_client<{{ client.action_type }}>(ctx->node, {{ client.name_expr }});
+        for (const auto& key : sn->params.{{ client.for_each_param }}) {
+            sn->action_clients.{{ client.field_name }}[key] = rclcpp_action::create_client<{{ client.action_type }}>(sn->node.shared_from_this(), {{ client.name_expr }});
         }
 {%- else %}
-        ctx->action_clients.{{ client.field_name }} = rclcpp_action::create_client<{{ client.action_type }}>(ctx->node, {{ client.name_expr }});
+        sn->action_clients.{{ client.field_name }} = rclcpp_action::create_client<{{ client.action_type }}>(sn->node.shared_from_this(), {{ client.name_expr }});
 {%- endif %}
 {%- endfor %}
 
 {%- endif %}
-        init_func(ctx);
+        return sn;
     }
+
+    void activate_entities(std::shared_ptr<SessionType> sn) override {
+        for (auto &t : sn->timers) { t->reset(); }
+    }
+
+    void deactivate_entities(std::shared_ptr<SessionType> sn) override {
+        for (auto &t : sn->timers) { t->cancel(); }
+{%- for action in actions %}
+{%- if action.for_each_param %}
+        for (auto &[key, action] : sn->actions.{{ action.field_name }}) { if (action) { action->deactivate(); } }
+{%- else %}
+        if (sn->actions.{{ action.field_name }}) { sn->actions.{{ action.field_name }}->deactivate(); }
+{%- endif %}
+{%- endfor %}
+    }
+
+    CallbackReturn user_on_configure(std::shared_ptr<SessionType> sn) override { return on_configure_func(sn); }
+    CallbackReturn user_on_activate(std::shared_ptr<SessionType> sn) override { return on_activate_func(sn); }
+    CallbackReturn user_on_deactivate(std::shared_ptr<SessionType> sn) override { return on_deactivate_func(sn); }
+    CallbackReturn user_on_cleanup(std::shared_ptr<SessionType> sn) override { return on_cleanup_func(sn); }
+    void user_on_shutdown(std::shared_ptr<SessionType> sn) override { on_shutdown_func(sn); }
 };
 
 } // namespace {{ implementation_namespace }}

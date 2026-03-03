@@ -2,27 +2,37 @@
 
 #include <functional>
 #include <memory>
+#include <type_traits>
+
 #include <rclcpp/rclcpp.hpp>
+
+#include "session.hpp"
 
 namespace cake {
 
-template <typename MessageT, typename ContextType> class Publisher {
+template <typename MessageT, typename SessionType> class Publisher {
+    static_assert(std::is_base_of_v<Session, SessionType>, "SessionType must derive from cake::Session");
+
   public:
-    explicit Publisher(std::shared_ptr<ContextType> context, const std::string &topic_name, const rclcpp::QoS &qos)
-        : context_(context) {
+    explicit Publisher(std::shared_ptr<SessionType> sn, const std::string &topic_name, const rclcpp::QoS &qos)
+        : session_(sn) {
         rclcpp::PublisherOptions options;
         options.event_callbacks.deadline_callback = [this](rclcpp::QOSDeadlineOfferedInfo &event) {
-            if (deadline_callback_) {
-                deadline_callback_(context_, event);
+            if (auto sn = session_.lock()) {
+                if (deadline_callback_) {
+                    deadline_callback_(sn, event);
+                }
             }
         };
         options.event_callbacks.liveliness_callback = [this](rclcpp::QOSLivelinessLostInfo &event) {
-            if (liveliness_callback_) {
-                liveliness_callback_(context_, event);
+            if (auto sn = session_.lock()) {
+                if (liveliness_callback_) {
+                    liveliness_callback_(sn, event);
+                }
             }
         };
 
-        publisher_ = context->node->template create_publisher<MessageT>(topic_name, qos, options);
+        publisher_ = rclcpp::create_publisher<MessageT>(sn->node, topic_name, qos, options);
     }
 
     void publish(const MessageT &msg) { publisher_->publish(msg); }
@@ -32,29 +42,29 @@ template <typename MessageT, typename ContextType> class Publisher {
     typename rclcpp::Publisher<MessageT>::SharedPtr publisher() { return publisher_; }
 
     void
-    set_deadline_callback(std::function<void(std::shared_ptr<ContextType>, rclcpp::QOSDeadlineOfferedInfo &)> callback
+    set_deadline_callback(std::function<void(std::shared_ptr<SessionType>, rclcpp::QOSDeadlineOfferedInfo &)> callback
     ) {
         deadline_callback_ = callback;
     }
 
     void
-    set_liveliness_callback(std::function<void(std::shared_ptr<ContextType>, rclcpp::QOSLivelinessLostInfo &)> callback
+    set_liveliness_callback(std::function<void(std::shared_ptr<SessionType>, rclcpp::QOSLivelinessLostInfo &)> callback
     ) {
         liveliness_callback_ = callback;
     }
 
   private:
-    std::shared_ptr<ContextType> context_;
+    std::weak_ptr<SessionType> session_;
     typename rclcpp::Publisher<MessageT>::SharedPtr publisher_;
 
-    std::function<void(std::shared_ptr<ContextType>, rclcpp::QOSDeadlineOfferedInfo &)> deadline_callback_;
-    std::function<void(std::shared_ptr<ContextType>, rclcpp::QOSLivelinessLostInfo &)> liveliness_callback_;
+    std::function<void(std::shared_ptr<SessionType>, rclcpp::QOSDeadlineOfferedInfo &)> deadline_callback_;
+    std::function<void(std::shared_ptr<SessionType>, rclcpp::QOSLivelinessLostInfo &)> liveliness_callback_;
 };
 
-template <typename MessageT, typename ContextType>
-std::shared_ptr<Publisher<MessageT, ContextType>>
-create_publisher(std::shared_ptr<ContextType> context, const std::string &topic_name, const rclcpp::QoS &qos) {
-    return std::make_shared<Publisher<MessageT, ContextType>>(context, topic_name, qos);
+template <typename MessageT, typename SessionType>
+std::shared_ptr<Publisher<MessageT, SessionType>>
+create_publisher(std::shared_ptr<SessionType> sn, const std::string &topic_name, const rclcpp::QoS &qos) {
+    return std::make_shared<Publisher<MessageT, SessionType>>(sn, topic_name, qos);
 }
 
 } // namespace cake

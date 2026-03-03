@@ -1,7 +1,9 @@
 from rclpy.qos import QoSProfile, qos_profile_services_default
 from rclpy.service import Service as RclpyService
 
-from .context import Context
+from lifecycle_msgs.msg import State
+
+from .session import Session
 
 from typing import Any, Callable, Generic, TypeVar, cast
 
@@ -10,9 +12,9 @@ RequestT = TypeVar("RequestT")
 ResponseT = TypeVar("ResponseT")
 
 
-def get_no_handler_warning_logger(service_name: str) -> Callable[[Context, Any, ResponseT], ResponseT]:
-    def inner(ctx: Context, request: Any, response: ResponseT) -> ResponseT:
-        ctx.node.get_logger().warning(
+def get_no_handler_warning_logger(service_name: str) -> Callable[[Session, Any, ResponseT], ResponseT]:
+    def inner(sn: Session, request: Any, response: ResponseT) -> ResponseT:
+        sn.node.get_logger().warning(
             f"Service '{service_name}' received request but no handler configured. Call set_request_handler()."
         )
         return response
@@ -22,13 +24,13 @@ def get_no_handler_warning_logger(service_name: str) -> Callable[[Context, Any, 
 
 class Service(Generic[ServiceT, RequestT, ResponseT]):
     _service: RclpyService | None = None
-    _request_handler: Callable[[Context, RequestT, ResponseT], ResponseT]
+    _request_handler: Callable[[Session, RequestT, ResponseT], ResponseT]
     _service_type: type[ServiceT]
     _service_name: str
 
     def _initialise(
         self,
-        context: Context,
+        session: Session,
         srv_type: type[ServiceT],
         service_name: str,
         qos: QoSProfile = qos_profile_services_default,
@@ -37,16 +39,27 @@ class Service(Generic[ServiceT, RequestT, ResponseT]):
         self._service_name = service_name
         self._request_handler = get_no_handler_warning_logger(service_name)
 
-        self._service = context.node.create_service(
+        def guarded_handler(request, response):
+            if session.node.current_state != State.PRIMARY_STATE_ACTIVE:
+                session.node.get_logger().warning(
+                    f"Service '{service_name}' received request while not active, ignoring."
+                )
+                return response
+            return self._request_handler(session, cast(RequestT, request), cast(ResponseT, response))
+
+        self._service = session.node.create_service(
             srv_type=srv_type,
             srv_name=service_name,
-            callback=lambda request, response: self._request_handler(
-                context, cast(RequestT, request), cast(ResponseT, response)
-            ),
+            callback=guarded_handler,
             qos_profile=qos,
         )
 
-    def set_request_handler(self, handler: Callable[[Context, RequestT, ResponseT], ResponseT]) -> None:
+    def _destroy(self, node) -> None:
+        if self._service is not None:
+            node.destroy_service(self._service)
+            self._service = None
+
+    def set_request_handler(self, handler: Callable[[Session, RequestT, ResponseT], ResponseT]) -> None:
         if self._service is None:
             raise RuntimeError("Can't set request handler. Service has not been initialised! This is an error in cake.")
         self._request_handler = handler

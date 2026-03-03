@@ -27,6 +27,14 @@ subscribers:
       qos:
         history: ${param:topic_queue_depth}
         reliability: BEST_EFFORT
+    - topic: heartbeat
+      type: std_msgs/msg/Bool
+      qos:
+        history: 1
+        reliability: RELIABLE
+        deadline_ms: 1000
+        liveliness: AUTOMATIC
+        lease_duration_ms: 1000
 
 services:
     - name: my_other_service

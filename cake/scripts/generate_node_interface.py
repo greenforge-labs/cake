@@ -176,7 +176,7 @@ def generate_cpp_name_expression(name: str, for_each_loop_var: str | None = None
 
     Examples:
         "/cmd_vel" -> '"/cmd_vel"'
-        "/robot/${param:id}/cmd" -> '"/robot/" + ctx->params.id + "/cmd"'
+        "/robot/${param:id}/cmd" -> '"/robot/" + sn->params.id + "/cmd"'
         "/${for_each_param:nodes}/state" with for_each_loop_var="key" -> '"/" + key + "/state"'
     """
     # Combined pattern matching both ${param:...} and ${for_each_param:...}
@@ -194,7 +194,7 @@ def generate_cpp_name_expression(name: str, for_each_loop_var: str | None = None
             parts.append(f'"{name[last_end:match.start()]}"')
         if match.group(1) is not None:
             # ${param:X} token
-            parts.append(f"ctx->params.{match.group(1)}")
+            parts.append(f"sn->params.{match.group(1)}")
         else:
             # ${for_each_param:X} token - use loop variable directly (string_array -> std::string)
             parts.append(for_each_loop_var or "key")
@@ -506,7 +506,7 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
     history = qos_spec["history"]
     if is_param_ref(history):
         param_name = extract_param_name(history)
-        base_qos = f"rclcpp::QoS(ctx->params.{param_name})"
+        base_qos = f"rclcpp::QoS(sn->params.{param_name})"
     elif history == "ALL":
         base_qos = "rclcpp::QoS(rclcpp::KeepAll())"
     else:
@@ -519,7 +519,7 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
     reliability = qos_spec["reliability"]
     if is_param_ref(reliability):
         param_name = extract_param_name(reliability)
-        methods.append(f".reliability(cake::to_reliability(ctx->params.{param_name}))")
+        methods.append(f".reliability(cake::to_reliability(sn->params.{param_name}))")
         needs_qos_helpers = True
     elif reliability == "RELIABLE":
         methods.append(".reliable()")
@@ -531,7 +531,7 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
         durability = qos_spec["durability"]
         if is_param_ref(durability):
             param_name = extract_param_name(durability)
-            methods.append(f".durability(cake::to_durability(ctx->params.{param_name}))")
+            methods.append(f".durability(cake::to_durability(sn->params.{param_name}))")
             needs_qos_helpers = True
         elif durability == "VOLATILE":
             methods.append(".durability_volatile()")
@@ -543,7 +543,7 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
         deadline_ms = qos_spec["deadline_ms"]
         if is_param_ref(deadline_ms):
             param_name = extract_param_name(deadline_ms)
-            methods.append(f".deadline(rclcpp::Duration::from_nanoseconds(ctx->params.{param_name} * 1000000LL))")
+            methods.append(f".deadline(rclcpp::Duration::from_nanoseconds(sn->params.{param_name} * 1000000LL))")
         else:
             ns = deadline_ms * 1_000_000
             methods.append(f".deadline(rclcpp::Duration::from_nanoseconds({ns}))")
@@ -553,7 +553,7 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
         lifespan_ms = qos_spec["lifespan_ms"]
         if is_param_ref(lifespan_ms):
             param_name = extract_param_name(lifespan_ms)
-            methods.append(f".lifespan(rclcpp::Duration::from_nanoseconds(ctx->params.{param_name} * 1000000LL))")
+            methods.append(f".lifespan(rclcpp::Duration::from_nanoseconds(sn->params.{param_name} * 1000000LL))")
         else:
             ns = lifespan_ms * 1_000_000
             methods.append(f".lifespan(rclcpp::Duration::from_nanoseconds({ns}))")
@@ -563,7 +563,7 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
         liveliness = qos_spec["liveliness"]
         if is_param_ref(liveliness):
             param_name = extract_param_name(liveliness)
-            methods.append(f".liveliness(cake::to_liveliness(ctx->params.{param_name}))")
+            methods.append(f".liveliness(cake::to_liveliness(sn->params.{param_name}))")
             needs_qos_helpers = True
         elif liveliness == "AUTOMATIC":
             methods.append(".liveliness(rclcpp::LivelinessPolicy::Automatic)")
@@ -576,7 +576,7 @@ def generate_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, bool]:
         if is_param_ref(lease_duration_ms):
             param_name = extract_param_name(lease_duration_ms)
             methods.append(
-                f".liveliness_lease_duration(rclcpp::Duration::from_nanoseconds(ctx->params.{param_name} * 1000000LL))"
+                f".liveliness_lease_duration(rclcpp::Duration::from_nanoseconds(sn->params.{param_name} * 1000000LL))"
             )
         else:
             ns = lease_duration_ms * 1_000_000
@@ -694,7 +694,7 @@ def generate_python_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, Set[str], b
     if is_param_ref(history):
         param_name = extract_param_name(history)
         args.append("history=HistoryPolicy.KEEP_LAST")
-        args.append(f"depth=ctx.params.{param_name}")
+        args.append(f"depth=params.{param_name}")
     elif history == "ALL":
         args.append("history=HistoryPolicy.KEEP_ALL")
     else:
@@ -705,7 +705,7 @@ def generate_python_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, Set[str], b
     reliability = qos_spec["reliability"]
     if is_param_ref(reliability):
         param_name = extract_param_name(reliability)
-        args.append(f"reliability=_to_reliability(ctx.params.{param_name})")
+        args.append(f"reliability=_to_reliability(params.{param_name})")
         needs_qos_helpers = True
     elif reliability == "RELIABLE":
         args.append("reliability=ReliabilityPolicy.RELIABLE")
@@ -717,7 +717,7 @@ def generate_python_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, Set[str], b
         durability = qos_spec["durability"]
         if is_param_ref(durability):
             param_name = extract_param_name(durability)
-            args.append(f"durability=_to_durability(ctx.params.{param_name})")
+            args.append(f"durability=_to_durability(params.{param_name})")
             needs_qos_helpers = True
         else:
             required_imports.add("DurabilityPolicy")
@@ -732,7 +732,7 @@ def generate_python_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, Set[str], b
         deadline_ms = qos_spec["deadline_ms"]
         if is_param_ref(deadline_ms):
             param_name = extract_param_name(deadline_ms)
-            args.append(f"deadline=Duration(nanoseconds=ctx.params.{param_name} * 1000000)")
+            args.append(f"deadline=Duration(nanoseconds=params.{param_name} * 1000000)")
         else:
             ns = deadline_ms * 1_000_000
             args.append(f"deadline=Duration(nanoseconds={ns})")
@@ -743,7 +743,7 @@ def generate_python_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, Set[str], b
         lifespan_ms = qos_spec["lifespan_ms"]
         if is_param_ref(lifespan_ms):
             param_name = extract_param_name(lifespan_ms)
-            args.append(f"lifespan=Duration(nanoseconds=ctx.params.{param_name} * 1000000)")
+            args.append(f"lifespan=Duration(nanoseconds=params.{param_name} * 1000000)")
         else:
             ns = lifespan_ms * 1_000_000
             args.append(f"lifespan=Duration(nanoseconds={ns})")
@@ -753,7 +753,7 @@ def generate_python_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, Set[str], b
         liveliness = qos_spec["liveliness"]
         if is_param_ref(liveliness):
             param_name = extract_param_name(liveliness)
-            args.append(f"liveliness=_to_liveliness(ctx.params.{param_name})")
+            args.append(f"liveliness=_to_liveliness(params.{param_name})")
             needs_qos_helpers = True
         else:
             required_imports.add("LivelinessPolicy")
@@ -768,7 +768,7 @@ def generate_python_qos_code(qos_spec: Dict[str, Any]) -> tuple[str, Set[str], b
         lease_duration_ms = qos_spec["lease_duration_ms"]
         if is_param_ref(lease_duration_ms):
             param_name = extract_param_name(lease_duration_ms)
-            args.append(f"liveliness_lease_duration=Duration(nanoseconds=ctx.params.{param_name} * 1000000)")
+            args.append(f"liveliness_lease_duration=Duration(nanoseconds=params.{param_name} * 1000000)")
         else:
             ns = lease_duration_ms * 1_000_000
             args.append(f"liveliness_lease_duration=Duration(nanoseconds={ns})")
@@ -1056,6 +1056,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
     implementation_namespace = get_implementation_namespace(interface_data)
     export_namespace = get_namespace(interface_data)
     class_name = get_class_name(node_name)
+    session_class = f"{class_name}Session"
 
     # Determine if QoS helpers are needed
     needs_qos_helpers = pub_needs_qos_helpers or sub_needs_qos_helpers
@@ -1069,6 +1070,7 @@ def generate_header(interface_data: Dict[str, Any]) -> str:
         node_name=node_name,
         package_name=package_name,
         class_name=class_name,
+        session_class=session_class,
         implementation_namespace=implementation_namespace,
         export_namespace=export_namespace,
         message_includes=message_includes,
@@ -1153,15 +1155,19 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
     # Determine if any entity uses for_each_param
     has_for_each_param = any(entity.get("for_each_param") for entity_list in all_entities for entity in entity_list)
 
-    # Convert node_name to context class name
+    # Convert node_name to session class name
     class_name = get_class_name(node_name)
-    context_class = f"{class_name}Context"
+    session_class = f"{class_name}Session"
+
+    # Check if any timers might exist (for template logic)
+    has_timers = True  # timers are created at runtime, always need reset/cancel support
 
     # Render template
     return template.render(
         node_name=node_name,
         package_name=package_name,
-        context_class=context_class,
+        class_name=class_name,
+        session_class=session_class,
         message_imports=message_imports,
         qos_imports=qos_imports,
         publishers=publishers,
@@ -1172,6 +1178,7 @@ def generate_python_interface(interface_data: Dict[str, Any]) -> str:
         action_clients=action_clients,
         needs_qos_helpers=needs_qos_helpers,
         has_for_each_param=has_for_each_param,
+        has_timers=has_timers,
     )
 
 

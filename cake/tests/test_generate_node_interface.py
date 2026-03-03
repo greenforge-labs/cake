@@ -1993,8 +1993,8 @@ publishers:
     with open(output_file, "r") as f:
         content = f.read()
 
-    assert "ctx->params.namespace" in content
-    assert "ctx->params.robot_id" in content
+    assert "sn->params.namespace" in content
+    assert "sn->params.robot_id" in content
     assert "cake::to_string" not in content
 
 
@@ -2045,7 +2045,7 @@ publishers:
     with open(output_file, "r") as f:
         content = f.read()
 
-    assert "ctx->params.robot_name" in content
+    assert "sn->params.robot_name" in content
     assert "cake::to_string" not in content
 
 
@@ -2475,11 +2475,11 @@ service_clients:
         content = f.read()
 
     # Should have regular publisher with direct param ref
-    assert "ctx->params.robot_id" in content
+    assert "sn->params.robot_id" in content
     assert "cake::to_string" not in content
     # Should have for_each_param service client with unordered_map
     assert "std::unordered_map<std::string, rclcpp::Client" in content
-    assert "for (const auto& key : ctx->params.managed_nodes)" in content
+    assert "for (const auto& key : sn->params.managed_nodes)" in content
 
 
 if __name__ == "__main__":

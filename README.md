@@ -2,9 +2,9 @@
 
 **Declarative code generation for ROS 2 nodes**
 
-Cake transforms simple YAML interface definitions into strongly-typed C++ and Python ROS 2 node scaffolding. Define your publishers, subscribers, services, actions and parameters in one simple file and Cake will handle the rest.
+Cake transforms simple YAML interface definitions into strongly-typed C++ and Python ROS 2 lifecycle node scaffolding. Define your publishers, subscribers, services, actions and parameters in one simple file and Cake will handle the rest.
 
-Using cake, writing ROS2 nodes becomes a...  <sub>piece of cake (hehe)</sub>
+Using cake, writing ROS2 nodes becomes a... <sub>piece of cake (hehe)</sub>
 
 ## Quick Start
 
@@ -59,7 +59,7 @@ services:
 
 First, create the header (`nodes/my_node/my_node.hpp`):
 
-> **Design Pattern:** Cake stores the mutable state of a node in a `Context` class rather than subclassing `rclcpp::Node`. This separation makes testing easier (you can test logic without spinning up ROS), keeps state explicit, and allows callbacks to be simple free functions. To define the `Context` of your node, you subclass the auto-generated `<NodeName>Context` struct and add your own variables to it. The auto-generated `Context` class will contain a pointer to your ROS2 node instance, as well as all publishers, subscribers, services, actions and parameters.
+> **Design Pattern:** Cake uses a lifecycle `Session` class rather than subclassing `rclcpp_lifecycle::LifecycleNode`. This separation makes testing easier (you can test logic without spinning up ROS), keeps state explicit, and allows callbacks to be simple free functions. The `Session` is created during the `on_configure` lifecycle transition and destroyed on `cleanup`/`shutdown`. To define the `Session` of your node, you subclass the auto-generated `<NodeName>Session` struct and add your own variables to it. The auto-generated `Session` class will contain a reference to the lifecycle node instance, as well as all publishers, subscribers, services, actions and parameters.
 
 ```cpp
 #pragma once
@@ -69,56 +69,59 @@ First, create the header (`nodes/my_node/my_node.hpp`):
 
 namespace my_package::my_node {
 
-// Extend the generated context with custom state
-struct Context : MyNodeContext<Context> {
+// Extend the generated session with custom state
+struct Session : MyNodeSession<Session> {
+    using MyNodeSession::MyNodeSession;
     // Add any custom state here
     int my_counter = 0;
 };
 
-// Forward declare init function
-void init(std::shared_ptr<Context> ctx);
+// Forward declare on_configure function
+CallbackReturn on_configure(std::shared_ptr<Session> sn);
 
 // Define the node class using the generated base
 // This must match the pattern: package::node_name::NodeName
-using MyNode = MyNodeBase<Context, init>;
+using MyNode = MyNodeBase<Session, on_configure>;
 
 } // namespace my_package::my_node
 ```
 
 Then implement it (`nodes/my_node/my_node.cpp`):
 
-> **Design Pattern:** Cake uses a functional `init()` approach instead of subclassing `rclcpp::Node` with constructors. The `init()` function receives a fully-constructed context with all publishers, subscribers, and parameters ready to use. This functional approach, coupled with the context object, makes nodes easier to reason about, simpler to write and more testable. By putting a pointer to the ROS node in the context, we create a "has-a" relationship with the Node rather than "is-a", cleanly separating ROS communication from your implementation logic.
+> **Design Pattern:** Cake uses a free function `on_configure()` approach instead of subclassing `rclcpp_lifecycle::LifecycleNode`. The `on_configure()` function receives a fully-constructed session with all publishers, subscribers, and parameters ready to use. This functional approach, coupled with the session object, makes nodes easier to reason about, simpler to write and more testable. By storing a reference to the lifecycle node in the session, we create a "has-a" relationship with the Node rather than "is-a", cleanly separating ROS communication from your implementation logic.
 
 ```cpp
 #include "my_node.hpp"
 
 namespace my_package::my_node {
 
-void msg_callback(std::shared_ptr<Context> ctx, std_msgs::msg::Bool::ConstSharedPtr msg) {
-    ctx->my_counter++;
-    RCLCPP_INFO(ctx->node->get_logger(), "Got a bool: %d (count: %d)", msg->data, ctx->my_counter);
+void msg_callback(std::shared_ptr<Session> sn, std_msgs::msg::Bool::ConstSharedPtr msg) {
+    sn->my_counter++;
+    RCLCPP_INFO(sn->node.get_logger(), "Got a bool: %d (count: %d)", msg->data, sn->my_counter);
 }
 
 void addition_request_handler(
-    std::shared_ptr<Context> ctx,
+    std::shared_ptr<Session> sn,
     example_interfaces::srv::AddTwoInts::Request::SharedPtr request,
     example_interfaces::srv::AddTwoInts::Response::SharedPtr response
 ) {
     response->sum = request->a + request->b;
 }
 
-void init(std::shared_ptr<Context> ctx) {
+CallbackReturn on_configure(std::shared_ptr<Session> sn) {
     // Access parameters
-    RCLCPP_INFO(ctx->node->get_logger(), "important_parameter: %s", ctx->params.important_parameter.c_str());
+    RCLCPP_INFO(sn->node.get_logger(), "important_parameter: %s", sn->params.important_parameter.c_str());
 
     // Publish messages
     auto msg = std_msgs::msg::String();
-    msg.data = ctx->params.important_parameter;
-    ctx->publishers.some_topic->publish(msg);
+    msg.data = sn->params.important_parameter;
+    sn->publishers.some_topic->publish(msg);
 
     // Set callbacks
-    ctx->subscribers.other_topic->set_callback(msg_callback);
-    ctx->services.my_service->set_request_handler(addition_request_handler);
+    sn->subscribers.other_topic->set_callback(msg_callback);
+    sn->services.my_service->set_request_handler(addition_request_handler);
+
+    return CallbackReturn::SUCCESS;
 }
 
 } // namespace my_package::my_node
@@ -129,32 +132,35 @@ void init(std::shared_ptr<Context> ctx) {
 ```python
 from dataclasses import dataclass
 
-from my_package.my_node import MyNodeContext, run
+from cake import TransitionCallbackReturn
+from my_package.my_node import MyNodeSession, run
 from std_msgs.msg import String
 
-# Extend the generated context with custom state
+# Extend the generated session with custom state
 @dataclass
-class Context(MyNodeContext):
+class MySession(MyNodeSession):
     my_counter: int = 0
 
-def msg_callback(ctx: Context, msg):
-    ctx.my_counter += 1
-    ctx.logger.info(f"Got a bool: {msg.data} (count: {ctx.my_counter})")
+def msg_callback(sn: MySession, msg):
+    sn.my_counter += 1
+    sn.logger.info(f"Got a bool: {msg.data} (count: {sn.my_counter})")
 
-def init(ctx: Context):
+def on_configure(sn: MySession) -> TransitionCallbackReturn:
     # Access parameters
-    ctx.logger.info(f"important_parameter: {ctx.params.important_parameter}")
+    sn.logger.info(f"important_parameter: {sn.params.important_parameter}")
 
     # Publish messages
     msg = String()
-    msg.data = ctx.params.important_parameter
-    ctx.publishers.some_topic.publish(msg)
+    msg.data = sn.params.important_parameter
+    sn.publishers.some_topic.publish(msg)
 
     # Set callbacks
-    ctx.subscribers.other_topic.set_callback(msg_callback)
+    sn.subscribers.other_topic.set_callback(msg_callback)
+
+    return TransitionCallbackReturn.SUCCESS
 
 if __name__ == "__main__":
-    run(Context, init)
+    run(MySession, on_configure)
 ```
 
 ### 4. Create CMakeLists.txt
@@ -168,6 +174,8 @@ project(my_package)
 find_package(cake REQUIRED)
 cake_auto_package()
 ```
+
+**Note:** Cake assumes a single-threaded executor. See [Threading Model](#threading-model) for details.
 
 That's it! `cake_auto_package()` automatically:
 - Detects C++ and Python nodes in the `nodes/` folder
@@ -214,6 +222,146 @@ ros2 run my_package my_node
 
 # Or load as component (if written in C++)
 ros2 component standalone my_package my_package::MyNode
+```
+
+## Lifecycle Callbacks
+
+Cake nodes follow the standard ROS 2 lifecycle state machine. The Quick Start examples show `on_configure`, but there are five lifecycle callbacks you can implement. Only `on_configure` is required — the rest are optional.
+
+### Available Callbacks
+
+| Callback | Return Type | Required | Transition |
+|----------|-------------|----------|------------|
+| `on_configure` | `CallbackReturn` | **Yes** | Unconfigured → Inactive |
+| `on_activate` | `CallbackReturn` | No | Inactive → Active |
+| `on_deactivate` | `CallbackReturn` | No | Active → Inactive |
+| `on_cleanup` | `CallbackReturn` | No | Inactive → Unconfigured |
+| `on_shutdown` | `void` | No | Any → Finalized |
+
+All callbacks except `on_shutdown` can return `SUCCESS`, `FAILURE`, or `ERROR`. Returning `FAILURE` rejects the transition and the node stays in its previous state. Returning `ERROR` transitions the node to the `Finalized` (error) state.
+
+### Execution Order
+
+Cake handles entity lifecycle management automatically around your callbacks:
+
+- **Configure:** Session is created with all entities, then `on_configure` runs. On failure, the session is destroyed.
+- **Activate:** `on_activate` runs first, then entities are activated automatically.
+- **Deactivate:** `on_deactivate` runs first, then entities are deactivated automatically.
+- **Cleanup:** `on_cleanup` runs first. On success, the session is destroyed.
+- **Shutdown:** `on_shutdown` runs, then the session is always destroyed regardless of outcome.
+
+### C++ Example
+
+Callbacks are passed as template parameters to the generated `Base` class. Optional callbacks default to returning `SUCCESS` (or no-op for `on_shutdown`):
+
+```cpp
+#pragma once
+#include <my_package/my_node_interface.hpp>
+
+namespace my_package::my_node {
+
+struct Session : MyNodeSession<Session> {
+    using MyNodeSession::MyNodeSession;
+    bool is_running = false;
+};
+
+CallbackReturn on_configure(std::shared_ptr<Session> sn);
+CallbackReturn on_activate(std::shared_ptr<Session> sn);
+CallbackReturn on_deactivate(std::shared_ptr<Session> sn);
+CallbackReturn on_cleanup(std::shared_ptr<Session> sn);
+void on_shutdown(std::shared_ptr<Session> sn);
+
+// Pass all callbacks as template parameters (only on_configure is required)
+using MyNode = MyNodeBase<Session, on_configure, on_activate, on_deactivate, on_cleanup, on_shutdown>;
+
+} // namespace my_package::my_node
+```
+
+```cpp
+#include "my_node.hpp"
+
+namespace my_package::my_node {
+
+CallbackReturn on_configure(std::shared_ptr<Session> sn) {
+    RCLCPP_INFO(sn->node.get_logger(), "Configuring...");
+    sn->subscribers.sensor->set_callback(sensor_callback);
+    return CallbackReturn::SUCCESS;
+}
+
+CallbackReturn on_activate(std::shared_ptr<Session> sn) {
+    RCLCPP_INFO(sn->node.get_logger(), "Activating...");
+    sn->is_running = true;
+    return CallbackReturn::SUCCESS;
+}
+
+CallbackReturn on_deactivate(std::shared_ptr<Session> sn) {
+    RCLCPP_INFO(sn->node.get_logger(), "Deactivating...");
+    sn->is_running = false;
+    return CallbackReturn::SUCCESS;
+}
+
+CallbackReturn on_cleanup(std::shared_ptr<Session> sn) {
+    RCLCPP_INFO(sn->node.get_logger(), "Cleaning up...");
+    return CallbackReturn::SUCCESS;
+}
+
+void on_shutdown(std::shared_ptr<Session> sn) {
+    RCLCPP_INFO(sn->node.get_logger(), "Shutting down...");
+}
+
+} // namespace my_package::my_node
+```
+
+You can also provide only the callbacks you need — omitted ones use sensible defaults:
+
+```cpp
+// Only on_configure and on_activate
+using MyNode = MyNodeBase<Session, on_configure, on_activate>;
+```
+
+### Python Example
+
+Callbacks are passed as keyword arguments to `run()`. Optional callbacks are simply omitted:
+
+```python
+from cake import TransitionCallbackReturn
+from my_package.my_node import MyNodeSession, run
+
+@dataclass
+class MySession(MyNodeSession):
+    is_running: bool = False
+
+def on_configure(sn: MySession) -> TransitionCallbackReturn:
+    sn.logger.info("Configuring...")
+    sn.subscribers.sensor.set_callback(sensor_callback)
+    return TransitionCallbackReturn.SUCCESS
+
+def on_activate(sn: MySession) -> TransitionCallbackReturn:
+    sn.logger.info("Activating...")
+    sn.is_running = True
+    return TransitionCallbackReturn.SUCCESS
+
+def on_deactivate(sn: MySession) -> TransitionCallbackReturn:
+    sn.logger.info("Deactivating...")
+    sn.is_running = False
+    return TransitionCallbackReturn.SUCCESS
+
+def on_cleanup(sn: MySession) -> TransitionCallbackReturn:
+    sn.logger.info("Cleaning up...")
+    return TransitionCallbackReturn.SUCCESS
+
+def on_shutdown(sn: MySession) -> None:
+    sn.logger.info("Shutting down...")
+
+if __name__ == "__main__":
+    run(
+        MySession,
+        on_configure,
+        on_activate=on_activate,
+        on_deactivate=on_deactivate,
+        on_cleanup=on_cleanup,
+        on_shutdown=on_shutdown,
+    )
 ```
 
 ## Automated Build System
@@ -537,7 +685,7 @@ All interface types (publishers, subscribers, services, service_clients, actions
 manually_created: false  # Set to true to completely exclude from code generation
 ```
 
-When `manually_created: true`, Cake will completely skip this interface during code generation - it won't appear in the generated context struct at all. This is useful when you want to document an interface in the YAML without having Cake generate code for it.
+When `manually_created: true`, Cake will completely skip this interface during code generation - it won't appear in the generated session struct at all. This is useful when you want to document an interface in the YAML without having Cake generate code for it.
 
 **Example:**
 ```yaml
@@ -727,13 +875,13 @@ services:
 This generates code that constructs the topic name at startup using the parameter value. In C++:
 ```cpp
 // Generated: topic name built from parameter
-cake::create_publisher<...>(ctx, "/robot/" + cake::to_string(ctx->params.robot_id) + "/cmd_vel", ...);
+cake::create_publisher<...>(sn, "/robot/" + cake::to_string(sn->params.robot_id) + "/cmd_vel", ...);
 ```
 
 In Python:
 ```python
 # Generated: topic name built from parameter
-ctx.publishers.cmd_vel._initialise(ctx, Twist, f"/robot/{params.robot_id}/cmd_vel", ...)
+sn.publishers.cmd_vel._initialise(sn, Twist, f"/robot/{params.robot_id}/cmd_vel", ...)
 ```
 
 You can then configure different robots at launch time:
@@ -769,16 +917,16 @@ publishers:
       reliability: RELIABLE
 ```
 
-**`field_name` explained:** When a topic/service/action name contains `${param:...}`, Cake can't derive a valid C++ field name from it automatically, so you must provide one explicitly. The `field_name` is used as the struct member name in the generated context:
+**`field_name` explained:** When a topic/service/action name contains `${param:...}`, Cake can't derive a valid C++ field name from it automatically, so you must provide one explicitly. The `field_name` is used as the struct member name in the generated session:
 
 ```cpp
 // With field_name: cmd_vel
-ctx->publishers.cmd_vel->publish(msg);
+sn->publishers.cmd_vel->publish(msg);
 ```
 
 ```python
 # With field_name: cmd_vel
-ctx.publishers.cmd_vel.publish(msg)
+sn.publishers.cmd_vel.publish(msg)
 ```
 
 The `field_name` property is also available for entities without parameter substitution, allowing you to override the auto-derived field name if desired.
@@ -839,12 +987,12 @@ This generates map/dict-typed fields and loop initialization. In C++:
 
 ```cpp
 // Struct field is a map
-std::unordered_map<std::string, std::shared_ptr<cake::Subscriber<std_msgs::msg::String, ContextType>>> node_states;
+std::unordered_map<std::string, std::shared_ptr<cake::Subscriber<std_msgs::msg::String, SessionType>>> node_states;
 
 // Constructor loops over parameter values
-for (const auto& key : ctx->params.managed_nodes) {
-    ctx->subscribers.node_states[key] = cake::create_subscriber<std_msgs::msg::String>(
-        ctx, "/" + key + "/state", rclcpp::QoS(10).reliable());
+for (const auto& key : sn->params.managed_nodes) {
+    sn->subscribers.node_states[key] = cake::create_subscriber<std_msgs::msg::String>(
+        sn, "/" + key + "/state", rclcpp::QoS(10).reliable());
 }
 ```
 
@@ -856,15 +1004,15 @@ node_states: dict[str, cake.Subscriber[String]] = field(default_factory=dict)
 
 # Initialization loops over parameter values
 for key in params.managed_nodes:
-    ctx.subscribers.node_states[key] = cake.Subscriber[String]()
-    ctx.subscribers.node_states[key]._initialise(ctx, String, f"/{key}/state", ...)
+    sn.subscribers.node_states[key] = cake.Subscriber[String]()
+    sn.subscribers.node_states[key]._initialise(sn, String, f"/{key}/state", ...)
 ```
 
 Access entities by iterating over the map/dict at runtime:
 
 ```cpp
 // C++
-for (const auto& [name, client] : ctx->service_clients.change_state_clients) {
+for (const auto& [name, client] : sn->service_clients.change_state_clients) {
     auto request = std::make_shared<lifecycle_msgs::srv::ChangeState::Request>();
     client->async_send_request(request);
 }
@@ -872,7 +1020,7 @@ for (const auto& [name, client] : ctx->service_clients.change_state_clients) {
 
 ```python
 # Python
-for name, client in ctx.service_clients.change_state_clients.items():
+for name, client in sn.service_clients.change_state_clients.items():
     request = ChangeState.Request()
     client.call_async(request)
 ```
@@ -889,38 +1037,42 @@ The deadline callback fires when no message is received within the deadline peri
 
 **C++ Example:**
 ```cpp
-void init(std::shared_ptr<Context> ctx) {
+CallbackReturn on_configure(std::shared_ptr<Session> sn) {
     // Set the message callback
-    ctx->subscribers.ok->set_callback(
-        [](std::shared_ptr<Context> ctx, std_msgs::msg::Bool::ConstSharedPtr msg) {
-            ctx->ok_received = true;
-            ctx->ok_status = msg->data;
+    sn->subscribers.ok->set_callback(
+        [](std::shared_ptr<Session> sn, std_msgs::msg::Bool::ConstSharedPtr msg) {
+            sn->ok_received = true;
+            sn->ok_status = msg->data;
         }
     );
 
     // Set deadline callback - fires when no message received in time
-    ctx->subscribers.ok->set_deadline_callback(
-        [](std::shared_ptr<Context> ctx, rclcpp::QOSDeadlineRequestedInfo& event) {
-            RCLCPP_WARN(ctx->node->get_logger(), "Deadline missed!");
-            ctx->ok_received = false;
+    sn->subscribers.ok->set_deadline_callback(
+        [](std::shared_ptr<Session> sn, rclcpp::QOSDeadlineRequestedInfo& event) {
+            RCLCPP_WARN(sn->node.get_logger(), "Deadline missed!");
+            sn->ok_received = false;
         }
     );
+
+    return CallbackReturn::SUCCESS;
 }
 ```
 
 **Python Example:**
 ```python
-def init(ctx: Context):
-    def on_msg(ctx, msg):
-        ctx.ok_received = True
-        ctx.ok_status = msg.data
+def on_configure(sn: MySession) -> TransitionCallbackReturn:
+    def on_msg(sn, msg):
+        sn.ok_received = True
+        sn.ok_status = msg.data
 
-    def on_deadline_missed(ctx, event):
-        ctx.node.get_logger().warning("Deadline missed!")
-        ctx.ok_received = False
+    def on_deadline_missed(sn, event):
+        sn.node.get_logger().warning("Deadline missed!")
+        sn.ok_received = False
 
-    ctx.subscribers.ok.set_callback(on_msg)
-    ctx.subscribers.ok.set_deadline_callback(on_deadline_missed)
+    sn.subscribers.ok.set_callback(on_msg)
+    sn.subscribers.ok.set_deadline_callback(on_deadline_missed)
+
+    return TransitionCallbackReturn.SUCCESS
 ```
 
 ### Subscriber Liveliness Callback
@@ -928,9 +1080,9 @@ def init(ctx: Context):
 The liveliness callback fires when a publisher's liveliness state changes:
 
 ```cpp
-ctx->subscribers.sensor->set_liveliness_callback(
-    [](std::shared_ptr<Context> ctx, rclcpp::QOSLivelinessChangedInfo& event) {
-        RCLCPP_INFO(ctx->node->get_logger(),
+sn->subscribers.sensor->set_liveliness_callback(
+    [](std::shared_ptr<Session> sn, rclcpp::QOSLivelinessChangedInfo& event) {
+        RCLCPP_INFO(sn->node.get_logger(),
             "Liveliness changed: %d alive, %d not alive",
             event.alive_count, event.not_alive_count);
     }
@@ -950,34 +1102,38 @@ Publishers also support QoS event callbacks. Note the different event types comp
 
 **C++ Example:**
 ```cpp
-void init(std::shared_ptr<Context> ctx) {
+CallbackReturn on_configure(std::shared_ptr<Session> sn) {
     // Deadline callback - fires when we don't publish in time
-    ctx->publishers.status->set_deadline_callback(
-        [](std::shared_ptr<Context> ctx, rclcpp::QOSDeadlineOfferedInfo& event) {
-            RCLCPP_WARN(ctx->node->get_logger(), "Missed publish deadline!");
+    sn->publishers.status->set_deadline_callback(
+        [](std::shared_ptr<Session> sn, rclcpp::QOSDeadlineOfferedInfo& event) {
+            RCLCPP_WARN(sn->node.get_logger(), "Missed publish deadline!");
         }
     );
 
     // Liveliness callback - fires when our liveliness is lost
-    ctx->publishers.status->set_liveliness_callback(
-        [](std::shared_ptr<Context> ctx, rclcpp::QOSLivelinessLostInfo& event) {
-            RCLCPP_WARN(ctx->node->get_logger(), "Liveliness lost!");
+    sn->publishers.status->set_liveliness_callback(
+        [](std::shared_ptr<Session> sn, rclcpp::QOSLivelinessLostInfo& event) {
+            RCLCPP_WARN(sn->node.get_logger(), "Liveliness lost!");
         }
     );
+
+    return CallbackReturn::SUCCESS;
 }
 ```
 
 **Python Example:**
 ```python
-def init(ctx: Context):
-    def on_deadline_missed(ctx, event):
-        ctx.node.get_logger().warning("Missed publish deadline!")
+def on_configure(sn: MySession) -> TransitionCallbackReturn:
+    def on_deadline_missed(sn, event):
+        sn.node.get_logger().warning("Missed publish deadline!")
 
-    def on_liveliness_lost(ctx, event):
-        ctx.node.get_logger().warning("Liveliness lost!")
+    def on_liveliness_lost(sn, event):
+        sn.node.get_logger().warning("Liveliness lost!")
 
-    ctx.publishers.status.set_deadline_callback(on_deadline_missed)
-    ctx.publishers.status.set_liveliness_callback(on_liveliness_lost)
+    sn.publishers.status.set_deadline_callback(on_deadline_missed)
+    sn.publishers.status.set_liveliness_callback(on_liveliness_lost)
+
+    return TransitionCallbackReturn.SUCCESS
 ```
 
 Publishers also expose the underlying `rclcpp::Publisher` / `rclpy.publisher.Publisher` via the `publisher()` method for advanced use cases like `wait_for_all_acked()` or `get_subscription_count()`.
@@ -1026,6 +1182,133 @@ publishers:
         lease_duration_ms: 1000  # 1 second
 ```
 
+## Autostart
+
+By default, Cake nodes **automatically transition through configure → activate** on startup, so they begin processing immediately without requiring an external lifecycle manager.
+
+This is controlled by the `autostart` parameter (default: `true`). A zero-delay timer fires once on construction to call `trigger_configure()` followed by `trigger_activate()`. If either transition fails, an error is logged and the sequence stops.
+
+To disable autostart (e.g., when using a lifecycle manager):
+
+```bash
+ros2 run my_package my_node --ros-args -p autostart:=false
+```
+
+Or in a launch file:
+
+```python
+Node(
+    package='my_package',
+    executable='my_node',
+    parameters=[{'autostart': False}]
+)
+```
+
+When `autostart` is disabled, you must trigger lifecycle transitions externally:
+
+```bash
+ros2 lifecycle set /my_node configure
+ros2 lifecycle set /my_node activate
+```
+
+## State Heartbeat
+
+Every Cake node publishes its current lifecycle state on `~/state` at 10 Hz. This provides a lightweight monitoring and watchdog interface without polling the lifecycle service.
+
+| Property | Value |
+|----------|-------|
+| Topic | `~/state` |
+| Type | `lifecycle_msgs/msg/State` |
+| Rate | 100 ms |
+| QoS | Reliable, transient-local, 100 ms deadline, automatic liveliness (100 ms lease) |
+
+The publisher only serialises messages when there are active subscribers, so there is zero overhead when nobody is listening.
+
+**Watchdog usage:** External monitors can subscribe with a matching deadline QoS. If the node hangs or crashes and stops publishing, the subscriber's deadline-missed or liveliness change callback fires, enabling automatic fault detection.
+
+```bash
+# Monitor a node's state from the command line
+ros2 topic echo /my_node/state
+```
+
+## Intra-Process Communication
+
+C++ Cake nodes enable **intra-process communication (IPC)** by default. When multiple Cake nodes run in the same process (e.g., via component composition), messages are passed by pointer rather than serialised, providing zero-copy performance.
+
+This is set automatically in the `BaseNode` constructor — no configuration is needed.
+
+> **Note:** IPC is a C++ feature. Python nodes are unaffected.
+
+## Default QoS Handlers
+
+Cake automatically attaches **default QoS event handlers** to every generated subscriber. These handlers provide a safety net that deactivates the node when QoS contracts are violated:
+
+| Event | Behaviour |
+|-------|-----------|
+| **Deadline missed** | Logs an error and deactivates the node |
+| **Liveliness changed** (alive publishers drops to 0) | Logs an error and deactivates the node |
+
+Both handlers are no-ops when the node is not in the `ACTIVE` state, preventing spurious triggers during transitions.
+
+This gives you **cascading shutdown** for free: if an upstream node deactivates and stops publishing, downstream subscribers miss their deadline (or lose liveliness) and automatically deactivate too.
+
+### How It Works
+
+For every subscriber defined in `interface.yaml`, the generated code calls `attach_default_qos_handlers()` immediately after creation. No user code is needed — the handlers are always present.
+
+To make the handlers trigger, configure a `deadline_ms` and/or `liveliness` + `lease_duration_ms` in your subscriber's QoS:
+
+```yaml
+subscribers:
+    - topic: heartbeat
+      type: std_msgs/msg/Bool
+      qos:
+        history: 1
+        reliability: RELIABLE
+        deadline_ms: 1000           # deactivate if no message for 1s
+        liveliness: AUTOMATIC
+        lease_duration_ms: 1000     # deactivate if publisher disappears
+```
+
+Without deadline or liveliness QoS settings, the handlers are attached but will never fire.
+
+### Overriding Default Handlers
+
+The default handlers call `set_deadline_callback()` and `set_liveliness_callback()` on the subscriber. If you set your own callbacks in `on_configure`, they will **replace** the defaults:
+
+```cpp
+// Override the default deadline handler with custom logic
+sn->subscribers.heartbeat->set_deadline_callback(
+    [](std::shared_ptr<Session> sn, rclcpp::QOSDeadlineRequestedInfo& event) {
+        RCLCPP_WARN(sn->node.get_logger(), "Custom deadline handling");
+        // your logic here
+    }
+);
+```
+
+### Using Default Handlers Manually
+
+You can also attach the default handlers to manually-created subscribers:
+
+**C++:**
+```cpp
+#include <cake/default_qos_handlers.hpp>
+
+// After creating a subscriber manually
+cake::attach_default_qos_handlers(sn->subscribers.my_sub);
+```
+
+**Python:**
+```python
+import cake
+
+cake.attach_default_qos_handlers(sn.subscribers.my_sub)
+```
+
+## Threading Model
+
+Cake assumes a **single-threaded executor**. Session state (publishers, subscribers, parameters, timers, etc.) is not protected by any synchronization primitives, so concurrent access from multiple executor threads would be a data race. Multi-threading executors is out of scope for cake at the moment. External concurrent execution of work is still available to the user via standard threading, but synchronisation is the users responsibility.
+
 ## Development
 
 ### Running Tests
@@ -1051,6 +1334,7 @@ cd cake/tests
 The `cake_example` package demonstrates usage with:
 - **Multiple nodes**: C++ node (`my_node`) and Python node (`python_node`)
 - **Interface examples**: Publishers, subscribers, services, actions, and parameters
+- **Cascading deactivation**: `my_node` publishes a heartbeat; `python_node` subscribes with a 1 s deadline — if `my_node` deactivates, the default QoS handler automatically deactivates `python_node` too
 - **Minimal CMakeLists.txt**: Just 3 lines using `cake_auto_package()`
 - **Component registration**: Automatic component plugin setup
 - **Package-level interfaces**: Optional `interfaces/` directory for shared definitions

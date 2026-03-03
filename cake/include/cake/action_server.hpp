@@ -3,9 +3,15 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <type_traits>
+
+#include <lifecycle_msgs/msg/state.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+
+#include "session.hpp"
 
 namespace cake {
 
@@ -20,7 +26,7 @@ template <typename ActionT> class SingleGoalActionServer {
     using GoalHandle = rclcpp_action::ServerGoalHandle<ActionT>;
 
     explicit SingleGoalActionServer(
-        rclcpp::Node *node,
+        rclcpp_lifecycle::LifecycleNode *node,
         const std::string &server_name,
         const std::optional<SingleGoalActionServerOptions<ActionT>> &options = std::nullopt
     )
@@ -85,8 +91,18 @@ template <typename ActionT> class SingleGoalActionServer {
         active_goal_handle_ = nullptr;
     }
 
+    void deactivate() {
+        if (active_goal_handle_) {
+            RCLCPP_WARN(
+                node_->get_logger(), "Action server '%s': Aborting active goal, node deactivating", server_name_.c_str()
+            );
+            active_goal_handle_->abort(std::make_shared<typename ActionT::Result>());
+            active_goal_handle_ = nullptr;
+        }
+    }
+
   private:
-    rclcpp::Node *node_;
+    rclcpp_lifecycle::LifecycleNode *node_;
     std::string server_name_;
     rclcpp_action::Server<ActionT>::SharedPtr action_server_;
     std::shared_ptr<GoalHandle> active_goal_handle_;
@@ -94,6 +110,13 @@ template <typename ActionT> class SingleGoalActionServer {
 
     rclcpp_action::GoalResponse
     handle_goal(const rclcpp_action::GoalUUID & /*uuid*/, std::shared_ptr<const typename ActionT::Goal> goal) {
+        if (node_->get_current_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+            RCLCPP_WARN(
+                node_->get_logger(), "Action server '%s': Rejecting goal, node not active", server_name_.c_str()
+            );
+            return rclcpp_action::GoalResponse::REJECT;
+        }
+
         if (!options_.has_value()) {
             RCLCPP_WARN(
                 node_->get_logger(),
@@ -151,20 +174,21 @@ template <typename ActionT> class SingleGoalActionServer {
 
 template <typename ActionT>
 std::shared_ptr<SingleGoalActionServer<ActionT>> create_single_goal_action_server(
-    rclcpp::Node *node,
+    rclcpp_lifecycle::LifecycleNode *node,
     const std::string &server_name,
     const std::optional<SingleGoalActionServerOptions<ActionT>> &options = std::nullopt
 ) {
     return std::make_shared<SingleGoalActionServer<ActionT>>(node, server_name, options);
 }
 
-template <typename ActionT, typename ContextType>
+template <typename ActionT, typename SessionType>
 std::shared_ptr<SingleGoalActionServer<ActionT>> create_single_goal_action_server(
-    std::shared_ptr<ContextType> context,
+    std::shared_ptr<SessionType> sn,
     const std::string &server_name,
     const std::optional<SingleGoalActionServerOptions<ActionT>> &options = std::nullopt
 ) {
-    return create_single_goal_action_server(context->node.get(), server_name, options);
+    static_assert(std::is_base_of_v<Session, SessionType>, "SessionType must derive from cake::Session");
+    return create_single_goal_action_server<ActionT>(&sn->node, server_name, options);
 }
 
 } // namespace cake

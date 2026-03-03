@@ -2,7 +2,7 @@ from rclpy.event_handler import PublisherEventCallbacks, QoSLivelinessLostInfo, 
 from rclpy.publisher import Publisher as RclpyPublisher
 from rclpy.qos import QoSProfile
 
-from .context import Context
+from .session import Session
 
 from typing import Any, Callable, Generic, Optional, TypeVar
 
@@ -16,22 +16,27 @@ class Publisher(Generic[MessageT]):
 
     def _initialise(
         self,
-        context: Context,
+        session: Session,
         msg_type: type[MessageT],
         topic_name: str,
         qos: QoSProfile | int,
     ) -> None:
         event_callbacks = PublisherEventCallbacks(
-            deadline=lambda info: self._deadline_callback(context, info) if self._deadline_callback else None,
-            liveliness=lambda info: self._liveliness_callback(context, info) if self._liveliness_callback else None,
+            deadline=lambda info: self._deadline_callback(session, info) if self._deadline_callback else None,
+            liveliness=lambda info: self._liveliness_callback(session, info) if self._liveliness_callback else None,
         )
 
-        self._publisher = context.node.create_publisher(
+        self._publisher = session.node.create_publisher(
             msg_type=msg_type,
             topic=topic_name,
             qos_profile=qos,
             event_callbacks=event_callbacks,
         )
+
+    def _destroy(self, node) -> None:
+        if self._publisher is not None:
+            node.destroy_publisher(self._publisher)
+            self._publisher = None
 
     def publish(self, msg: MessageT) -> None:
         if self._publisher is None:

@@ -4,64 +4,86 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <example_interfaces/srv/add_two_ints.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <cake/base_node.hpp>
-#include <cake/context.hpp>
+#include <cake/session.hpp>
 #include <test_package/service_clients_only_parameters.hpp>
 
 namespace test_package::service_clients_only {
 
-template <typename ContextType> struct ServiceClientsOnlyPublishers {};
+template <typename SessionType> struct ServiceClientsOnlyPublishers {};
 
-template <typename ContextType> struct ServiceClientsOnlySubscribers {};
+template <typename SessionType> struct ServiceClientsOnlySubscribers {};
 
-template <typename ContextType> struct ServiceClientsOnlyServices {};
+template <typename SessionType> struct ServiceClientsOnlyServices {};
 
-template <typename ContextType> struct ServiceClientsOnlyServiceClients {
+template <typename SessionType> struct ServiceClientsOnlyServiceClients {
     rclcpp::Client<example_interfaces::srv::AddTwoInts>::SharedPtr add_two_ints;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr trigger_service;
 };
 
-template <typename ContextType> struct ServiceClientsOnlyActions {};
+template <typename SessionType> struct ServiceClientsOnlyActions {};
 
-template <typename ContextType> struct ServiceClientsOnlyActionClients {};
+template <typename SessionType> struct ServiceClientsOnlyActionClients {};
 
-template <typename DerivedContextType> struct ServiceClientsOnlyContext : cake::Context {
-    ServiceClientsOnlyPublishers<DerivedContextType> publishers;
-    ServiceClientsOnlySubscribers<DerivedContextType> subscribers;
-    ServiceClientsOnlyServices<DerivedContextType> services;
-    ServiceClientsOnlyServiceClients<DerivedContextType> service_clients;
-    ServiceClientsOnlyActions<DerivedContextType> actions;
-    ServiceClientsOnlyActionClients<DerivedContextType> action_clients;
+template <typename DerivedSessionType> struct ServiceClientsOnlySession : cake::Session {
+    using cake::Session::Session;
+    ServiceClientsOnlyPublishers<DerivedSessionType> publishers;
+    ServiceClientsOnlySubscribers<DerivedSessionType> subscribers;
+    ServiceClientsOnlyServices<DerivedSessionType> services;
+    ServiceClientsOnlyServiceClients<DerivedSessionType> service_clients;
+    ServiceClientsOnlyActions<DerivedSessionType> actions;
+    ServiceClientsOnlyActionClients<DerivedSessionType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
 
+using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 template <
-    typename ContextType,
-    auto init_func,
+    typename SessionType,
+    auto on_configure_func,
+    auto on_activate_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_deactivate_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_cleanup_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_shutdown_func = [](std::shared_ptr<SessionType>) {},
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class ServiceClientsOnlyBase : public cake::BaseNode<"service_clients_only", extend_options> {
+class ServiceClientsOnlyBase : public cake::BaseNode<"service_clients_only", SessionType, extend_options> {
+    static_assert(
+        std::is_base_of_v<ServiceClientsOnlySession<SessionType>, SessionType>, "SessionType must be a child of ServiceClientsOnlySession"
+    );
+
   public:
-    explicit ServiceClientsOnlyBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"service_clients_only", extend_options>(options) {
-        static_assert(
-            std::is_base_of_v<ServiceClientsOnlyContext<ContextType>, ContextType>, "ContextType must be a child of ServiceClientsOnlyContext"
-        );
+    explicit ServiceClientsOnlyBase(const rclcpp::NodeOptions &options)
+        : cake::BaseNode<"service_clients_only", SessionType, extend_options>(options) {}
 
-        // init context
-        auto ctx = std::make_shared<ContextType>();
-        ctx->node = this->node_;
-
+  protected:
+    std::shared_ptr<SessionType> create_session(rclcpp_lifecycle::LifecycleNode& node) override {
+        auto sn = std::make_shared<SessionType>(node);
         // init parameters (must be before publishers/subscribers for QoS param refs)
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
+        sn->param_listener = std::make_shared<ParamListener>(sn->node.shared_from_this());
+        sn->params = sn->param_listener->get_params();
         // init service clients
-        ctx->service_clients.add_two_ints = ctx->node->template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints");
-        ctx->service_clients.trigger_service = ctx->node->template create_client<std_srvs::srv::Trigger>("trigger_service");
-        init_func(ctx);
+        sn->service_clients.add_two_ints = sn->node.template create_client<example_interfaces::srv::AddTwoInts>("/add_two_ints");
+        sn->service_clients.trigger_service = sn->node.template create_client<std_srvs::srv::Trigger>("trigger_service");
+        return sn;
     }
+
+    void activate_entities(std::shared_ptr<SessionType> sn) override {
+        for (auto &t : sn->timers) { t->reset(); }
+    }
+
+    void deactivate_entities(std::shared_ptr<SessionType> sn) override {
+        for (auto &t : sn->timers) { t->cancel(); }
+    }
+
+    CallbackReturn user_on_configure(std::shared_ptr<SessionType> sn) override { return on_configure_func(sn); }
+    CallbackReturn user_on_activate(std::shared_ptr<SessionType> sn) override { return on_activate_func(sn); }
+    CallbackReturn user_on_deactivate(std::shared_ptr<SessionType> sn) override { return on_deactivate_func(sn); }
+    CallbackReturn user_on_cleanup(std::shared_ptr<SessionType> sn) override { return on_cleanup_func(sn); }
+    void user_on_shutdown(std::shared_ptr<SessionType> sn) override { on_shutdown_func(sn); }
 };
 
 } // namespace test_package::service_clients_only

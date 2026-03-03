@@ -4,70 +4,94 @@
 
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <cake/base_node.hpp>
-#include <cake/context.hpp>
+#include <cake/session.hpp>
 #include <cake/publisher.hpp>
 #include <cake/subscriber.hpp>
+#include <cake/default_qos_handlers.hpp>
 #include <cake/qos_helpers.hpp>
 #include <test_package/qos_param_substitution_parameters.hpp>
 
 namespace test_package::qos_param_substitution {
 
-template <typename ContextType> struct QosParamSubstitutionPublishers {
-    std::shared_ptr<cake::Publisher<std_msgs::msg::String, ContextType>> processed_data;
+template <typename SessionType> struct QosParamSubstitutionPublishers {
+    std::shared_ptr<cake::Publisher<std_msgs::msg::String, SessionType>> processed_data;
 };
 
-template <typename ContextType> struct QosParamSubstitutionSubscribers {
-    std::shared_ptr<cake::Subscriber<sensor_msgs::msg::LaserScan, ContextType>> sensor_data;
+template <typename SessionType> struct QosParamSubstitutionSubscribers {
+    std::shared_ptr<cake::Subscriber<sensor_msgs::msg::LaserScan, SessionType>> sensor_data;
 };
 
-template <typename ContextType> struct QosParamSubstitutionServices {};
+template <typename SessionType> struct QosParamSubstitutionServices {};
 
-template <typename ContextType> struct QosParamSubstitutionServiceClients {};
+template <typename SessionType> struct QosParamSubstitutionServiceClients {};
 
-template <typename ContextType> struct QosParamSubstitutionActions {};
+template <typename SessionType> struct QosParamSubstitutionActions {};
 
-template <typename ContextType> struct QosParamSubstitutionActionClients {};
+template <typename SessionType> struct QosParamSubstitutionActionClients {};
 
-template <typename DerivedContextType> struct QosParamSubstitutionContext : cake::Context {
-    QosParamSubstitutionPublishers<DerivedContextType> publishers;
-    QosParamSubstitutionSubscribers<DerivedContextType> subscribers;
-    QosParamSubstitutionServices<DerivedContextType> services;
-    QosParamSubstitutionServiceClients<DerivedContextType> service_clients;
-    QosParamSubstitutionActions<DerivedContextType> actions;
-    QosParamSubstitutionActionClients<DerivedContextType> action_clients;
+template <typename DerivedSessionType> struct QosParamSubstitutionSession : cake::Session {
+    using cake::Session::Session;
+    QosParamSubstitutionPublishers<DerivedSessionType> publishers;
+    QosParamSubstitutionSubscribers<DerivedSessionType> subscribers;
+    QosParamSubstitutionServices<DerivedSessionType> services;
+    QosParamSubstitutionServiceClients<DerivedSessionType> service_clients;
+    QosParamSubstitutionActions<DerivedSessionType> actions;
+    QosParamSubstitutionActionClients<DerivedSessionType> action_clients;
     std::shared_ptr<ParamListener> param_listener;
     Params params;
 };
 
+using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 template <
-    typename ContextType,
-    auto init_func,
+    typename SessionType,
+    auto on_configure_func,
+    auto on_activate_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_deactivate_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_cleanup_func = [](std::shared_ptr<SessionType>) { return CallbackReturn::SUCCESS; },
+    auto on_shutdown_func = [](std::shared_ptr<SessionType>) {},
     auto extend_options = [](rclcpp::NodeOptions options) { return options; }>
-class QosParamSubstitutionBase : public cake::BaseNode<"qos_param_substitution", extend_options> {
+class QosParamSubstitutionBase : public cake::BaseNode<"qos_param_substitution", SessionType, extend_options> {
+    static_assert(
+        std::is_base_of_v<QosParamSubstitutionSession<SessionType>, SessionType>, "SessionType must be a child of QosParamSubstitutionSession"
+    );
+
   public:
-    explicit QosParamSubstitutionBase(const rclcpp::NodeOptions &options) : cake::BaseNode<"qos_param_substitution", extend_options>(options) {
-        static_assert(
-            std::is_base_of_v<QosParamSubstitutionContext<ContextType>, ContextType>, "ContextType must be a child of QosParamSubstitutionContext"
-        );
+    explicit QosParamSubstitutionBase(const rclcpp::NodeOptions &options)
+        : cake::BaseNode<"qos_param_substitution", SessionType, extend_options>(options) {}
 
-        // init context
-        auto ctx = std::make_shared<ContextType>();
-        ctx->node = this->node_;
-
+  protected:
+    std::shared_ptr<SessionType> create_session(rclcpp_lifecycle::LifecycleNode& node) override {
+        auto sn = std::make_shared<SessionType>(node);
         // init parameters (must be before publishers/subscribers for QoS param refs)
-        ctx->param_listener = std::make_shared<ParamListener>(ctx->node);
-        ctx->params = ctx->param_listener->get_params();
+        sn->param_listener = std::make_shared<ParamListener>(sn->node.shared_from_this());
+        sn->params = sn->param_listener->get_params();
 
         // init publishers
-        ctx->publishers.processed_data = cake::create_publisher<std_msgs::msg::String>(ctx, "/processed_data", rclcpp::QoS(ctx->params.output_queue_depth).reliable());
+        sn->publishers.processed_data = cake::create_publisher<std_msgs::msg::String>(sn, "/processed_data", rclcpp::QoS(sn->params.output_queue_depth).reliable());
         // init subscribers
-        ctx->subscribers.sensor_data = cake::create_subscriber<sensor_msgs::msg::LaserScan>(ctx, "/sensor_data", rclcpp::QoS(ctx->params.sensor_queue_depth).reliability(cake::to_reliability(ctx->params.sensor_reliability)).durability(cake::to_durability(ctx->params.sensor_durability)).deadline(rclcpp::Duration::from_nanoseconds(ctx->params.sensor_deadline_ms * 1000000LL)).liveliness(cake::to_liveliness(ctx->params.sensor_liveliness)));
-        init_func(ctx);
+        sn->subscribers.sensor_data = cake::create_subscriber<sensor_msgs::msg::LaserScan>(sn, "/sensor_data", rclcpp::QoS(sn->params.sensor_queue_depth).reliability(cake::to_reliability(sn->params.sensor_reliability)).durability(cake::to_durability(sn->params.sensor_durability)).deadline(rclcpp::Duration::from_nanoseconds(sn->params.sensor_deadline_ms * 1000000LL)).liveliness(cake::to_liveliness(sn->params.sensor_liveliness)));
+        cake::attach_default_qos_handlers(sn->subscribers.sensor_data);
+        return sn;
     }
+
+    void activate_entities(std::shared_ptr<SessionType> sn) override {
+        for (auto &t : sn->timers) { t->reset(); }
+    }
+
+    void deactivate_entities(std::shared_ptr<SessionType> sn) override {
+        for (auto &t : sn->timers) { t->cancel(); }
+    }
+
+    CallbackReturn user_on_configure(std::shared_ptr<SessionType> sn) override { return on_configure_func(sn); }
+    CallbackReturn user_on_activate(std::shared_ptr<SessionType> sn) override { return on_activate_func(sn); }
+    CallbackReturn user_on_deactivate(std::shared_ptr<SessionType> sn) override { return on_deactivate_func(sn); }
+    CallbackReturn user_on_cleanup(std::shared_ptr<SessionType> sn) override { return on_cleanup_func(sn); }
+    void user_on_shutdown(std::shared_ptr<SessionType> sn) override { on_shutdown_func(sn); }
 };
 
 } // namespace test_package::qos_param_substitution
