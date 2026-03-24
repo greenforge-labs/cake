@@ -1,3 +1,7 @@
+> [!WARNING]
+> **This repository has been archived.** `cake` has moved to a new home and been renamed to **[jig](https://github.com/nineyards-robotics/jig)**.
+> You can find `jig` here: https://github.com/nineyards-robotics/jig
+
 # cake
 
 **Declarative code generation for ROS 2 nodes**
